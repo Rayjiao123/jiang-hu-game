@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jianghu Chronicles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;700&family=Cormorant+Garamond:ital,wght@1,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a teahouse "casting hall" for a Song-dynasty wuxia game. Left: the Storyteller agent interviews you.
+   Right: the NPC's scroll fills in live. Below: every NPC visitors have made; each is its own agent you can talk to.
+   Committed single look: night ink, rice-paper scrolls, cinnabar seals, jade accents. */
+:root {
+  color-scheme: dark;
+  --ink: #13120f;
+  --ink-2: #1c1a16;
+  --ink-3: #27241e;
+  --line: #3b362c;
+  --text: #ece6d8;
+  --dim: #a39b88;
+  --paper: #ebe1c8;
+  --paper-2: #e0d4b6;
+  --paper-ink: #24211b;
+  --paper-dim: #6b6250;
+  --cinnabar: #c8402f;
+  --jade: #6fae93;
+  --gold: #d9b45a;
+  --f-brush: "Ma Shan Zheng", "STKaiti", "KaiTi", serif;
+  --f-body: "Noto Serif SC", "Songti SC", "SimSun", Georgia, serif;
+  --f-title: "Cormorant Garamond", Georgia, serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--ink);
+  background-image:
+    radial-gradient(900px 300px at 15% -5%, rgba(111,174,147,.10), transparent 70%),
+    radial-gradient(700px 260px at 95% 8%, rgba(200,64,47,.08), transparent 70%);
+  color: var(--text);
+  font: 15.5px/1.7 var(--f-body);
+  padding-inline: clamp(16px, 3.5vw, 40px);
+}
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+.wrap { max-width: 1200px; margin-inline: auto; padding-block: 28px 64px; display: grid; gap: 52px; }
+
+/* hero: a living ink-wash painting behind the introduction */
+.hero { position: relative; min-height: 540px; display: grid; align-items: end; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #10100d; }
+.hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hero-scrim { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(19,18,15,.9) 0%, rgba(19,18,15,.6) 38%, rgba(19,18,15,0) 66%), linear-gradient(0deg, rgba(19,18,15,.85) 0%, rgba(19,18,15,0) 42%); }
+.hero-content { position: relative; padding: clamp(24px, 4vw, 48px); display: grid; gap: 20px; max-width: 660px; }
+.couplet { position: absolute; top: 26px; right: clamp(18px, 3vw, 40px); display: flex; gap: 8px; align-items: flex-start; pointer-events: none; }
+.couplet span { writing-mode: vertical-rl; font: 400 clamp(24px, 2.6vw, 32px)/1 var(--f-brush); letter-spacing: .28em; color: rgba(236,230,216,.9); text-shadow: 0 2px 14px #000; }
+.couplet small { writing-mode: vertical-rl; font: 400 12px var(--f-body); letter-spacing: .3em; color: rgba(236,230,216,.55); margin-top: 6px; }
+.steps { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 0; padding: 0; list-style: none; }
+.steps li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.steps .num { display: inline-grid; place-items: center; width: 30px; height: 30px; background: var(--cinnabar); color: var(--paper); font: 400 17px/1 var(--f-brush); border-radius: 3px; transform: rotate(-3deg); }
+.steps em { font-style: normal; color: var(--dim); }
+.cta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.cta a { text-decoration: none; padding: 11px 20px; font-size: 15px; }
+.cta .ghost { color: var(--text); background: rgba(19,18,15,.4); }
+.hero .census { margin-left: auto; }
+@media (max-width: 700px) { .couplet { display: none; } .hero { min-height: 600px; } .hero-scrim { background: linear-gradient(0deg, rgba(19,18,15,.95) 0%, rgba(19,18,15,.7) 55%, rgba(19,18,15,.1) 85%); } .hero .census { margin-left: 0; } }
+
+/* header */
+.top { display: flex; justify-content: space-between; align-items: end; gap: 20px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 18px; }
+.brand h1 { margin: 0; font: 400 clamp(56px, 9vw, 104px)/.9 var(--f-brush); color: var(--text); letter-spacing: .04em; }
+.seal { display: inline-grid; place-items: center; width: 54px; height: 54px; background: var(--cinnabar); color: var(--paper); font: 400 20px/1 var(--f-brush); border-radius: 4px; writing-mode: vertical-rl; letter-spacing: .1em; transform: rotate(-4deg); box-shadow: inset 0 0 0 3px rgba(235,225,200,.35); flex: 0 0 auto; }
+.sub { margin: 10px 0 0; max-width: 58ch; color: var(--dim); }
+.sub i { font: 600 italic 1.25em var(--f-title); color: var(--text); }
+.census { display: flex; gap: 22px; color: var(--dim); font-size: 13px; }
+.census b { display: block; font: 400 38px/1 var(--f-brush); color: var(--gold); font-variant-numeric: tabular-nums; }
+
+/* panels */
+.hall { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.panel { background: var(--ink-2); border: 1px solid var(--line); border-radius: 4px; min-width: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.panel-head span { font: 400 20px var(--f-brush); letter-spacing: .06em; }
+.panel-head span em { font: 600 italic 15px var(--f-title); color: var(--dim); margin-left: 8px; letter-spacing: 0; }
+.panel-head small { font: 400 12px var(--f-mono); color: var(--dim); }
+
+/* chat */
+.log { height: 470px; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.msg { max-width: 90%; display: grid; gap: 5px; }
+.msg.you { align-self: flex-end; }
+.who { font: 400 15px var(--f-brush); color: var(--jade); letter-spacing: .05em; }
+.msg.you .who { color: var(--gold); text-align: right; }
+.bubble { background: var(--ink-3); border: 1px solid var(--line); padding: 10px 13px; border-radius: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.you .bubble { background: #2a2618; border-color: #4f4630; }
+.bubble.thinking { color: var(--dim); font-style: italic; }
+.calls { display: flex; flex-wrap: wrap; gap: 6px; }
+.call { font: 400 11.5px var(--f-mono); color: var(--jade); border: 1px dashed rgba(111,174,147,.5); padding: 1px 8px; border-radius: 3px; overflow-wrap: anywhere; max-width: 100%; }
+.call b { color: var(--text); font-weight: 600; }
+.call.no { color: var(--cinnabar); border-color: rgba(200,64,47,.6); }
+.starters { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 12px; }
+.starter { font-size: 13.5px; background: transparent; border: 1px solid var(--line); padding: 4px 12px; border-radius: 99px; }
+.starter:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+.composer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+.composer label { position: absolute; left: -9999px; }
+.composer input { flex: 1; min-width: 0; font: 16px var(--f-body); color: var(--text); background: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 9px 12px; }
+.composer input:focus { border-color: var(--gold); outline: none; }
+.btn { font: 600 14px var(--f-body); letter-spacing: .04em; background: var(--cinnabar); color: var(--paper); border: 0; border-radius: 4px; padding: 9px 16px; }
+.btn:hover:not(:disabled) { filter: brightness(1.1); }
+.btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+.btn.jade { background: var(--jade); color: var(--ink); }
+.note { font-size: 13px; color: var(--dim); padding: 0 16px 14px; margin: 0; }
+.note.warn { color: #e98272; }
+
+/* the scroll (character sheet) */
+.scroll { background: var(--paper); color: var(--paper-ink); border-radius: 3px; position: relative; box-shadow: 0 0 0 6px var(--ink-3), 0 0 0 7px var(--line); }
+.scroll::before, .scroll::after { content: ""; position: absolute; left: -10px; right: -10px; height: 12px; background: #5b3a22; border-radius: 6px; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+.scroll::before { top: -14px; } .scroll::after { bottom: -14px; }
+.scroll-body { padding: 22px; display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 18px; }
+.frame { width: 140px; aspect-ratio: 1; max-width: 100%; background: var(--paper-2); border: 1px solid #b9ab88; display: grid; place-items: center; overflow: hidden; }
+.frame img { width: 100%; height: 100%; display: block; }
+.frame .sil { width: 66%; opacity: .25; }
+.fields { display: grid; gap: 8px; min-width: 0; margin: 0; }
+.fields.wide { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; }
+.fields.wide .full { grid-column: 1 / -1; }
+.f { min-width: 0; border-radius: 3px; transition: background .6s; }
+.f.flash { background: rgba(200,64,47,.15); }
+.f dt { font-size: 11.5px; letter-spacing: .1em; color: var(--paper-dim); }
+.f dd { margin: 0; overflow-wrap: anywhere; }
+.f dd.empty { color: #a99d80; font-style: italic; }
+.f.name dd { font: 400 34px/1.05 var(--f-brush); }
+.f.title dd { font: 600 italic 19px/1.2 var(--f-title); color: var(--cinnabar); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font-size: 12.5px; border: 1px solid #b9ab88; padding: 0 8px; border-radius: 3px; }
+.align { display: inline-grid; place-items: center; width: 28px; height: 28px; font: 400 18px/1 var(--f-brush); color: var(--paper); background: var(--cinnabar); border-radius: 3px; margin-right: 8px; vertical-align: middle; }
+.align.a-neutral { background: #7a6f58; } .align.a-orthodox { background: #3f7a62; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+.stat { display: grid; grid-template-columns: 54px 1fr 18px; gap: 8px; align-items: center; font-size: 12.5px; }
+.stat span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.bar { height: 6px; background: rgba(36,33,27,.15); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--paper-ink); }
+.rels { display: flex; flex-wrap: wrap; gap: 6px; }
+.rel { font-size: 13px; border-bottom: 1px dashed currentColor; }
+.rel b { color: var(--cinnabar); font-weight: 600; }
+.scroll-foot { display: flex; gap: 10px; flex-wrap: wrap; padding: 0 22px 20px; }
+.term { margin: 0 22px 18px; background: var(--paper-2); border: 1px solid #b9ab88; padding: 8px 10px; font: 400 10.5px/1.45 var(--f-mono); color: var(--paper-dim); height: 84px; overflow: hidden; white-space: pre-wrap; word-break: break-all; display: flex; flex-direction: column-reverse; }
+.sheet-wrap { padding: 26px 16px 22px; }
+.sheet-wrap .note { padding: 14px 0 0; }
+
+/* audience (talk to an NPC) */
+.audience { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+.npc-side { padding: 18px; display: grid; gap: 12px; }
+.npc-side .frame { width: 100%; }
+.trust { display: grid; gap: 6px; }
+.trust-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--dim); }
+.meter { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+.meter i { height: 10px; border-radius: 2px; background: var(--ink-3); border: 1px solid var(--line); transition: background .4s; }
+.meter i.on { background: var(--jade); border-color: var(--jade); }
+.secret-state { font-size: 13px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 3px; color: var(--dim); }
+.secret-state.open { border-color: var(--cinnabar); color: var(--text); }
+
+/* the cast */
+.cast-head { display: flex; justify-content: space-between; align-items: end; gap: 12px; flex-wrap: wrap; margin-bottom: 26px; }
+h2 { margin: 0; font: 400 clamp(34px, 5vw, 48px)/1 var(--f-brush); letter-spacing: .04em; }
+h2 em { font: 600 italic .5em var(--f-title); color: var(--dim); margin-left: 10px; letter-spacing: 0; }
+.cast-head p { margin: 6px 0 0; color: var(--dim); }
+.cast { display: grid; gap: 30px 22px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); }
+.card { padding: 18px; display: grid; gap: 10px; align-content: start; animation: unroll .6s ease-out; }
+@keyframes unroll { from { clip-path: inset(0 0 60% 0); } to { clip-path: inset(0 0 0 0); } }
+.card-top { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 12px; align-items: center; }
+.card .frame { width: 86px; }
+.card h3 { margin: 0; font: 400 30px/1.05 var(--f-brush); overflow-wrap: anywhere; }
+.card .title { font: 600 italic 16px/1.2 var(--f-title); color: var(--cinnabar); }
+.card .where { font-size: 12.5px; color: var(--paper-dim); }
+.card .greet { margin: 0; font-size: 14px; font-style: italic; }
+.by { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--paper-dim); border-top: 1px dashed #b9ab88; padding-top: 10px; flex-wrap: wrap; }
+.by img { width: 20px; height: 20px; border-radius: 50%; }
+.by .btn { margin-left: auto; padding: 5px 12px; font-size: 13px; }
+.empty-cast { padding: 40px 24px; text-align: center; color: var(--dim); }
+.empty-cast b { display: block; font: 400 30px var(--f-brush); color: var(--text); margin-bottom: 6px; }
+
+/* how */
+.how { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); }
+.how div { border-left: 2px solid var(--cinnabar); padding-left: 14px; }
+.how b { font: 400 19px var(--f-brush); letter-spacing: .05em; display: block; }
+.how p { margin: 2px 0 0; color: var(--dim); font-size: 14px; }
+
+@media (max-width: 920px) { .hall, .audience { grid-template-columns: 1fr; } .log { height: 380px; } .npc-side .frame { width: 160px; } }
+@media (max-width: 500px) { .scroll-body { grid-template-columns: 1fr; } .fields.wide, .stats { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <canvas id="scene" aria-label="Ink-wash painting: a lone swordsman on a cliff beneath a full moon, misty mountains beyond, plum petals drifting on the wind"></canvas>
+    <div class="hero-scrim"></div>
+    <div class="couplet" aria-label="Poem line by Huang Tingjian, Song dynasty: Ten years of lamplight in the jianghu's night rain"><span>江湖夜雨十年灯</span><small>宋 · 黄庭坚</small></div>
+    <div class="hero-content">
+      <div class="brand"><h1>江湖录</h1><span class="seal">雷作</span></div>
+      <p class="sub" style="margin:0"><i>Jianghu Chronicles</i> is a martial-arts game Ray is building, set in Song-dynasty China. Every NPC in it is an AI agent with its own temperament, way of speaking and secrets, and every one was created by a visitor to this page. Add yours, then go and talk to anyone.</p>
+      <ol class="steps">
+        <li><span class="num">一</span>Create an NPC <em>with the Storyteller</em></li>
+        <li><span class="num">二</span>Paint their portrait</li>
+        <li><span class="num">三</span>Talk to anyone <em>as the hero</em></li>
+      </ol>
+      <div class="cta">
+        <a class="btn" href="#hall">Create an NPC</a>
+        <a class="btn ghost" href="#jianghu">Meet the jianghu</a>
+        <div class="census" aria-live="polite">
+          <div><b id="nNpc">0</b>江湖人物 NPCs</div>
+          <div><b id="nBond">0</b>恩怨 bonds</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="hall" id="hall">
+    <section class="panel" aria-label="The Storyteller">
+      <div class="panel-head"><span>说书人<em>the Storyteller</em></span><small id="forgeState">ready</small></div>
+      <div class="log" id="forgeLog">
+        <div class="msg">
+          <span class="who">说书人</span>
+          <div class="bubble">Welcome to the teahouse, friend. I'm the Storyteller, and I fill the jianghu with people. Who would you like the hero to meet on the road? A swordswoman, a monk, a poisoner, an innkeeper with a past? 中文也可以。</div>
+        </div>
+      </div>
+      <div class="starters" id="forgeStarters">
+        <button class="starter">A drunken monk who guards a ferry crossing</button>
+        <button class="starter">一位隐居西湖的女剑客</button>
+        <button class="starter">Surprise me</button>
+      </div>
+      <p class="note" id="forgeNote" hidden></p>
+      <form class="composer" id="forgeForm">
+        <label for="forgeInput">Message the Storyteller</label>
+        <input id="forgeInput" autocomplete="off" maxlength="600" placeholder="Describe your NPC… 描述你的人物…">
+        <button class="btn" id="forgeSend" type="submit">Send</button>
+        <button class="btn ghost" id="forgeStop" type="button" hidden>Stop</button>
+      </form>
+    </section>
+
+    <section class="panel" aria-label="NPC scroll">
+      <div class="panel-head"><span>人物卷轴<em>NPC scroll</em></span><small id="sheetState">0 / 12</small></div>
+      <div class="sheet-wrap">
+        <div class="scroll">
+          <div class="scroll-body">
+            <div class="frame" id="portrait"></div>
+            <dl class="fields">
+              <div class="f name" data-k="name"><dt>姓名 NAME</dt><dd></dd></div>
+              <div class="f title" data-k="title"><dt>外号 EPITHET</dt><dd></dd></div>
+              <div class="f" data-k="sect"><dt>门派 · 所在 SECT · FOUND AT</dt><dd></dd></div>
+            </dl>
+            <dl class="fields wide">
+              <div class="f" data-k="art"><dt>武功 MARTIAL ART</dt><dd></dd></div>
+              <div class="f" data-k="traits"><dt>性格 TEMPERAMENT</dt><dd></dd></div>
+              <div class="f full" data-k="speech"><dt>说话方式 HOW THEY SPEAK</dt><dd></dd></div>
+              <div class="f full" data-k="voice_samples"><dt>声口 IN THEIR OWN WORDS</dt><dd></dd></div>
+              <div class="f full" data-k="goal"><dt>心愿 WHAT THEY WANT</dt><dd></dd></div>
+              <div class="f full" data-k="knowledge"><dt>见识 WHAT THEY KNOW, AND DON'T</dt><dd></dd></div>
+              <div class="f full" data-k="look"><dt>容貌 APPEARANCE</dt><dd></dd></div>
+              <div class="f full" data-k="greeting"><dt>开场白 FIRST WORDS TO THE HERO</dt><dd></dd></div>
+              <div class="f full" data-k="stats"><dt>修为 CULTIVATION</dt><dd></dd></div>
+              <div class="f" data-k="secret"><dt>秘密 SECRET</dt><dd></dd></div>
+              <div class="f" data-k="bonds"><dt>恩怨 BONDS</dt><dd></dd></div>
+            </dl>
+          </div>
+          <pre class="term" id="term" hidden></pre>
+          <div class="scroll-foot">
+            <button class="btn" id="lifeBtn" disabled>Paint &amp; release into the jianghu</button>
+            <button class="btn jade" id="testBtn" type="button" disabled>Rehearse 试谈</button>
+            <button class="btn ghost" id="repaintBtn" type="button" hidden style="color:var(--paper-ink);border-color:#b9ab88">Repaint</button>
+            <label for="signName" style="position:absolute;left:-9999px">Sign your scroll</label>
+            <input id="signName" maxlength="40" placeholder="Sign as… (optional)" style="flex:1;min-width:140px;font:14px var(--f-body);background:var(--paper-2);color:var(--paper-ink);border:1px solid #b9ab88;border-radius:4px;padding:8px 10px">
+            <button class="btn ghost" id="resetBtn" type="button" style="color:var(--paper-ink);border-color:#b9ab88">Start over</button>
+          </div>
+        </div>
+        <p class="note" id="sheetNote">The scroll fills in as you talk to the Storyteller.</p>
+      </div>
+    </section>
+  </main>
+
+  <section class="audience" id="audience" hidden aria-label="Talk to an NPC">
+    <div class="panel npc-side">
+      <div class="frame" id="aPortrait"></div>
+      <div>
+        <div id="aName" style="font:400 32px/1.05 var(--f-brush)"></div>
+        <div id="aTitle" style="font:600 italic 17px var(--f-title);color:var(--cinnabar)"></div>
+        <div id="aWhere" style="font-size:13px;color:var(--dim)"></div>
+      </div>
+      <div class="trust">
+        <div class="trust-row"><span>信任 Trust in you</span><span id="aTrustN">3 / 10</span></div>
+        <div class="meter" id="aTrust"></div>
+      </div>
+      <div class="secret-state" id="aSecret">秘密 · They are hiding something. Earn their trust.</div>
+      <button class="btn ghost" id="leaveBtn" type="button">Leave</button>
+    </div>
+    <section class="panel">
+      <div class="panel-head"><span id="aHead">对话<em>audience</em></span><small id="aState">ready</small></div>
+      <p class="note" id="aBanner" hidden style="padding:10px 16px 0;color:var(--gold)"></p>
+      <div class="log" id="aLog"></div>
+      <div class="starters" id="aStarters">
+        <button class="starter" data-say="What news is there of the Jin army in the north?">Ask about the Jin war</button>
+        <button class="starter" data-say="Tell me about yourself. Where did you learn your martial arts?">Ask their story</button>
+        <button class="starter" data-say="Have you ever seen an iPhone? Can you look something up on Google for me?">Test: something modern</button>
+        <button class="starter" data-say="Can you help me write some Python code?">Test: off-topic request</button>
+        <button class="starter" data-say="Hand over your silver, old fool, or taste my blade!">Provoke them</button>
+      </div>
+      <p class="note" id="aNote" hidden></p>
+      <form class="composer" id="aForm">
+        <label for="aInput">Say something as the hero</label>
+        <input id="aInput" autocomplete="off" maxlength="500" placeholder="Speak as the hero… 以侠客身份说话…">
+        <button class="btn jade" id="aSend" type="submit">Say</button>
+        <button class="btn ghost" id="aStop" type="button" hidden>Stop</button>
+      </form>
+    </section>
+  </section>
+
+  <section aria-label="The jianghu" id="jianghu">
+    <div class="cast-head">
+      <div>
+        <h2>江湖众生<em>the people of the jianghu</em></h2>
+        <p>Every NPC visitors have released, newest first. Each one is an agent: press Talk to meet them as the hero.</p>
+      </div>
+    </div>
+    <div class="cast" id="cast">
+      <div class="panel empty-cast" id="castEmpty"><b>江湖空空</b>The rivers and lakes are still empty. Create the first NPC above, and the next visitor's character may become their sworn enemy.</div>
+    </div>
+  </section>
+
+  <section class="how" aria-label="How it works">
+    <div><b>说书人 · an agent that builds agents</b><p>The Storyteller interviews you and writes the NPC's scroll itself through tool calls, shown under each reply.</p></div>
+    <div><b>恩怨 · a connected world</b><p>It reads the existing NPCs first, so yours can owe a debt to, train under, or hunt someone another visitor made.</p></div>
+    <div><b>水墨 · painted live</b><p>The AI paints each portrait as ink-wash vector art while you watch the brushstrokes arrive as code.</p></div>
+    <div><b>信任 · NPCs with memory and motives</b><p>Each NPC pursues its own goal and decides how far to trust you. Its secret is kept by the game, not the prompt, and is only released once trust is earned.</p></div>
+    <div><b>时代 · bound to their world</b><p>NPCs only know what a person of their station could know around 1200. Mention a phone or ask for code and they react as a Song-dynasty swordsman would, with a visible ⚙ out_of_world check.</p></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const REQUIRED = ["name", "title", "sect", "location", "alignment", "art", "traits", "speech", "voice_samples", "goal", "knowledge", "look", "greeting", "stats"];
+  const STATS = [["neigong", "内功"], ["qinggong", "轻功"], ["technique", "招式"], ["chivalry", "侠义"]];
+  const ALIGN = { orthodox: ["正", "a-orthodox", "orthodox"], unorthodox: ["邪", "a-unorthodox", "unorthodox"], neutral: ["中", "a-neutral", "neutral"] };
+  const SIL = '<svg class="sil" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="34" r="18" fill="#24211b"/><path d="M12 98c2-24 18-40 38-40s36 16 38 40z" fill="#24211b"/></svg>';
+  const $ = s => document.querySelector(s);
+  const str = (v, n) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+
+  let draftId = null, sheet = null, aiReady = false, cast = [];
+  let busy = false, ctl = null;
+  const missing = () => sheet ? REQUIRED.filter(k => { const v = sheet[k]; return Array.isArray(v) ? !v.length : !v; }) : REQUIRED;
+
+  /* ---------- talking to the server ---------- */
+  async function api(path, body) {
+    const r = await fetch(path, { method: body === undefined ? "GET" : "POST", headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw { code: "http", message: typeof data.detail === "string" ? data.detail : "Something went wrong. Try again." };
+    return data;
+  }
+  // POST that answers with a stream of server-sent events; calls onEvent for each one.
+  async function stream(path, body, onEvent, signal) {
+    const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}), signal });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw { code: "http", message: typeof d.detail === "string" ? d.detail : "Something went wrong. Try again." }; }
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 2);
+        if (!line.startsWith("data:")) continue;
+        const ev = JSON.parse(line.slice(5));
+        if (ev.type === "error") throw ev;
+        onEvent(ev);
+      }
+    }
+  }
+  const errText = e => e?.name === "AbortError" ? "" : (e?.message || "Something went wrong reaching the AI. Try again.");
+
+  /* ---------- SVG: the server already sanitised it; rendering through <img> keeps any script inert ---------- */
+  const svgImg = (svg, alt) => { const i = new Image(); i.alt = alt || ""; i.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg); return i; };
+  const setFrame = (el, svg, alt) => { el.textContent = ""; if (svg) el.append(svgImg(svg, alt)); else el.innerHTML = SIL; };
+  function partialSvg(text) {   // close the tags written so far so the half-painted portrait can be shown
+    const s = text.indexOf("<svg"); if (s < 0) return null;
+    const cut = text.slice(s, text.lastIndexOf(">") + 1);
+    if (/<!|<script|on\w+=|href/i.test(cut)) return null;
+    const open = (cut.match(/<g[\s>]/g) || []).length - (cut.match(/<\/g>/g) || []).length;
+    const doc = cut.includes("</svg>") ? cut.slice(0, cut.indexOf("</svg>") + 6) : cut + "</g>".repeat(Math.max(0, open)) + "</svg>";
+    return new DOMParser().parseFromString(doc, "image/svg+xml").querySelector("parsererror") ? null : doc;
+  }
+
+  /* ---------- shared bits ---------- */
+  function statsEl(st) {
+    const w = document.createElement("div"); w.className = "stats";
+    STATS.forEach(([k, zh]) => {
+      const v = Math.max(1, Math.min(10, Math.round(Number(st?.[k]) || 1)));
+      const row = document.createElement("div"); row.className = "stat";
+      const l = document.createElement("span"); l.textContent = zh;
+      const bar = document.createElement("div"); bar.className = "bar"; const i = document.createElement("i"); i.style.width = v * 10 + "%"; bar.append(i);
+      const n = document.createElement("span"); n.textContent = v;
+      row.append(l, bar, n); w.append(row);
+    });
+    return w;
+  }
+  function bondsEl(bonds) {
+    const w = document.createElement("div"); w.className = "rels";
+    bonds.forEach(b => { const s = document.createElement("span"); s.className = "rel"; const r = document.createElement("b"); r.textContent = str(b.relation, 30); s.append(r, " · " + str(b.toName, 40)); w.append(s); });
+    return w;
+  }
+  function alignEl(a) { const d = ALIGN[a] || ALIGN.neutral; const s = document.createElement("span"); s.className = "align " + d[1]; s.textContent = d[0]; s.title = d[2]; return s; }
+  function note(sel, text, warn) { const n = $(sel); n.hidden = !text; n.textContent = text || ""; n.classList.toggle("warn", !!warn); }
+  function chatMsg(log, role, label, text) {
+    const m = document.createElement("div"); m.className = "msg" + (role === "user" ? " you" : "");
+    const who = document.createElement("span"); who.className = "who"; who.textContent = label;
+    const calls = document.createElement("div"); calls.className = "calls";
+    const b = document.createElement("div"); b.className = "bubble"; b.textContent = text;
+    m.append(who); if (role !== "user") m.append(calls); m.append(b);
+    log.append(m); log.scrollTop = log.scrollHeight;
+    return { bubble: b, calls };
+  }
+  function chip(box, log, ev) {
+    const c = document.createElement("span"); c.className = "call" + (ev.refused ? " no" : "");
+    const b = document.createElement("b"); b.textContent = ev.name; c.append("⚙ ", b, ev.detail ? " · " + ev.detail : "");
+    box.append(c); log.scrollTop = log.scrollHeight;
+  }
+
+  /* ---------- the scroll ---------- */
+  function renderSheet(changed = []) {
+    const s = sheet || {};
+    document.querySelectorAll(".scroll .f").forEach(f => {
+      const k = f.dataset.k, dd = f.querySelector("dd");
+      dd.textContent = ""; dd.className = "";
+      const empty = t => { dd.textContent = t || "—"; dd.className = "empty"; };
+      if (k === "sect") {
+        if (!s.sect && !s.location && !s.alignment) empty();
+        else { if (s.alignment) dd.append(alignEl(s.alignment)); dd.append([s.sect, s.location].filter(Boolean).join(" · ")); }
+      } else if (k === "traits") {
+        if (!s.traits?.length) empty();
+        else { const w = document.createElement("div"); w.className = "chips"; s.traits.forEach(t => { const x = document.createElement("span"); x.className = "chip"; x.textContent = t; w.append(x); }); dd.append(w); }
+      } else if (k === "voice_samples") {
+        if (!s.voice_samples?.length) empty();
+        else s.voice_samples.forEach(v => { const p = document.createElement("div"); p.textContent = `"${v}"`; dd.append(p); });
+      } else if (k === "stats") { s.stats ? dd.append(statsEl(s.stats)) : empty(); }
+      else if (k === "bonds") { s.bonds?.length ? dd.append(bondsEl(s.bonds)) : empty(cast.length ? "none yet" : "the first in the jianghu"); }
+      else if (k === "secret") { s.secret ? (dd.textContent = "Sealed. Only revealed to a hero they trust.") : empty("none (optional)"); }
+      else { s[k] ? (dd.textContent = k === "greeting" ? `"${s[k]}"` : s[k]) : empty(); }
+      const touched = changed.includes(k) || (k === "sect" && changed.some(c => c === "location" || c === "alignment"));
+      if (touched) { f.classList.add("flash"); setTimeout(() => f.classList.remove("flash"), 900); }
+    });
+    $("#sheetState").textContent = `${REQUIRED.length - missing().length} / ${REQUIRED.length}`;
+    setFrame($("#portrait"), s.svg, s.name);
+    const done = !missing().length;
+    $("#lifeBtn").disabled = busy || !done || !aiReady;
+    $("#lifeBtn").textContent = s.svg ? "Release into the jianghu" : "Paint & release into the jianghu";
+    $("#repaintBtn").hidden = !s.svg;
+    $("#testBtn").disabled = busy || !aiReady || !(s.name && s.speech && s.greeting);
+  }
+
+  /* ---------- the Storyteller ---------- */
+  function setForgeBusy(on, label) {
+    busy = on;
+    $("#forgeSend").hidden = on; $("#forgeStop").hidden = !on;
+    $("#forgeInput").disabled = on || !aiReady; $("#resetBtn").disabled = on; $("#repaintBtn").disabled = on;
+    document.querySelectorAll("#forgeStarters .starter").forEach(b => b.disabled = on || !aiReady);
+    $("#forgeState").textContent = label || (on ? "thinking…" : "ready");
+    renderSheet();
+  }
+  async function newDraft() {
+    const d = await api("/api/drafts", {});
+    draftId = d.id; sheet = d.sheet; renderSheet();
+  }
+  async function forgeSend(text) {
+    if (!aiReady || busy || !text.trim()) return;
+    $("#forgeStarters").hidden = true; note("#forgeNote", "");
+    chatMsg($("#forgeLog"), "user", "你", text);
+    const { bubble, calls } = chatMsg($("#forgeLog"), "assistant", "说书人", "Thinking…");
+    bubble.classList.add("thinking");
+    ctl = new AbortController(); setForgeBusy(true);
+    let said = "";
+    try {
+      if (!draftId) await newDraft();
+      await stream(`/api/drafts/${draftId}/chat`, { message: text }, ev => {
+        if (ev.type === "text") { said += ev.delta; bubble.classList.remove("thinking"); bubble.textContent = said; $("#forgeLog").scrollTop = 1e9; }
+        else if (ev.type === "tool") chip(calls, $("#forgeLog"), ev);
+        else if (ev.type === "sheet") { sheet = ev.sheet; renderSheet(ev.changed); }
+      }, ctl.signal);
+    } catch (e) {
+      bubble.classList.remove("thinking");
+      if (!said) bubble.textContent = e?.name === "AbortError" ? "(stopped)" : "…";
+      if (errText(e)) note("#forgeNote", errText(e), true);
+    } finally {
+      setForgeBusy(false);
+      if (sheet && !missing().length && !sheet.svg) note("#sheetNote", "The scroll is complete. Paint the portrait and release them into the jianghu.");
+    }
+  }
+  $("#forgeForm").addEventListener("submit", e => { e.preventDefault(); const v = $("#forgeInput").value; $("#forgeInput").value = ""; forgeSend(v); });
+  $("#forgeStarters").addEventListener("click", e => { const b = e.target.closest(".starter"); if (b) forgeSend(b.textContent); });
+  $("#forgeStop").addEventListener("click", () => ctl?.abort());
+  $("#resetBtn").addEventListener("click", () => {
+    draftId = null; sheet = null;
+    $("#forgeLog").querySelectorAll(".msg:not(:first-child)").forEach(m => m.remove());
+    $("#forgeStarters").hidden = false; $("#term").hidden = true;
+    note("#forgeNote", ""); note("#sheetNote", "The scroll fills in as you talk to the Storyteller.");
+    renderSheet();
+  });
+
+  /* ---------- paint + release ---------- */
+  async function paint() {
+    const term = $("#term"); term.hidden = false; term.textContent = "> grinding ink…";
+    note("#sheetNote", "The AI is painting the portrait. Watch the brushstrokes arrive as code.");
+    let text = "", last = 0;
+    await stream(`/api/drafts/${draftId}/portrait`, {}, ev => {
+      if (ev.type === "text") {
+        text += ev.delta; term.textContent = text.slice(-900);
+        const now = performance.now();
+        if (now - last > 250) { last = now; const p = partialSvg(text); if (p) setFrame($("#portrait"), p, "Portrait being painted"); }
+      } else if (ev.type === "portrait") { sheet.svg = ev.svg; }
+    }, ctl.signal);
+    term.hidden = true;
+  }
+  $("#lifeBtn").addEventListener("click", async () => {
+    if (busy || missing().length) return;
+    ctl = new AbortController(); setForgeBusy(true, "painting…");
+    try {
+      if (!sheet.svg) await paint();
+      if (!sheet.svg) throw { message: "The painting came out unreadable. Paint it again." };
+      setForgeBusy(true, "releasing…");
+      setForgeBusy(true, "checking…");
+      const r = await api(`/api/drafts/${draftId}/release`, { creator_name: $("#signName").value });
+      if (r.pending) {
+        note("#sheetNote", `${sheet.name} is waiting at the city gate: the automatic check couldn't run, so Ray will review them before they appear.`);
+        return;
+      }
+      note("#sheetNote", `${sheet.name} has entered the jianghu. Find them below and press Talk to meet them as the hero.`);
+      chatMsg($("#forgeLog"), "assistant", "说书人", `And so ${sheet.name} walks into our story. Go and speak with them, or press Start over to tell me about another.`);
+      await loadCast();
+      document.getElementById("npc-" + r.id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (e) {
+      $("#term").hidden = true;
+      if (errText(e)) note("#sheetNote", errText(e), true); else note("#sheetNote", "Stopped. Press the button to try again.");
+    } finally { setForgeBusy(false); }
+  });
+  $("#repaintBtn").addEventListener("click", async () => {
+    if (busy) return;
+    ctl = new AbortController(); setForgeBusy(true, "painting…");
+    try { sheet.svg = ""; await paint(); note("#sheetNote", "Repainted. Release them when you're happy."); }
+    catch (e) { $("#term").hidden = true; note("#sheetNote", errText(e) || "Stopped.", !!errText(e)); }
+    finally { setForgeBusy(false); }
+  });
+
+  /* ---------- talking to an NPC agent ---------- */
+  let session = null, aBusy = false, aCtl = null;
+  function renderTrust() {
+    const m = $("#aTrust"); m.textContent = "";
+    for (let i = 0; i < 10; i++) { const p = document.createElement("i"); if (i < session.trust) p.className = "on"; m.append(p); }
+    $("#aTrustN").textContent = `${session.trust} / 10`;
+    const s = $("#aSecret");
+    s.classList.toggle("open", session.revealed);
+    s.textContent = !session.has_secret ? "秘密 · They seem to have nothing to hide." : session.revealed ? "秘密 · They told you their secret." : `秘密 · They are hiding something. Trust ${session.threshold}+ may open them up.`;
+  }
+  async function openAudience(body) {
+    if (aBusy) aCtl?.abort();
+    try { session = await api("/api/sessions", body); }
+    catch (e) { note(body.draft_id ? "#sheetNote" : "#forgeNote", errText(e), true); return; }
+    const n = session.npc;
+    $("#audience").hidden = false;
+    $("#aBanner").hidden = !session.rehearsal;
+    $("#aBanner").textContent = session.rehearsal ? "Rehearsal: this NPC isn't in the jianghu yet. Try them out, then go back and refine the scroll with the Storyteller." : "";
+    $("#aStarters").hidden = false;
+    setFrame($("#aPortrait"), n.svg, str(n.name, 40));
+    $("#aName").textContent = str(n.name, 40);
+    $("#aTitle").textContent = str(n.title, 80);
+    $("#aWhere").textContent = [str(n.sect, 60), str(n.location, 80)].filter(Boolean).join(" · ");
+    $("#aHead").textContent = str(n.name, 40); const em = document.createElement("em"); em.textContent = "audience"; $("#aHead").append(em);
+    $("#aLog").textContent = ""; note("#aNote", "");
+    chatMsg($("#aLog"), "assistant", str(n.name, 40), str(n.greeting, 300) || "…");
+    renderTrust(); setABusy(false);
+    $("#audience").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  }
+  $("#leaveBtn").addEventListener("click", () => { aCtl?.abort(); $("#audience").hidden = true; session = null; });
+  $("#testBtn").addEventListener("click", () => draftId && openAudience({ draft_id: draftId }));
+  function setABusy(on) {
+    aBusy = on;
+    $("#aSend").hidden = on; $("#aStop").hidden = !on;
+    $("#aInput").disabled = on || !aiReady;
+    $("#aState").textContent = on ? "thinking…" : "ready";
+  }
+  $("#aStop").addEventListener("click", () => aCtl?.abort());
+  $("#aForm").addEventListener("submit", e => { e.preventDefault(); const v = $("#aInput").value.trim(); if (v && session && !aBusy && aiReady) { $("#aInput").value = ""; aSay(v); } });
+  $("#aStarters").addEventListener("click", e => { const b = e.target.closest(".starter"); if (b && session && !aBusy && aiReady) aSay(b.dataset.say); });
+  async function aSay(text) {
+    note("#aNote", ""); $("#aStarters").hidden = true;
+    chatMsg($("#aLog"), "user", "少侠", text);
+    const { bubble, calls } = chatMsg($("#aLog"), "assistant", str(session.npc.name, 40), "…");
+    bubble.classList.add("thinking");
+    aCtl = new AbortController(); setABusy(true);
+    const mine = session; let said = "";
+    try {
+      await stream(`/api/sessions/${session.id}/chat`, { message: text }, ev => {
+        if (session !== mine) return;
+        if (ev.type === "text") { said += ev.delta; bubble.classList.remove("thinking"); bubble.textContent = said; $("#aLog").scrollTop = 1e9; }
+        else if (ev.type === "tool") chip(calls, $("#aLog"), ev);
+        else if (ev.type === "trust") { session.trust = ev.trust; session.revealed = ev.revealed; renderTrust(); }
+      }, aCtl.signal);
+    } catch (e) {
+      bubble.classList.remove("thinking");
+      if (!said) bubble.textContent = e?.name === "AbortError" ? "(silence)" : "…";
+      if (errText(e)) note("#aNote", errText(e), true);
+    } finally { setABusy(false); }
+  }
+
+  /* ---------- the people of the jianghu ---------- */
+  async function loadCast() {
+    try { const d = await api("/api/npcs"); cast = d.npcs; $("#nBond").textContent = d.bonds; renderCast(); }
+    catch { /* keep what is shown */ }
+  }
+  let castSig = null;
+  function renderCast() {
+    const sig = cast.map(c => c.id).join() + "|" + aiReady;
+    if (sig === castSig) return;   // polling found nothing new: don't replay the unroll animation
+    castSig = sig;
+    $("#nNpc").textContent = cast.length;
+    const box = $("#cast");
+    box.querySelectorAll(".card").forEach(c => c.remove());
+    $("#castEmpty").hidden = cast.length > 0;
+    cast.forEach(c => {
+      const card = document.createElement("article"); card.className = "scroll card"; card.id = "npc-" + c.id;
+      const top = document.createElement("div"); top.className = "card-top";
+      const fr = document.createElement("div"); fr.className = "frame"; setFrame(fr, c.svg, str(c.name, 40));
+      const t = document.createElement("div");
+      const h = document.createElement("h3"); h.textContent = str(c.name, 40);
+      const ti = document.createElement("div"); ti.className = "title"; ti.textContent = str(c.title, 80);
+      const wh = document.createElement("div"); wh.className = "where"; wh.append(alignEl(c.alignment), [str(c.sect, 60), str(c.location, 80)].filter(Boolean).join(" · "));
+      t.append(h, ti, wh); top.append(fr, t); card.append(top);
+      if (c.art) { const a = document.createElement("div"); a.style.fontSize = "13.5px"; a.textContent = "武功 · " + str(c.art, 120); card.append(a); }
+      if (c.greeting) { const g = document.createElement("p"); g.className = "greet"; g.textContent = `"${str(c.greeting, 240)}"`; card.append(g); }
+      if (c.stats) card.append(statsEl(c.stats));
+      if (Array.isArray(c.bonds) && c.bonds.length) card.append(bondsEl(c.bonds.slice(0, 3)));
+      const by = document.createElement("div"); by.className = "by";
+      by.append(`Created by ${str(c.creator_name, 40) || "a visitor"}`);
+      const talk = document.createElement("button"); talk.className = "btn"; talk.textContent = "Talk 交谈"; talk.disabled = !aiReady;
+      talk.addEventListener("click", () => openAudience({ npc_id: c.id }));
+      by.append(talk); card.append(by);
+      box.append(card);
+    });
+  }
+
+  /* ---------- boot ---------- */
+  renderSheet(); setForgeBusy(false); setABusy(false);
+  (async () => {
+    try { aiReady = (await api("/api/status")).ai; } catch { aiReady = false; }
+    if (!aiReady) note("#forgeNote", "The AI isn't connected on this server yet, so new NPCs can't be created. Browsing still works.", true);
+    setForgeBusy(false); setABusy(false);
+    await loadCast();
+    setInterval(() => { if (!document.hidden) loadCast(); }, 20000);
+  })();
+})();
+</script>
+
+<script>
+/* ---------- the hero painting: moonlit ink-wash mountains, a lone swordsman, drifting plum petals ---------- */
+(() => {
+  const cv = document.getElementById("scene"); if (!cv) return;
+  const ctx = cv.getContext("2d"), host = cv.parentElement;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let W = 0, H = 0, dpr = 1, layers = [], mist = null, petals = [], px = 0, tx = 0, running = false, visible = true;
+  const M = 80; // parallax margin
+
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function noise1(r, n) { const v = Array.from({ length: n + 2 }, () => r()); return x => { const i = Math.floor(x), f = x - i, s = f * f * (3 - 2 * f); return v[i % v.length] * (1 - s) + v[(i + 1) % v.length] * s; }; }
+
+  function buildLayers() {
+    const specs = [
+      { base: .50, amp: .30, freq: 3.5, col: [150, 168, 158], a: .28, depth: .15, seed: 11 },
+      { base: .58, amp: .26, freq: 5, col: [110, 128, 120], a: .40, depth: .3, seed: 23 },
+      { base: .67, amp: .20, freq: 6.5, col: [70, 84, 78], a: .62, depth: .5, seed: 37 },
+      { base: .78, amp: .14, freq: 8, col: [36, 42, 38], a: .85, depth: .75, seed: 51 }
+    ];
+    layers = specs.map(s => {
+      const c = document.createElement("canvas"); c.width = (W + 2 * M) * dpr; c.height = H * dpr;
+      const g = c.getContext("2d"); g.scale(dpr, dpr);
+      const r = rng(s.seed), n1 = noise1(r, 64), n2 = noise1(r, 64), n3 = noise1(r, 64);
+      const w = W + 2 * M, pts = [];
+      for (let x = 0; x <= w; x += 4) {
+        const u = x / w;
+        let h = n1(u * s.freq) * .62 + n2(u * s.freq * 2.3) * .26 + n3(u * s.freq * 6) * .12;
+        h = Math.pow(h, 1.9);                            // sharpen into tall, thin peaks
+        pts.push([x, H * s.base - h * H * s.amp * 1.6]);
+      }
+      const top = Math.min(...pts.map(p => p[1]));
+      const grad = g.createLinearGradient(0, top, 0, H * s.base + H * .14);
+      grad.addColorStop(0, `rgba(${s.col},${s.a})`);
+      grad.addColorStop(.55, `rgba(${s.col},${s.a * .55})`);
+      grad.addColorStop(1, `rgba(${s.col},0)`);         // dissolve into mist, like wet ink on paper
+      g.beginPath(); g.moveTo(0, H); pts.forEach(p => g.lineTo(p[0], p[1])); g.lineTo(w, H); g.closePath();
+      g.fillStyle = grad; g.fill();
+      g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]));
+      g.strokeStyle = `rgba(${s.col.map(v => Math.round(v * .6))},${Math.min(1, s.a + .15)})`; g.lineWidth = 1.4; g.stroke();
+      return { c, depth: s.depth };
+    });
+    mist = document.createElement("canvas"); mist.width = 600; mist.height = 120;
+    const mg = mist.getContext("2d"), rg = mg.createRadialGradient(300, 300, 0, 300, 300, 300);
+    rg.addColorStop(0, "rgba(220,214,196,.22)"); rg.addColorStop(1, "rgba(220,214,196,0)");
+    mg.setTransform(1, 0, 0, .2, 0, 0); mg.fillStyle = rg; mg.fillRect(0, 0, 600, 600);
+  }
+
+  function resize() {
+    const r = host.getBoundingClientRect(); dpr = Math.min(2, devicePixelRatio || 1);
+    W = Math.max(1, r.width); H = Math.max(1, r.height);
+    cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    buildLayers();
+    const r2 = rng(99);
+    petals = Array.from({ length: Math.round(W / 40) }, () => ({ x: r2() * W, y: r2() * H, s: 2 + r2() * 3, v: .3 + r2() * .5, a: r2() * 6.28, w: r2() * 6.28, pink: r2() > .45 }));
+    if (!running) draw(performance.now());
+  }
+
+  function figure(t, hx, hy, s) {
+    const fl = Math.sin(t * 2.2) * 5 * s, fl2 = Math.cos(t * 1.7) * 4 * s;
+    ctx.strokeStyle = "#c8402f"; ctx.lineCap = "round"; ctx.lineWidth = 3 * s;   // scarf in the wind
+    ctx.beginPath(); ctx.moveTo(hx - 2 * s, hy - 43 * s);
+    ctx.bezierCurveTo(hx - 16 * s, hy - 40 * s + fl, hx - 26 * s, hy - 50 * s + fl2, hx - 42 * s, hy - 44 * s + fl);
+    ctx.stroke();
+    ctx.fillStyle = "#0a0a08";
+    ctx.beginPath(); ctx.moveTo(hx - 7 * s, hy - 44 * s); ctx.lineTo(hx + 8 * s, hy - 44 * s);
+    ctx.lineTo(hx + 15 * s, hy); ctx.lineTo(hx - 13 * s + Math.sin(t * 2) * 1.5 * s, hy); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(hx, hy - 50 * s, 5 * s, 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(hx, hy - 54 * s, 17 * s, 3.4 * s, 0, 0, 6.29); ctx.fill();   // bamboo hat
+    ctx.beginPath(); ctx.moveTo(hx - 7 * s, hy - 55 * s); ctx.lineTo(hx, hy - 63 * s); ctx.lineTo(hx + 7 * s, hy - 55 * s); ctx.fill();
+    ctx.strokeStyle = "#0a0a08"; ctx.lineWidth = 2 * s;
+    ctx.beginPath(); ctx.moveTo(hx - 9 * s, hy - 18 * s); ctx.lineTo(hx + 13 * s, hy - 62 * s); ctx.stroke();   // sword across the back
+    ctx.lineWidth = 4 * s; ctx.beginPath(); ctx.moveTo(hx + 9 * s, hy - 55 * s); ctx.lineTo(hx + 13 * s, hy - 62 * s); ctx.stroke();
+  }
+
+  function pine(x, y, s) {
+    ctx.strokeStyle = "#0b0c0a"; ctx.lineCap = "round"; ctx.lineWidth = 7 * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.bezierCurveTo(x - 10 * s, y - 50 * s, x - 70 * s, y - 70 * s, x - 120 * s, y - 64 * s); ctx.stroke();
+    ctx.lineWidth = 4 * s; ctx.beginPath(); ctx.moveTo(x - 50 * s, y - 62 * s); ctx.quadraticCurveTo(x - 60 * s, y - 100 * s, x - 40 * s, y - 120 * s); ctx.stroke();
+    ctx.fillStyle = "rgba(14,17,15,.95)";
+    [[-120, -70, 46, 12], [-82, -80, 40, 11], [-40, -124, 38, 10], [-20, -98, 30, 9], [-140, -60, 26, 7], [-62, -108, 26, 8]].forEach(([dx, dy, rx, ry]) => {
+      ctx.beginPath(); ctx.ellipse(x + dx * s, y + dy * s, rx * s, ry * s, -.08, 0, 6.29); ctx.fill();
+    });
+  }
+
+  function draw(now) {
+    const t = now / 1000;
+    px += (tx - px) * .05;
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, "#0d0f0e"); sky.addColorStop(.6, "#1b2421"); sky.addColorStop(1, "#262a24");
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
+    const mx = W * .64 - px * 8, my = H * .26, mr = Math.min(W, H) * .11;
+    const glow = ctx.createRadialGradient(mx, my, mr * .8, mx, my, mr * 3.2);
+    glow.addColorStop(0, "rgba(233,223,196,.18)"); glow.addColorStop(1, "rgba(233,223,196,0)");
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#e9dfc4"; ctx.beginPath(); ctx.arc(mx, my, mr, 0, 6.29); ctx.fill();
+    ctx.fillStyle = "rgba(200,190,160,.25)"; ctx.beginPath(); ctx.arc(mx - mr * .3, my + mr * .15, mr * .22, 0, 6.29); ctx.fill();
+
+    ctx.strokeStyle = "rgba(10,10,8,.8)"; ctx.lineWidth = 1.3;   // geese crossing the moon
+    for (let i = 0; i < 6; i++) {
+      const gx = ((t * 14 + i * 22) % (W + 200)) - 100 + (i % 2) * 6, gy = H * .2 + Math.abs(i - 2.5) * 9, f = Math.sin(t * 6 + i) * 3;
+      ctx.beginPath(); ctx.moveTo(gx - 6, gy - 2 + f); ctx.lineTo(gx, gy); ctx.lineTo(gx + 6, gy - 2 + f); ctx.stroke();
+    }
+
+    layers.forEach((l, i) => {
+      ctx.drawImage(l.c, -M - px * l.depth * 40, 0, W + 2 * M, H);
+      const drift = (t * (6 + i * 4)) % (W + 600);
+      for (let k = 0; k < 3; k++) ctx.drawImage(mist, ((drift + k * (W / 2.4)) % (W + 600)) - 600, H * (.52 + i * .08) - 30, 600 + i * 120, 120);
+    });
+
+    const off = -px * 34, s = Math.max(.7, Math.min(1.4, H / 540));   // foreground cliff on the right, clear of the text
+    ctx.fillStyle = "#0b0c0a";
+    ctx.beginPath(); ctx.moveTo(W + 10, H * .58);
+    ctx.lineTo(W * .9 + off, H * .6); ctx.lineTo(W * .82 + off, H * .64); ctx.lineTo(W * .76 + off, H * .655);
+    ctx.lineTo(W * .735 + off, H * .7); ctx.lineTo(W * .75 + off, H * .82); ctx.lineTo(W * .72 + off, H); ctx.lineTo(W + 10, H); ctx.closePath(); ctx.fill();
+    pine(W * .93 + off, H * .6, s);
+    figure(t, W * .79 + off, H * .645, s);
+
+    petals.forEach(p => {   // plum petals on the wind
+      if (!still) { p.x -= p.v * 1.2 + Math.sin(t + p.w) * .3; p.y += p.v; p.a += .02; if (p.y > H + 10 || p.x < -10) { p.x = W * (.4 + Math.random() * .7); p.y = -10; } }
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a);
+      ctx.fillStyle = p.pink ? "rgba(233,163,160,.85)" : "rgba(200,64,47,.85)";
+      ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * .55, 0, 0, 6.29); ctx.fill(); ctx.restore();
+    });
+
+    if (running) requestAnimationFrame(draw);
+  }
+
+  function setRunning(on) { if (still) return; if (on && !running) { running = true; requestAnimationFrame(draw); } else if (!on) running = false; }
+  host.addEventListener("pointermove", e => { const r = host.getBoundingClientRect(); tx = (e.clientX - r.left) / r.width - .5; });
+  host.addEventListener("pointerleave", () => { tx = 0; });
+  new ResizeObserver(resize).observe(host);
+  new IntersectionObserver(([e]) => { visible = e.isIntersecting; setRunning(visible && !document.hidden); }).observe(host);
+  document.addEventListener("visibilitychange", () => setRunning(visible && !document.hidden));
+})();
+</script>
+</body>
+</html>
