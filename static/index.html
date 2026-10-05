@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Jianghu Chronicles</title>
+<title>江湖录 Jianghu Chronicles</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;700&family=Cormorant+Garamond:ital,wght@1,600&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -241,6 +241,28 @@ h2 em { font: 600 italic .5em var(--f-title); color: var(--dim); margin-left: 10
 .npc-side .frame { width: 100%; max-width: 220px; justify-self: center; }
 
 @media (max-width: 500px) { .scroll-body { grid-template-columns: 1fr; } .scroll-body .frame { width: 150px; } }
+
+/* ---- every text in two languages ---- */
+.note, .secret-state { white-space: pre-line; }
+.zh-note { display: block; margin-top: 4px; color: var(--dim); font-size: .94em; }
+.how .zh-note { font-size: 13px; }
+.lede.zh { margin-top: -6px; color: rgba(236,230,216,.62); }
+.bubble .en, .bubble .zh { white-space: pre-wrap; }
+.bubble .zh { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--dim); }
+.msg.you .bubble .zh { border-top-color: #4f4630; color: #b9ad8e; }
+.bubble.thinking { white-space: pre-line; }
+.bi .zh { color: var(--paper-dim); font-size: .93em; }
+.bi .en, .bi .zh { white-space: pre-wrap; }
+.f .bi.quote .en { font-style: italic; }
+.chips.quirks .chip { text-align: center; line-height: 1.35; padding: 3px 10px; }
+.chips.quirks .chip .zh { font-size: 12px; color: var(--paper-dim); }
+.card .title .zh { font: 400 13px var(--f-body); color: var(--paper-dim); font-style: normal; }
+.card .where .bi { display: inline-block; vertical-align: top; max-width: calc(100% - 34px); }
+.card .art .zh, .card .greet .zh { font-size: 13px; }
+#aTitle .zh, #aWhere .zh { font-size: 13px; color: var(--dim); font-style: normal; }
+#aWhere .zh { color: #8a8470; }
+.starter { text-align: left; }
+.f.title dd .zh { font: 400 14px var(--f-body); font-style: normal; color: var(--paper-dim); }
 .brand .logo { white-space: nowrap; flex: none; }
 @media (max-width: 600px) { .brand .kick { display: none; } }
 </style>
@@ -253,10 +275,11 @@ h2 em { font: 600 italic .5em var(--f-title); color: var(--dim); margin-left: 10
     <div class="hero-scrim"></div>
     <div class="couplet" aria-label="Poem line by Huang Tingjian, Song dynasty: Ten years of lamplight in the jianghu's night rain"><span>江湖夜雨十年灯</span><small>宋 · 黄庭坚</small></div>
     <div class="hero-content">
-      <div class="brand"><span class="logo">江湖录</span><span class="seal">雷作</span><span class="kick">Jianghu Chronicles · a game by Ray</span></div>
+      <div class="brand"><span class="logo">江湖录</span><span class="seal">江湖</span><span class="kick">Jianghu Chronicles · a game by Ray · Ray 的武侠游戏</span></div>
       <h1 class="hero-line"><span>你已身在</span><span>江湖</span></h1>
       <p class="hero-sub">You're already in the jianghu. Come in and have a look.</p>
       <p class="lede">Jianghu Chronicles is a martial-arts game Ray is building, set in Song-dynasty China. Every NPC in it is an AI agent with its own temperament, way of speaking and secrets, and every one was created by a visitor to this page. Add yours, then go and talk to anyone.</p>
+      <p class="lede zh">《江湖录》是 Ray 正在制作的武侠游戏，背景是宋代中国。游戏里的每一位 NPC 都是一个 AI 智能体，有自己的性情、说话方式和秘密，而且每一位都由访问本页的人创造。添加你的人物，然后去和任何人交谈吧。</p>
       <div class="cta">
         <button class="btn roll" id="heroRoll" type="button">掷骰 · Roll a stranger</button>
         <button class="btn ghost" id="heroWander" type="button">闲逛 · Wander the roads</button>
@@ -274,33 +297,34 @@ h2 em { font: 600 italic .5em var(--f-title); color: var(--dim); margin-left: 10
       <div>
         <h2>茶馆<em>the teahouse</em></h2>
         <p>Tell the Storyteller who you'd like the hero to meet, even in one line, and the rest is invented for you. Or roll the dice and see who walks in.</p>
+        <p class="zh-note">告诉说书人你想让主角遇见谁，哪怕只有一句话，其余的由他替你编出来。或者掷骰子，看谁走进茶馆。</p>
       </div>
     </div>
     <div class="hall">
       <section class="panel" aria-label="The Storyteller">
-        <div class="panel-head"><span>说书人<em>the Storyteller</em></span><small id="forgeState">ready</small></div>
+        <div class="panel-head"><span>说书人<em>the Storyteller</em></span><small id="forgeState">ready 就绪</small></div>
         <div class="log" id="forgeLog">
           <div class="msg">
-            <span class="who">说书人</span>
-            <div class="bubble">Welcome to the teahouse, friend. Tell me about someone you'd like the hero to meet on the road, a single line is plenty, and I'll fill in the rest: their name, quirks, secret, even their face. Or roll the dice and see who walks in. 中文也可以。</div>
+            <span class="who">说书人 Storyteller</span>
+            <div class="bubble"><div class="en">Welcome to the teahouse, friend. Tell me about someone you'd like the hero to meet on the road, a single line is plenty, and I'll fill in the rest: their name, quirks, secret, even their face. Or roll the dice and see who walks in.</div><div class="zh">欢迎来到茶馆，朋友。说说你想让主角在路上遇见谁，一句话就够了，其余的我来补全：姓名、怪癖、秘密，连相貌也一并写好。或者掷个骰子，看谁走进来。</div></div>
           </div>
         </div>
         <div class="starters" id="forgeStarters">
-          <button class="starter primary" id="rollBtn" type="button">掷骰 Roll a random character</button>
-          <button class="starter" data-say="A drunken monk who guards a ferry crossing" type="button">A drunken monk who guards a ferry crossing</button>
-          <button class="starter" data-say="一位隐居西湖的女剑客" type="button">一位隐居西湖的女剑客</button>
+          <button class="starter primary" id="rollBtn" type="button">掷骰 · Roll a random character · 随机人物</button>
+          <button class="starter" data-say="A drunken monk who guards a ferry crossing ||| 守渡口的醉和尚" type="button">A drunken monk who guards a ferry crossing · 守渡口的醉和尚</button>
+          <button class="starter" data-say="A swordswoman living in hiding by West Lake ||| 一位隐居西湖的女剑客" type="button">一位隐居西湖的女剑客 · A swordswoman by West Lake</button>
         </div>
         <p class="note" id="forgeNote" hidden></p>
         <form class="composer" id="forgeForm">
-          <label for="forgeInput">Message the Storyteller</label>
+          <label for="forgeInput">Message the Storyteller 给说书人留言</label>
           <input id="forgeInput" autocomplete="off" maxlength="600" placeholder="Describe your NPC… 描述你的人物…">
-          <button class="btn" id="forgeSend" type="submit">Send</button>
-          <button class="btn ghost" id="forgeStop" type="button" hidden>Stop</button>
+          <button class="btn" id="forgeSend" type="submit">Send 发送</button>
+          <button class="btn ghost" id="forgeStop" type="button" hidden>Stop 停止</button>
         </form>
       </section>
 
       <section class="panel" aria-label="NPC scroll">
-        <div class="panel-head"><span>人物卷轴<em>NPC scroll</em></span><small id="sheetState">empty</small></div>
+        <div class="panel-head"><span>人物卷轴<em>NPC scroll</em></span><small id="sheetState">empty 空</small></div>
         <div class="sheet-wrap">
           <div class="scroll">
             <div class="scroll-body">
@@ -315,24 +339,25 @@ h2 em { font: 600 italic .5em var(--f-title); color: var(--dim); margin-left: 10
                 <div class="f full" data-k="traits"><dt>怪癖 QUIRKS</dt><dd></dd></div>
                 <div class="f full" data-k="greeting"><dt>第一句话 FIRST WORDS</dt><dd></dd></div>
                 <div class="f full" data-k="goal"><dt>心愿 WANTS FROM THE HERO</dt><dd></dd></div>
-                <div class="f full" data-k="secret"><dt>秘密 SECRET (only you can see it)</dt><dd></dd></div>
+                <div class="f full" data-k="secret"><dt>秘密 SECRET · only you can see it 仅你可见</dt><dd></dd></div>
               </dl>
               <details class="hood">
-                <summary>Under the hood: how the AI plays them</summary>
+                <summary>Under the hood: how the AI plays them · 幕后：AI 如何扮演他们</summary>
                 <div class="f" data-k="speech"><dt>说话方式 HOW THEY SPEAK</dt><dd></dd></div>
                 <div class="f" data-k="knowledge"><dt>见识 WHAT THEY KNOW, AND DON'T</dt><dd></dd></div>
               </details>
             </div>
             <div class="scroll-foot">
-              <button class="btn" id="lifeBtn" disabled>Release into the jianghu</button>
+              <button class="btn" id="lifeBtn" disabled>Release into the jianghu 放入江湖</button>
               <button class="btn jade" id="testBtn" type="button" disabled>Talk to them first 试谈</button>
               <button class="btn ink" id="rerollBtn" type="button">掷骰 Roll another</button>
-              <button class="btn ink" id="resetBtn" type="button">Start over</button>
-              <label for="signName" style="position:absolute;left:-9999px">Sign your scroll</label>
-              <input class="sign" id="signName" maxlength="40" placeholder="Sign as… (optional)">
+              <button class="btn ink" id="resetBtn" type="button">Start over 重来</button>
+              <label for="signName" style="position:absolute;left:-9999px">Sign your scroll 在卷轴上署名</label>
+              <input class="sign" id="signName" maxlength="40" placeholder="Sign as… 署名（可选）">
             </div>
           </div>
-          <p class="note" id="sheetNote">The scroll fills in as you talk to the Storyteller.</p>
+          <p class="note" id="sheetNote">The scroll fills in as you talk to the Storyteller.
+你与说书人交谈时，卷轴会自动填写。</p>
         </div>
       </section>
     </div>
@@ -350,26 +375,27 @@ h2 em { font: 600 italic .5em var(--f-title); color: var(--dim); margin-left: 10
         <div class="trust-row"><span>信任 Trust in you</span><span id="aTrustN">3 / 10</span></div>
         <div class="meter" id="aTrust"></div>
       </div>
-      <div class="secret-state" id="aSecret">秘密 · They are hiding something. Earn their trust.</div>
-      <button class="btn ghost" id="leaveBtn" type="button">Leave</button>
+      <div class="secret-state" id="aSecret">Secret 秘密 · hiding something. Earn their trust.
+他藏着秘密，先赢得他的信任。</div>
+      <button class="btn ghost" id="leaveBtn" type="button">Leave 离开</button>
     </div>
     <section class="panel">
-      <div class="panel-head"><span id="aHead">对话<em>audience</em></span><small id="aState">ready</small></div>
+      <div class="panel-head"><span id="aHead">对话<em>audience</em></span><small id="aState">ready 就绪</small></div>
       <p class="note" id="aBanner" hidden style="padding:10px 16px 0;color:var(--gold)"></p>
       <div class="log" id="aLog"></div>
       <div class="starters" id="aStarters">
-        <button class="starter" data-say="What news is there of the Jin army in the north?" type="button">Ask about the Jin war</button>
-        <button class="starter" data-say="Tell me about yourself. Where did you learn your martial arts?" type="button">Ask their story</button>
-        <button class="starter" data-say="Have you ever seen an iPhone? Can you look something up on Google for me?" type="button">Test: something modern</button>
-        <button class="starter" data-say="Can you help me write some Python code?" type="button">Test: off-topic request</button>
-        <button class="starter" data-say="Hand over your silver, old fool, or taste my blade!" type="button">Provoke them</button>
+        <button class="starter" data-say="What news is there of the Jin army in the north? ||| 北边的金兵有什么消息？" type="button">Ask about the Jin war · 问金国战事</button>
+        <button class="starter" data-say="Tell me about yourself. Where did you learn your martial arts? ||| 说说你自己吧，你的武功是在哪里学的？" type="button">Ask their story · 问来历</button>
+        <button class="starter" data-say="Have you ever seen an iPhone? Can you look something up on Google for me? ||| 你见过 iPhone 吗？能帮我在谷歌上查点东西吗？" type="button">Test: something modern · 试探：现代之物</button>
+        <button class="starter" data-say="Can you help me write some Python code? ||| 你能帮我写段 Python 代码吗？" type="button">Test: off-topic request · 试探：离题请求</button>
+        <button class="starter" data-say="Hand over your silver, old fool, or taste my blade! ||| 老东西，把银子交出来，不然尝尝我的剑！" type="button">Provoke them · 挑衅</button>
       </div>
       <p class="note" id="aNote" hidden></p>
       <form class="composer" id="aForm">
-        <label for="aInput">Say something as the hero</label>
+        <label for="aInput">Say something as the hero 以主角身份说话</label>
         <input id="aInput" autocomplete="off" maxlength="500" placeholder="Speak as the hero… 以侠客身份说话…">
-        <button class="btn jade" id="aSend" type="submit">Say</button>
-        <button class="btn ghost" id="aStop" type="button" hidden>Stop</button>
+        <button class="btn jade" id="aSend" type="submit">Say 说</button>
+        <button class="btn ghost" id="aStop" type="button" hidden>Stop 停止</button>
       </form>
     </section>
   </section>
@@ -379,20 +405,21 @@ h2 em { font: 600 italic .5em var(--f-title); color: var(--dim); margin-left: 10
       <div>
         <h2>江湖众生<em>the people on the road</em></h2>
         <p>Everyone visitors have released, newest first. Press Talk to meet them as the hero, or just wander.</p>
+        <p class="zh-note">江湖路上，访客们放入的所有人物，新来的在前。点「交谈」以主角身份与他们相见，或者随意闲逛。</p>
       </div>
       <button class="btn" id="wanderBtn" type="button">闲逛 Wander</button>
     </div>
     <div class="cast" id="cast">
-      <div class="panel empty-cast" id="castEmpty"><b>江湖空空</b>The roads are empty so far. Roll the first stranger above, and the next visitor's character may become their sworn enemy.</div>
+      <div class="panel empty-cast" id="castEmpty"><b>江湖空空 · the roads are empty</b>Roll the first stranger above, and the next visitor's character may become their sworn enemy.<span class="zh-note">还没有人。在上面掷出第一位陌生人，下一位访客的人物也许会成为他的死对头。</span></div>
     </div>
   </section>
 
   <section class="how" aria-label="How it works">
-    <div><b>说书人 · an agent that builds agents</b><p>Say one line and the Storyteller writes the whole scroll itself through tool calls, shown under each reply.</p></div>
-    <div><b>恩怨 · a connected world</b><p>It reads the existing NPCs first, so yours can owe a debt to, train under, or hunt someone another visitor made.</p></div>
-    <div><b>相由心生 · drawn from the personality</b><p>The Storyteller picks hair, outfit, weapon and aura to match who they are, and the portrait is drawn at once.</p></div>
-    <div><b>信任 · NPCs with motives</b><p>Each NPC pursues its own goal and decides how far to trust you. Its secret is kept by the game, not the prompt, and is only released once trust is earned.</p></div>
-    <div><b>时代 · bound to their world</b><p>NPCs only know what a person of their station could know around 1200. Mention a phone or ask for code and they react as a Song-dynasty swordsman would, with a visible ⚙ out_of_world check.</p></div>
+    <div><b>说书人 · an agent that builds agents</b><p>Say one line and the Storyteller writes the whole scroll itself through tool calls, shown under each reply.<span class="zh-note">说一句话，说书人就会通过工具调用自己写完整张卷轴，每一步都显示在回复下方。</span></p></div>
+    <div><b>恩怨 · a connected world</b><p>It reads the existing NPCs first, so yours can owe a debt to, train under, or hunt someone another visitor made.<span class="zh-note">它会先读已有的人物，所以你的人物可以欠别人人情、拜别人为师，或追杀另一位访客创造的人。</span></p></div>
+    <div><b>相由心生 · drawn from the personality</b><p>The Storyteller picks hair, outfit, weapon and aura to match who they are, and the portrait is drawn at once.<span class="zh-note">说书人按人物性格挑选发式、衣着、兵器和气场，画像随即绘成。</span></p></div>
+    <div><b>信任 · NPCs with motives</b><p>Each NPC pursues its own goal and decides how far to trust you. Its secret is kept by the game, not the prompt, and is only released once trust is earned.<span class="zh-note">每个 NPC 都有自己的目标，并决定对你信任到什么程度。秘密由游戏保管，而不是写在提示词里，只有赢得信任才会透露。</span></p></div>
+    <div><b>时代 · bound to their world</b><p>NPCs only know what a person of their station could know around 1200. Mention a phone or ask for code and they react as a Song-dynasty swordsman would, with a visible ⚙ out_of_world check.<span class="zh-note">NPC 只知道公元 1200 年前后同等身份的人所能知道的事。提到手机或让他写代码，他会像宋代侠客那样反应，并显示 ⚙ out_of_world 检查。</span></p></div>
   </section>
 </div>
 <script src="/portrait.js"></script>

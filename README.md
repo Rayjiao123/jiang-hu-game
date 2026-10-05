@@ -2,7 +2,7 @@
 
 A website for a Song-dynasty wuxia game where every NPC is an AI agent created by a visitor.
 A visitor says one line (or just presses **Roll a stranger**) and the Storyteller agent writes a
-whole character: name, epithet, quirks, secret, signature move, and an anime-style portrait drawn
+whole character: name, epithet, quirks, secret, signature move, and a wuxia-illustration portrait drawn
 from their personality. They can talk to the NPC to try it out, release it into the shared world,
 and anyone can then talk to any NPC as the hero (or just **Wander** and meet someone).
 
@@ -24,14 +24,15 @@ Open http://localhost:8000. Run the tests (no API calls, no cost) with `.\.venv\
 ```
 static/index.html      page markup and styles
 static/app.js          Storyteller chat, roll, scroll, conversations, NPC cards, wander
-static/portrait.js     anime portrait builder: appearance options in, SVG out
+static/portrait.js     portrait builder in the style of classic Chinese wuxia game art: appearance options in, SVG out
 static/hero.js         the animated ink-wash painting behind the introduction
 static/admin.html      password-protected review page: approve, hide, delete, add citizens, back up
 app/main.py            FastAPI routes; streams replies to the page as server-sent events
 app/agent.py           streaming tool-use loop for DeepSeek (OpenAI chat format)
 app/game.py            game rules and the tools each agent may call
 app/prompts.py         world bible, era rules, Storyteller and NPC instructions
-app/roll.py            the dice: random role, place, twist and look for "Roll a stranger"
+app/roll.py            the dice: random role, place, twist and look for "Roll a stranger" (each phrase in English and Chinese)
+app/bilingual.py       the "English ||| 中文" format, its checks, and the fallback translation
 app/moderation.py      automatic content check before an NPC goes public
 app/db.py              SQLite: npcs, npc_secrets, drafts, sessions
 app/ratelimit.py       per-visitor and daily caps on model calls
@@ -56,14 +57,20 @@ they want, secret). How they speak, what they know and don't, and their look wor
 because a model asked for "a random character" keeps producing the same one. The Storyteller builds
 the character from that seed.
 
-**Anime portraits, drawn from the personality.** DeepSeek's API doesn't generate images, so the
-Storyteller picks 16 appearance options (hair, eyes, outfit, weapon, aura, scene and so on) from fixed
-lists in `app/game.py`, and `static/portrait.js` draws the matching layers. Every portrait shares one
-game-art style, appears instantly, costs nothing, and cannot carry unsafe markup. To use a real
-image model later, send the same `appearance` object to it as a prompt.
+**Portraits in the style of Chinese wuxia game art, drawn from the personality.** DeepSeek's API
+doesn't generate images, so the Storyteller picks 16 appearance options (hair, eyes, outfit, weapon,
+aura, scene and so on) from fixed lists in `app/game.py`, and `static/portrait.js` draws the matching
+layers: ink outlines with a hand-brushed wobble, realistic proportions, narrow eyes under strong brows,
+hanfu, topknots and long beards, an ink-wash landscape on paper, and a red seal. Every portrait shares
+one look, appears instantly, costs nothing, and cannot carry unsafe markup. To use a real image model
+later, send the same `appearance` object to it as a prompt.
 
-**Reply language is decided in code** (`prompts.reply_language`), because the model otherwise
-drifts into the character's own language.
+**Everything is in English and Chinese.** AI text is written `English ||| 中文`. Every scroll field
+(except the name, which is Chinese plus pinyin) must follow that form: `set_fields` refuses a field
+written in one language and tells the model what to fix. Replies use the same form, and if the model
+forgets, the server translates the missing half (`app/bilingual.py`). The visitor's own messages are
+translated by `/api/translate` and shown under them. Fixed messages and errors are written in both
+languages in the code. The admin page is English only.
 
 ## API
 
@@ -74,6 +81,7 @@ drifts into the character's own language.
 | POST | `/api/drafts` | start a new NPC |
 | POST | `/api/drafts/{id}/chat` | talk to the Storyteller (stream) |
 | POST | `/api/drafts/{id}/roll` | roll a random character (stream) |
+| POST | `/api/translate` | the other-language version of a visitor's message |
 | POST | `/api/drafts/{id}/release` | check and publish the NPC |
 | POST | `/api/sessions` | start talking to an NPC (`npc_id`) or rehearse a draft (`draft_id`) |
 | POST | `/api/sessions/{id}/chat` | talk to the NPC (stream) |

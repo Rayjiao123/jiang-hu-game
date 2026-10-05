@@ -71,6 +71,7 @@
 <script>
 (() => {
   const $ = s => document.querySelector(s);
+  const flat = v => String(v ?? "").split("|||").map(x => x.trim()).join(" / ");   // "English ||| 中文" shown as "English / 中文"
   let pw = "", npcs = [], filter = "all", confirmDelete = null;
   try { pw = sessionStorage.getItem("jianghu-admin") || ""; } catch {}
 
@@ -106,15 +107,15 @@
 
       const body = document.createElement("div");
       const h = document.createElement("h2"); h.textContent = n.name || "(unnamed)";
-      const sm = document.createElement("small"); sm.textContent = n.title || ""; h.append(sm);
+      const sm = document.createElement("small"); sm.textContent = flat(n.title); h.append(sm);
       const meta = document.createElement("div"); meta.className = "muted";
       const pill = document.createElement("span"); pill.className = "pill" + (n.hidden ? " off" : ""); pill.textContent = n.hidden ? (n.flag ? "needs review" : "hidden") : "live";
       meta.append(pill, `by ${n.creator_name || "anonymous"} · ${new Date(n.created_at * 1000).toLocaleString()}`);
-      if (n.flag) meta.append(` · ${n.flag}`);
+      if (n.flag) meta.append(` · ${flat(n.flag)}`);
       const det = document.createElement("details");
       const sum = document.createElement("summary"); sum.textContent = "Full scroll"; det.append(sum);
-      [["Sect", n.sect], ["Found at", n.location], ["Signature move", n.art], ["Quirks", (n.traits || []).join(" / ")], ["Speech", n.speech], ["Goal", n.goal], ["Knowledge", n.knowledge], ["Greeting", n.greeting], ["Secret", n.secret]].forEach(([k, v]) => {
-        if (!v) return; const p = document.createElement("p"); const b = document.createElement("b"); b.textContent = k + ": "; p.append(b, String(v)); det.append(p);
+      [["Sect", n.sect], ["Found at", n.location], ["Signature move", n.art], ["Quirks", (n.traits || []).map(flat).join("; ")], ["Speech", n.speech], ["Goal", n.goal], ["Knowledge", n.knowledge], ["Greeting", n.greeting], ["Secret", n.secret]].forEach(([k, v]) => {
+        if (!v) return; const p = document.createElement("p"); const b = document.createElement("b"); b.textContent = k + ": "; p.append(b, flat(v)); det.append(p);
       });
       body.append(h, meta, det);
 

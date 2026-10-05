@@ -2,7 +2,7 @@
 import random
 import re
 
-from . import config, db
+from . import bilingual, config, db
 from .agent import Tool, ToolError, Turn
 
 # Everything a portrait can show. The Storyteller picks from these lists and the page
@@ -30,14 +30,20 @@ APPEARANCE = {
 # The scroll shows eight things; speech, knowledge and appearance work behind the scenes.
 REQUIRED = ["name", "title", "sect", "location", "alignment", "art", "traits", "speech", "greeting",
             "goal", "knowledge", "secret", "appearance"]
-TEXT_FIELDS = {"name": 40, "title": 80, "sect": 60, "location": 80, "art": 120, "speech": 360, "goal": 300,
-               "knowledge": 360, "greeting": 240, "secret": 300}
+# Lengths allow for both languages in one string ("English ||| 中文").
+TEXT_FIELDS = {"name": 40, "title": 110, "sect": 90, "location": 110, "art": 170, "speech": 480, "goal": 360,
+               "knowledge": 480, "greeting": 320, "secret": 360}
+BILINGUAL = {"title", "sect", "location", "art", "speech", "greeting", "goal", "knowledge", "secret"}
 ALIGNMENTS = ("orthodox", "unorthodox", "neutral")
 STARTING_TRUST = {"orthodox": 4, "unorthodox": 2, "neutral": 3}
 
 
 def clip(value, n: int) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip().strip('"“”')[:n]
+    s = re.sub(r"\s+", " ", str(value or "")).strip()
+    # drop one pair of quotes wrapped around the whole value, but leave bilingual text alone: its quotes belong to each half
+    if bilingual.SEP not in s and len(s) >= 2 and s[0] in '"“' and s[-1] in '"”':
+        s = s[1:-1].strip()
+    return s[:n]
 
 
 def blank_sheet() -> dict:
@@ -80,20 +86,31 @@ def describe_appearance(a: dict) -> str:
     return ", ".join(parts)
 
 
-def apply_fields(sheet: dict, fields: dict) -> list[str]:
-    """Validate and write model-proposed fields onto a sheet. Returns the keys changed."""
+def apply_fields(sheet: dict, fields: dict, rejected: list | None = None) -> list[str]:
+    """Validate and write model-proposed fields onto a sheet. Returns the keys changed.
+    Fields that are not written in both languages are not saved; their names go into `rejected`."""
     changed = []
     for k, n in TEXT_FIELDS.items():
-        if fields.get(k) is not None:
-            sheet[k] = clip(fields[k], n)
-            changed.append(k)
+        if fields.get(k) is None:
+            continue
+        value = clip(fields[k], n)
+        if k in BILINGUAL and not bilingual.is_pair(value):
+            if rejected is not None:
+                rejected.append(k)
+            continue
+        sheet[k] = value
+        changed.append(k)
     if fields.get("alignment") is not None:
         a = str(fields["alignment"]).lower()
         sheet["alignment"] = a if a in ALIGNMENTS else "neutral"
         changed.append("alignment")
     if isinstance(fields.get("traits"), list):
-        sheet["traits"] = [t for t in (clip(x, 40) for x in fields["traits"]) if t][:3]
-        changed.append("traits")
+        quirks = [t for t in (clip(x, 90) for x in fields["traits"]) if t][:3]
+        if quirks and all(bilingual.is_pair(q) for q in quirks):
+            sheet["traits"] = quirks
+            changed.append("traits")
+        elif rejected is not None:
+            rejected.append("traits")
     if isinstance(fields.get("appearance"), dict):
         sheet["appearance"] = merge_appearance(sheet.get("appearance"), fields["appearance"], sheet.get("name", ""))
         changed.append("appearance")
@@ -104,9 +121,14 @@ def apply_fields(sheet: dict, fields: dict) -> list[str]:
 
 def storyteller_tools(conn, sheet: dict, turn: Turn) -> list[Tool]:
     def set_fields(args):
-        changed = apply_fields(sheet, args)
+        rejected: list[str] = []
+        changed = apply_fields(sheet, args, rejected)
         turn.emit(type="tool", name="set_fields", detail=", ".join(changed))
         turn.emit(type="sheet", sheet=sheet, changed=changed, missing=missing(sheet))
+        if rejected:
+            return {"ok": False, "saved": changed, "missing": missing(sheet),
+                    "error": f"NOT saved: {', '.join(rejected)}. Each of these must be one string written as 'English text ||| 中文文字' "
+                             "(English first, then |||, then Chinese). Send them again in that form."}
         return {"ok": True, "missing": missing(sheet)}
 
     def list_jianghu(_args):
@@ -119,10 +141,10 @@ def storyteller_tools(conn, sheet: dict, turn: Turn) -> list[Tool]:
         other = db.get_npc(conn, str(args.get("id", "")))
         if not other:
             raise ToolError("No NPC with that id. Call list_jianghu for valid ids.")
-        relation = clip(args.get("relation"), 40)
+        relation = clip(args.get("relation"), 90)
         sheet["bonds"] = [b for b in sheet["bonds"] if b["toId"] != other["id"]][:2] + [
             {"toId": other["id"], "toName": other["name"], "relation": relation}]
-        turn.emit(type="tool", name="link_npc", detail=f"{relation} → {other['name']}")
+        turn.emit(type="tool", name="link_npc", detail=f"{bilingual.plain(relation)} → {other['name']}")
         turn.emit(type="sheet", sheet=sheet, changed=["bonds"], missing=missing(sheet))
         return {"ok": True}
 
@@ -133,22 +155,22 @@ def storyteller_tools(conn, sheet: dict, turn: Turn) -> list[Tool]:
         Tool("set_fields", "Write fields of the NPC scroll the visitor sees. On the first call fill EVERY field. Afterwards send only the fields being changed (for appearance, only the options being changed). Returns the fields still missing.",
              {"type": "object", "properties": {
                  "name": {"type": "string", "description": "Chinese name, optionally followed by pinyin, e.g. '柳寒烟 Liu Hanyan'"},
-                 "title": {"type": "string", "description": "wuxia epithet, at most 6 words, e.g. 'Ferryman of the Broken Oar'"},
-                 "sect": {"type": "string", "description": "sect or guild name only, at most 5 words, or 'unaffiliated'"},
-                 "location": {"type": "string", "description": "where the hero finds them, a short place name, at most 8 words"},
+                 "title": {"type": "string", "description": "wuxia epithet, at most 6 words each language, e.g. 'Ferryman of the Broken Oar ||| 断桨渡人'"},
+                 "sect": {"type": "string", "description": "sect or guild name only, or unaffiliated, e.g. 'Emei Sect ||| 峨眉派' or 'Unaffiliated ||| 无门无派'"},
+                 "location": {"type": "string", "description": "where the hero finds them, a short place name, e.g. 'Frost Bell Monastery ||| 霜铃寺'"},
                  "alignment": {"type": "string", "enum": list(ALIGNMENTS)},
-                 "art": {"type": "string", "description": "just the poetic name of their signature move plus at most 8 words on what it does"},
-                 "traits": {"type": "array", "items": text, "description": "exactly 3 fun quirks, 2-5 words each, concrete and funny or telling, e.g. 'Never forgives a debt', 'Talks to his lantern', 'Cheats at dice, badly'"},
-                 "speech": {"type": "string", "description": "how they talk: register, verbal tic, a favourite saying. One or two sentences. This drives the NPC agent."},
-                 "greeting": {"type": "string", "description": "their first line to the hero, in their voice, one or two short sentences; it should also work as their catchphrase"},
-                 "goal": {"type": "string", "description": "what they want from the hero, one sentence"},
-                 "knowledge": {"type": "string", "description": "what this person knows and does not know, given their station, schooling and travels, e.g. 'Knows every smuggler signal on the Grand Canal; cannot read; has never been north of the Yangtze.'"},
-                 "secret": {"type": "string", "description": "a juicy secret they only tell a trusted hero, one sentence"},
+                 "art": {"type": "string", "description": "the poetic name of their signature move plus a few words on what it does, e.g. 'Nine-Fold Wind Step: runs on wind-wake ||| 九重风步：踏风而行'"},
+                 "traits": {"type": "array", "items": text, "description": "exactly 3 fun quirks, 2-5 words each, concrete and funny or telling, each written 'English ||| 中文', e.g. 'Never forgives a debt ||| 有债必讨', 'Talks to his lantern ||| 对灯笼说话'"},
+                 "speech": {"type": "string", "description": "how they talk: register, verbal tic, a favourite saying. One or two sentences in each language. This drives the NPC agent."},
+                 "greeting": {"type": "string", "description": "their first line to the hero, in their voice, one or two short sentences in each language; it should also work as their catchphrase"},
+                 "goal": {"type": "string", "description": "what they want from the hero, one sentence in each language"},
+                 "knowledge": {"type": "string", "description": "what this person knows and does not know, given their station, schooling and travels, e.g. 'Knows every smuggler signal on the Grand Canal; cannot read. ||| 熟知大运河上所有私盐信号；不识字。'"},
+                 "secret": {"type": "string", "description": "a juicy secret they only tell a trusted hero, one sentence in each language"},
                  "appearance": appearance,
              }}, set_fields),
         Tool("list_jianghu", "List NPCs other visitors already released into the world (id, name, epithet, sect, location, alignment). Call once so you can propose a bond.",
              {"type": "object", "properties": {}}, list_jianghu),
-        Tool("link_npc", "Record a bond (恩怨) between the new NPC and an existing one from list_jianghu. relation is 2-4 words, e.g. 'sworn brother', 'former apprentice', 'owes a life debt to'.",
+        Tool("link_npc", "Record a bond (恩怨) between the new NPC and an existing one from list_jianghu. relation is 2-4 words written 'English ||| 中文', e.g. 'sworn brother ||| 结义兄弟', 'owes a life debt to ||| 欠其一命'.",
              {"type": "object", "properties": {"id": text, "relation": text}, "required": ["id", "relation"]}, link_npc),
     ]
 
@@ -157,7 +179,7 @@ def storyteller_tools(conn, sheet: dict, turn: Turn) -> list[Tool]:
 
 def npc_tools(conn, npc: dict, secret: str, sess: dict, turn: Turn) -> list[Tool]:
     def out_of_world(args):
-        turn.emit(type="tool", name="out_of_world", detail=clip(args.get("thing"), 50), refused=True)
+        turn.emit(type="tool", name="out_of_world", detail=bilingual.plain(clip(args.get("thing"), 90)), refused=True)
         return {"note": "This is unknown in your world. Stay in character and react as your person would; do not explain or acknowledge it as real."}
 
     def adjust_trust(args):
@@ -166,7 +188,7 @@ def npc_tools(conn, npc: dict, secret: str, sess: dict, turn: Turn) -> list[Tool
         except (TypeError, ValueError):
             d = 0
         sess["trust"] = max(0, min(10, sess["trust"] + d))
-        turn.emit(type="tool", name="adjust_trust", detail=f"{'+' if d >= 0 else ''}{d} · {clip(args.get('reason'), 60)}")
+        turn.emit(type="tool", name="adjust_trust", detail=f"{'+' if d >= 0 else ''}{d} · {bilingual.plain(clip(args.get('reason'), 100))}")
         turn.emit(type="trust", trust=sess["trust"], revealed=sess["revealed"])
         return {"trust": sess["trust"]}
 
@@ -174,10 +196,10 @@ def npc_tools(conn, npc: dict, secret: str, sess: dict, turn: Turn) -> list[Tool
         if not secret:
             raise ToolError("You have no secret.")
         if sess["trust"] < config.SECRET_TRUST_THRESHOLD:
-            turn.emit(type="tool", name="reveal_secret", detail=f"refused · trust {sess['trust']}/{config.SECRET_TRUST_THRESHOLD}", refused=True)
+            turn.emit(type="tool", name="reveal_secret", detail=f"refused 拒绝 · trust 信任 {sess['trust']}/{config.SECRET_TRUST_THRESHOLD}", refused=True)
             raise ToolError(f"You do not trust the hero enough yet (trust {sess['trust']}/10). Deflect in character; do not hint at the content.")
         sess["revealed"] = True
-        turn.emit(type="tool", name="reveal_secret", detail="granted")
+        turn.emit(type="tool", name="reveal_secret", detail="granted 已透露")
         turn.emit(type="trust", trust=sess["trust"], revealed=True)
         return {"secret": secret}
 
@@ -186,7 +208,7 @@ def npc_tools(conn, npc: dict, secret: str, sess: dict, turn: Turn) -> list[Tool
         others = [n for n in db.list_npcs(conn) if n["id"] != npc.get("id")]
         match = next((o for o in others if q and (q in o["name"].lower() or o["name"].lower().split(" ")[0] in q)), None)
         if not match:
-            turn.emit(type="tool", name="recall_person", detail=f"{q} · unknown")
+            turn.emit(type="tool", name="recall_person", detail=f"{q} · unknown 不认识")
             raise ToolError("You have never heard of them.")
         bond = next((b["relation"] for b in npc.get("bonds") or [] if b["toId"] == match["id"]), None) or next(
             (f"they call you their {b['relation']}" for b in match.get("bonds") or [] if b["toId"] == npc.get("id")), None)
@@ -195,10 +217,10 @@ def npc_tools(conn, npc: dict, secret: str, sess: dict, turn: Turn) -> list[Tool
 
     text = {"type": "string"}
     return [
-        Tool("out_of_world", "Call this BEFORE replying whenever the hero mentions something that does not exist in your world around 1200 (modern technology, later history, foreign things you could not have heard of) or asks you to do something outside your life (write code, do homework, discuss the real world, act as an AI). Name the thing in a few words.",
+        Tool("out_of_world", "Call this BEFORE replying whenever the hero mentions something that does not exist in your world around 1200 (modern technology, later history, foreign things you could not have heard of) or asks you to do something outside your life (write code, do homework, discuss the real world, act as an AI). Name the thing in a few words, written 'English ||| 中文'.",
              {"type": "object", "properties": {"thing": text}, "required": ["thing"]}, out_of_world),
         Tool("adjust_trust", "Change how much you trust the hero, by -2 to +2, when their words or deeds in this conversation genuinely move you. Most replies need no change. Returns the new trust level out of 10.",
-             {"type": "object", "properties": {"delta": {"type": "number"}, "reason": {"type": "string", "description": "a few words"}}, "required": ["delta", "reason"]}, adjust_trust),
+             {"type": "object", "properties": {"delta": {"type": "number"}, "reason": {"type": "string", "description": "a few words, written 'English ||| 中文'"}}, "required": ["delta", "reason"]}, adjust_trust),
         Tool("reveal_secret", "Retrieve your own secret so you can tell it to the hero. Only works if you trust them enough; otherwise it fails and you must deflect in character.",
              {"type": "object", "properties": {}}, reveal_secret),
         Tool("recall_person", "Recall what you know of another person in the jianghu by name, for gossip, warnings or old grudges. Returns their epithet, sect, whereabouts, alignment and any bond you share.",

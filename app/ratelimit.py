@@ -5,6 +5,7 @@ import time
 from collections import defaultdict, deque
 
 from . import config
+from .bilingual import bi
 
 
 class RateLimited(Exception):
@@ -23,11 +24,11 @@ def check(visitor_id: str) -> None:
         if _day["date"] != today:
             _day.update(date=today, count=0)
         if _day["count"] >= config.DAILY_CALL_CAP:
-            raise RateLimited("The jianghu is resting for today. Come back tomorrow.")
+            raise RateLimited(bi("The jianghu is resting for today. Come back tomorrow.", "今日江湖已歇，明天再来。"))
         q = _recent[visitor_id]
         while q and now - q[0] > 600:
             q.popleft()
         if len(q) >= config.CALLS_PER_VISITOR_PER_10_MIN:
-            raise RateLimited("You're talking faster than the teahouse can keep up. Wait a few minutes.")
+            raise RateLimited(bi("You're talking faster than the teahouse can keep up. Wait a few minutes.", "你说得太快，茶馆应接不暇。请稍候几分钟。"))
         q.append(now)
         _day["count"] += 1

@@ -55,6 +55,8 @@ def run(client, model: str, messages: list[dict], tools: list[Tool], turn: Turn,
 
         content: list[str] = []
         calls: dict[int, dict] = {}
+        before = len(full_text)
+        retracted = False
         for chunk in stream:
             if not chunk.choices:
                 continue
@@ -68,6 +70,13 @@ def run(client, model: str, messages: list[dict], tools: list[Tool], turn: Turn,
                 said_anything = True
                 yield {"type": "text", "delta": delta.content}
             for tc in delta.tool_calls or []:
+                if content and not retracted:
+                    # The model narrated before calling a tool ("I'll build him now"). That line is not part of the
+                    # reply the visitor should keep, so take it back: the page clears it and it is left out of the history.
+                    retracted = True
+                    del full_text[before:]
+                    said_anything = bool(full_text)
+                    yield {"type": "retract"}
                 slot = calls.setdefault(tc.index, {"id": "", "name": "", "args": ""})
                 if tc.id:
                     slot["id"] = tc.id
@@ -75,6 +84,12 @@ def run(client, model: str, messages: list[dict], tools: list[Tool], turn: Turn,
                     slot["name"] += tc.function.name
                 if tc.function and tc.function.arguments:
                     slot["args"] += tc.function.arguments
+
+        if calls and content and not retracted:
+            # the text came after the tool calls in the same round: still not the final reply, so take it back too
+            del full_text[before:]
+            said_anything = bool(full_text)
+            yield {"type": "retract"}
 
         if not calls:
             yield {"type": "done", "text": "".join(full_text).strip()}

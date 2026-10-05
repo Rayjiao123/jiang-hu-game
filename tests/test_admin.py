@@ -11,7 +11,7 @@ os.environ.setdefault("DEEPSEEK_API_KEY", "")
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import config, db, game, moderation  # noqa: E402
+from app import bilingual, config, db, game, moderation  # noqa: E402
 from app.main import app  # noqa: E402
 
 
@@ -29,7 +29,7 @@ class Reply:
 
 def npc(**fields):
     s = game.blank_sheet()
-    game.apply_fields(s, {"name": "Old Wu", "speech": "gruff", **fields})
+    game.apply_fields(s, {"name": "Old Wu", "speech": "gruff ||| 粗声粗气", **fields})
     return s
 
 
@@ -41,7 +41,8 @@ def test_moderation_allows_and_blocks():
 
 def test_links_are_blocked_without_asking_the_model():
     client = Reply('{"verdict": "allow"}')
-    assert moderation.check(client, "m", npc(greeting="Visit www.example.com!"))[0] == "block"
+    verdict, reason = moderation.check(client, "m", npc(greeting="Visit www.example.com! ||| 来访问 www.example.com！"))
+    assert verdict == "block" and bilingual.is_pair(reason)       # the creator is told why, in both languages
     assert client.calls == 0
 
 
@@ -81,9 +82,9 @@ def test_admin_is_off_without_a_password(monkeypatch):
 def test_admin_hide_restore_delete(client):
     auth = {"authorization": "Bearer plum-blossom"}
     with db.session() as conn:
-        npc_id = db.insert_npc(conn, npc(name="Target", secret="buried gold"), "v", "Ray")
+        npc_id = db.insert_npc(conn, npc(name="Target", secret="buried gold ||| 埋着的金子"), "v", "Ray")
     listed = client.get("/api/admin/npcs", headers=auth).json()["npcs"]
-    assert next(n for n in listed if n["id"] == npc_id)["secret"] == "buried gold"
+    assert next(n for n in listed if n["id"] == npc_id)["secret"] == "buried gold ||| 埋着的金子"
 
     assert client.post(f"/api/admin/npcs/{npc_id}/visibility", json={"hidden": True}, headers=auth).status_code == 200
     assert npc_id not in {n["id"] for n in client.get("/api/npcs").json()["npcs"]}

@@ -8,14 +8,51 @@ from types import SimpleNamespace as NS
 os.environ["DATABASE_PATH"] = str(Path(tempfile.mkdtemp()) / "test.db")
 os.environ["DEEPSEEK_API_KEY"] = ""
 
-from app import agent, config, db, game, roll  # noqa: E402
+from app import agent, bilingual, config, db, game, roll  # noqa: E402
 
 
-def test_reply_language_is_decided_in_code():
-    from app import prompts
-    assert prompts.reply_language("What do you sell, old man?") == "English"
-    assert prompts.reply_language("老人家，你卖的是什么？") == "Chinese"
-    assert prompts.reply_language("Have you met 柳寒烟 on the canal?") == "English"
+def test_language_detection():
+    assert bilingual.language_of("What do you sell, old man?") == "English"
+    assert bilingual.language_of("老人家，你卖的是什么？") == "Chinese"
+    assert bilingual.language_of("Have you met 柳寒烟 on the canal?") == "English"   # a Chinese name inside English stays English
+
+
+def test_bilingual_format():
+    assert bilingual.is_pair("Never forgives a debt ||| 有债必讨")
+    assert not bilingual.is_pair("Never forgives a debt")                  # one language only
+    assert not bilingual.is_pair("有债必讨 ||| Never forgives a debt")      # wrong order
+    assert not bilingual.is_pair("Never forgives a debt ||| ")             # an empty half
+    assert bilingual.split("Hello ||| 你好") == ("Hello", "你好")
+    assert bilingual.plain("Hello ||| 你好") == "Hello / 你好"
+    assert bilingual.has_both("Ask about the Jin war 问问金国战事")
+    assert not bilingual.has_both("Ask about the Jin war")
+
+
+class Translator:
+    def __init__(self, reply="你好，老人家"):
+        self.reply, self.prompts = reply, []
+        self.chat = NS(completions=NS(create=self._create))
+
+    def _create(self, **kw):
+        self.prompts.append(kw["messages"][0]["content"])
+        return NS(choices=[NS(message=NS(content=self.reply))])
+
+
+def test_counterpart_translates_to_the_other_language_only_when_needed():
+    t = Translator("Hello, old man")
+    assert bilingual.counterpart(t, "m", "你好，老人家") == "Hello, old man"
+    assert "into English" in t.prompts[0]
+    t2 = Translator()
+    assert bilingual.counterpart(t2, "m", "Hello, old man") == "你好，老人家"
+    assert "into Chinese" in t2.prompts[0]
+    assert bilingual.counterpart(t2, "m", "Hello 你好 old man 老人家") == ""      # already both: no call
+    assert len(t2.prompts) == 1
+
+
+def test_a_failed_translation_never_breaks_a_reply():
+    class Boom:
+        chat = NS(completions=NS(create=lambda **kw: (_ for _ in ()).throw(RuntimeError("down"))))
+    assert bilingual.counterpart(Boom(), "m", "Hello, old man") == ""
 
 
 # ---------- game rules ----------
@@ -23,11 +60,31 @@ def test_reply_language_is_decided_in_code():
 def test_apply_fields_clamps_and_validates():
     s = game.blank_sheet()
     changed = game.apply_fields(s, {"name": "  柳寒烟   Liu  Hanyan ", "alignment": "chaotic",
-                                     "traits": ["a", "", "b", "c", "d"]})
+                                     "traits": ["bold ||| 勇", "calm ||| 静", "wry ||| 俏", "mean ||| 刻"]})
     assert s["name"] == "柳寒烟 Liu Hanyan"
     assert s["alignment"] == "neutral"
-    assert s["traits"] == ["a", "b", "c"]            # exactly three quirks at most
+    assert s["traits"] == ["bold ||| 勇", "calm ||| 静", "wry ||| 俏"]       # exactly three quirks at most
     assert {"name", "alignment", "traits"} <= set(changed)
+
+
+def test_text_in_one_language_is_not_saved():
+    s = game.blank_sheet()
+    rejected: list[str] = []
+    changed = game.apply_fields(s, {"title": "Ferryman of the Broken Oar", "goal": "Find my brother ||| 找到我的兄弟",
+                                     "traits": ["Never forgives a debt", "Talks to his lantern ||| 对灯笼说话"]}, rejected)
+    assert s["goal"] == "Find my brother ||| 找到我的兄弟" and "goal" in changed
+    assert s["title"] == "" and s["traits"] == []
+    assert set(rejected) == {"title", "traits"}
+
+
+def test_set_fields_tells_the_model_what_to_fix():
+    s = game.blank_sheet()
+    turn = agent.Turn()
+    with db.session() as conn:
+        tools = {t.name: t for t in game.storyteller_tools(conn, s, turn)}
+        result = agent._call(tools["set_fields"], json.dumps({"name": "Old Wu", "goal": "Find my brother"}))
+    assert result["ok"] is False and "goal" in result["error"] and "|||" in result["error"]
+    assert s["name"] == "Old Wu" and s["goal"] == ""           # the good field was kept, the bad one was not
 
 
 def test_appearance_keeps_valid_choices_and_fills_the_rest():
@@ -47,13 +104,14 @@ def test_appearance_keeps_valid_choices_and_fills_the_rest():
 def test_a_sheet_is_complete_only_when_every_part_is_filled():
     s = game.blank_sheet()
     assert set(game.missing(s)) == set(game.REQUIRED)
-    game.apply_fields(s, {k: "x" for k in game.TEXT_FIELDS} | {"alignment": "neutral", "traits": ["a", "b", "c"]})
+    both = {k: "English text ||| 中文文字" for k in game.BILINGUAL}
+    game.apply_fields(s, both | {"name": "Old Wu", "alignment": "neutral", "traits": ["bold ||| 勇", "calm ||| 静", "wry ||| 俏"]})
     assert game.missing(s) == ["appearance"]
     game.apply_fields(s, {"appearance": {}})          # even an empty look is filled in with defaults
     assert game.missing(s) == []
 
 
-def test_dice_give_varied_valid_seeds():
+def test_dice_give_varied_valid_seeds_in_both_languages():
     import random
     seeds = [roll.random_seed(random.Random(i)) for i in range(40)]
     assert len({x["summary"] for x in seeds}) > 30
@@ -61,8 +119,9 @@ def test_dice_give_varied_valid_seeds():
         for key, value in x["look"].items():
             assert value in game.APPEARANCE[key]
         assert x["look"]["aura"] != "none"
+        assert bilingual.language_of(x["summary"]) == "English" and bilingual.language_of(x["summary_zh"]) == "Chinese"
     msg = roll.roll_message(seeds[0])
-    assert seeds[0]["summary"] in msg and "aura=" in msg
+    assert seeds[0]["summary"] in msg and seeds[0]["summary_zh"] in msg and "aura=" in msg
 
 
 def test_secret_is_gated_by_server_trust():
@@ -84,13 +143,13 @@ def test_secret_is_gated_by_server_trust():
 def test_secrets_never_appear_in_public_cards():
     db.init()
     sheet = game.blank_sheet()
-    game.apply_fields(sheet, {"name": "Old Wu", "secret": "He poisoned the abbot"})
+    game.apply_fields(sheet, {"name": "Old Wu", "secret": "He poisoned the abbot ||| 他毒死了方丈"})
     with db.session() as conn:
         npc_id = db.insert_npc(conn, sheet, "v1", "Ray")
         card = db.public_card(db.get_npc(conn, npc_id))
         assert "poisoned" not in json.dumps(card, ensure_ascii=False)
         assert card["has_secret"] is True
-        assert db.get_secret(conn, npc_id) == "He poisoned the abbot"
+        assert db.get_secret(conn, npc_id) == "He poisoned the abbot ||| 他毒死了方丈"
 
 
 # ---------- the agent loop, with a fake streaming client ----------
@@ -126,8 +185,8 @@ def test_agent_runs_tool_then_answers():
         ])
         events = list(agent.run(client, "m", [{"role": "user", "content": "hi"}], tools, turn, "visitor-a"))
     assert sheet["name"] == "Old Wu"
-    assert [e["type"] for e in events if e["type"] != "text"] == ["tool", "sheet", "done"]
-    assert events[-1]["text"] == "Let me write that down.\n\nOld Wu it is. What does he want?"
+    assert [e["type"] for e in events if e["type"] != "text"] == ["retract", "tool", "sheet", "done"]
+    assert events[-1]["text"] == "Old Wu it is. What does he want?"       # the narration before the tool call is taken back
     second = client.requests[1]["messages"]
     assert second[-2]["tool_calls"][0]["function"]["arguments"] == '{"name": "Old Wu"}'
     assert second[-1]["role"] == "tool"
@@ -141,3 +200,32 @@ def test_agent_survives_bad_tool_arguments():
         events = list(agent.run(client, "m", [{"role": "user", "content": "hi"}], tools, turn, "visitor-b"))
     assert events[-1] == {"type": "done", "text": "Sorry."}
     assert "error" in client.requests[1]["messages"][-1]["content"]
+
+
+def test_quotes_inside_bilingual_text_are_kept():
+    assert game.clip('"Hello there"', 40) == "Hello there"                                 # wrapped around a single value: dropped
+    both = 'Calls every blade "little sister" ||| 管每把剑叫"小妹"'
+    assert game.clip(both, 80) == both                                                      # each half keeps its own quotes
+
+
+def test_a_reply_without_narration_is_kept_whole():
+    turn = agent.Turn()
+    with db.session() as conn:
+        tools = game.storyteller_tools(conn, game.blank_sheet(), turn)
+        client = FakeClient([[chunk("Hello there "), chunk("friend ||| 你好，朋友")]])
+        events = list(agent.run(client, "m", [{"role": "user", "content": "hi"}], tools, turn, "visitor-c"))
+    assert all(e["type"] != "retract" for e in events)
+    assert events[-1]["text"] == "Hello there friend ||| 你好，朋友"
+
+
+def test_text_that_follows_tool_calls_in_the_same_round_is_not_the_reply():
+    turn = agent.Turn()
+    with db.session() as conn:
+        tools = game.storyteller_tools(conn, game.blank_sheet(), turn)
+        client = FakeClient([
+            [chunk(tool={"id": "c1", "name": "list_jianghu", "args": "{}"}), chunk("A first draft of the reply ||| 初稿")],
+            [chunk("The real reply ||| 正式回复")],
+        ])
+        events = list(agent.run(client, "m", [{"role": "user", "content": "hi"}], tools, turn, "visitor-d"))
+    assert "retract" in [e["type"] for e in events]
+    assert events[-1]["text"] == "The real reply ||| 正式回复"

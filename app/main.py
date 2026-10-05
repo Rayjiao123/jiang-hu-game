@@ -11,7 +11,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, config, db, game, moderation, prompts, ratelimit, roll as roller
+from . import agent, bilingual, config, db, game, moderation, prompts, ratelimit, roll as roller
+from .bilingual import bi
 from .ratelimit import RateLimited
 
 app = FastAPI(title="Jianghu Chronicles")
@@ -23,7 +24,7 @@ _client: openai.OpenAI | None = None
 def llm() -> openai.OpenAI:
     global _client
     if not config.DEEPSEEK_API_KEY:
-        raise HTTPException(503, "The AI isn't configured on this server yet (DEEPSEEK_API_KEY is missing).")
+        raise HTTPException(503, bi("The AI isn't configured on this server yet (DEEPSEEK_API_KEY is missing).", "此服务器尚未配置 AI（缺少 DEEPSEEK_API_KEY）。"))
     if _client is None:
         _client = openai.OpenAI(api_key=config.DEEPSEEK_API_KEY, base_url=config.DEEPSEEK_BASE_URL, timeout=120, max_retries=1)
     return _client
@@ -75,8 +76,22 @@ def guarded(events: Iterator[dict]) -> Iterator[dict]:
     except HTTPException as e:
         yield {"type": "error", "code": "bad_request", "message": str(e.detail)}
     except openai.APIError as e:
-        yield {"type": "error", "code": "upstream", "message": "The AI service didn't answer. Try again in a moment."}
+        yield {"type": "error", "code": "upstream", "message": bi("The AI service didn't answer. Try again in a moment.", "AI 服务没有响应，请稍后再试。")}
         print("DeepSeek error:", repr(e))
+
+
+@app.post("/api/translate")
+def translate(body: Message, request: Request):
+    """The other-language version of something the visitor typed, shown under their message."""
+    vid = request.state.vid
+    if bilingual.has_both(body.message):
+        return {"text": ""}
+    client = llm()
+    try:
+        ratelimit.check(vid)
+    except RateLimited as e:
+        raise HTTPException(429, str(e))
+    return {"text": bilingual.counterpart(client, config.CHAT_MODEL, body.message)}
 
 
 # ---------- read-only ----------
@@ -107,14 +122,30 @@ def new_draft(request: Request):
 def _draft(conn, draft_id: str, vid: str) -> dict:
     d = db.get_draft(conn, draft_id, vid)
     if not d:
-        raise HTTPException(404, "That draft doesn't exist. Start a new NPC.")
+        raise HTTPException(404, bi("That draft doesn't exist. Start a new NPC.", "找不到这份草稿，请重新创建人物。"))
     return d
 
 
 def _open_draft(draft_id: str, vid: str) -> None:
     with db.session() as conn:
         if _draft(conn, draft_id, vid)["released"]:
-            raise HTTPException(409, "This NPC is already in the jianghu. Start a new one.")
+            raise HTTPException(409, bi("This NPC is already in the jianghu. Start a new one.", "这位人物已放入江湖，请重新创建。"))
+
+
+def _finish(client, vid: str, ev: dict) -> Iterator[dict]:
+    """On a reply that is in one language only, translate it and append the other half (the model sometimes forgets)."""
+    text = ev["text"]
+    if text and bilingual.SEP not in text and not bilingual.has_both(text):
+        try:
+            ratelimit.check(vid)
+            other = bilingual.counterpart(client, config.CHAT_MODEL, text)
+        except RateLimited:
+            other = ""
+        if other:
+            extra = f"\n{bilingual.SEP}\n{other}"
+            yield {"type": "text", "delta": extra}
+            ev = {"type": "done", "text": text + extra}
+    yield ev
 
 
 def _storyteller_events(client, draft_id: str, vid: str, message: str) -> Iterator[dict]:
@@ -124,15 +155,16 @@ def _storyteller_events(client, draft_id: str, vid: str, message: str) -> Iterat
         turn = agent.Turn()
         tools = game.storyteller_tools(conn, draft["sheet"], turn)
         messages = [{"role": "system", "content": prompts.STORYTELLER}, *agent.history(draft["turns"]),
-                    {"role": "system", "content": prompts.storyteller_state(draft["sheet"], game.missing(draft["sheet"]), message)},
+                    {"role": "system", "content": prompts.storyteller_state(draft["sheet"], game.missing(draft["sheet"]))},
                     {"role": "user", "content": message}]
         try:
             # the first reply carries a whole scroll of fields, so it needs room for the tool call
-            for ev in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=1600):
-                if ev["type"] == "done":
-                    draft["turns"] += [{"role": "user", "content": message},
-                                       {"role": "assistant", "content": ev["text"] or "…"}]
-                yield ev
+            for raw in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=1800):
+                for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
+                    if ev["type"] == "done":
+                        draft["turns"] += [{"role": "user", "content": message},
+                                           {"role": "assistant", "content": ev["text"] or "…"}]
+                    yield ev
         finally:
             db.save_draft(conn, draft)   # keep sheet changes even if the reply failed
 
@@ -158,7 +190,7 @@ def roll(draft_id: str, request: Request):
         db.save_draft(conn, draft)
 
     def events():
-        yield {"type": "roll", "text": seed["summary"]}
+        yield {"type": "roll", "text": seed["summary"], "text_zh": seed["summary_zh"]}
         yield from _storyteller_events(client, draft_id, vid, roller.roll_message(seed))
     return sse(guarded(events()))
 
@@ -171,7 +203,7 @@ def release(draft_id: str, body: Release, request: Request):
     if draft["released"]:
         return {"id": draft["released"], "pending": False}
     if game.missing(draft["sheet"]):
-        raise HTTPException(400, "The scroll isn't finished yet. Ask the Storyteller to fill the rest.")
+        raise HTTPException(400, bi("The scroll isn't finished yet. Ask the Storyteller to fill the rest.", "卷轴还没写完，请让说书人补全。"))
 
     sheet = {**draft["sheet"], "creator_name": game.clip(body.creator_name, 40)}
     try:
@@ -183,7 +215,9 @@ def release(draft_id: str, body: Release, request: Request):
         client = None
     verdict, reason = moderation.check(client, config.CHAT_MODEL, sheet)
     if verdict == "block":
-        raise HTTPException(422, f"This NPC can't be released yet: {reason} Ask the Storyteller to change it, then try again.")
+        why_en, why_zh = bilingual.split(reason)
+        raise HTTPException(422, bi(f"This NPC can't be released yet: {why_en or reason} Ask the Storyteller to change it, then try again.",
+                                    f"暂时不能放入江湖：{why_zh or why_en} 请让说书人修改后再试。"))
 
     with db.session() as conn:
         draft = _draft(conn, draft_id, vid)
@@ -200,7 +234,7 @@ def _npc_for(conn, sess: dict, vid: str) -> tuple[dict, str]:
     if sess.get("npc_id"):
         npc = db.get_npc(conn, sess["npc_id"])
         if not npc:
-            raise HTTPException(404, "That NPC has left the jianghu.")
+            raise HTTPException(404, bi("That NPC has left the jianghu.", "这位人物已离开江湖。"))
         return npc, db.get_secret(conn, npc["id"])
     sheet = _draft(conn, sess["draft_id"], vid)["sheet"]
     return {**sheet, "id": "draft"}, sheet.get("secret", "")
@@ -213,13 +247,13 @@ def new_session(body: NewSession, request: Request):
         if body.npc_id:
             npc = db.get_npc(conn, body.npc_id)
             if not npc:
-                raise HTTPException(404, "That NPC has left the jianghu.")
+                raise HTTPException(404, bi("That NPC has left the jianghu.", "这位人物已离开江湖。"))
             has_secret = bool(db.get_secret(conn, npc["id"]))
         elif body.draft_id:
             npc = {**_draft(conn, body.draft_id, vid)["sheet"], "id": "draft"}
             has_secret = bool(npc.get("secret"))
         else:
-            raise HTTPException(400, "Say who to talk to.")
+            raise HTTPException(400, bi("Say who to talk to.", "请选择要交谈的人。"))
         trust = game.STARTING_TRUST.get(npc.get("alignment"), 3)
         sid = db.create_session(conn, vid, trust, npc_id=body.npc_id if body.npc_id else None,
                                 draft_id=None if body.npc_id else body.draft_id)
@@ -233,7 +267,7 @@ def npc_chat(sid: str, body: Message, request: Request):
     vid = request.state.vid
     with db.session() as conn:
         if not db.get_session(conn, sid, vid):
-            raise HTTPException(404, "That conversation has ended. Talk to them again.")
+            raise HTTPException(404, bi("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。"))
     client = llm()
 
     def events():
@@ -245,14 +279,15 @@ def npc_chat(sid: str, body: Message, request: Request):
             tools = game.npc_tools(conn, npc, secret, sess, turn)
             messages = [{"role": "system", "content": prompts.npc_system(npc, others, game.admirers(conn, npc["id"]))},
                         *agent.history(sess["turns"]),
-                        {"role": "system", "content": prompts.npc_state(sess["trust"], sess["revealed"], body.message)},
+                        {"role": "system", "content": prompts.npc_state(sess["trust"], sess["revealed"])},
                         {"role": "user", "content": body.message}]
             try:
-                for ev in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=500):
-                    if ev["type"] == "done":
-                        sess["turns"] += [{"role": "user", "content": body.message},
-                                          {"role": "assistant", "content": ev["text"] or "…"}]
-                    yield ev
+                for raw in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=800):
+                    for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
+                        if ev["type"] == "done":
+                            sess["turns"] += [{"role": "user", "content": body.message},
+                                              {"role": "assistant", "content": ev["text"] or "…"}]
+                        yield ev
             finally:
                 db.save_session(conn, sess)
     return sse(guarded(events()))
