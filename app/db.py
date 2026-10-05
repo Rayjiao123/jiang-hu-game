@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 """
 
-PUBLIC_FIELDS = ("name", "title", "sect", "location", "alignment", "art", "traits", "greeting", "stats", "bonds", "look")
+PUBLIC_FIELDS = ("name", "title", "sect", "location", "alignment", "art", "traits", "greeting", "bonds", "appearance")
 
 
 def new_id() -> str:

@@ -18,7 +18,6 @@ def _int(name: str, default: int) -> int:
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 CHAT_MODEL = os.getenv("CHAT_MODEL", "deepseek-flash")
-PORTRAIT_MODEL = os.getenv("PORTRAIT_MODEL", "deepseek-flash")
 
 # Password for /admin.html (hide, restore, delete NPCs). Admin is switched off when empty.
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")

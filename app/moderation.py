@@ -28,7 +28,7 @@ Reply with only JSON: {"verdict": "allow" or "block", "reason": "<one short sent
 
 
 def check(client, model: str, sheet: dict) -> tuple[str, str]:
-    fields = {k: v for k, v in sheet.items() if k not in ("svg", "bonds", "stats")}
+    fields = {k: v for k, v in sheet.items() if k not in ("svg", "bonds", "appearance")}
     for value in fields.values():
         if URL.search(json.dumps(value, ensure_ascii=False)):
             return "block", "Links and web addresses aren't allowed in an NPC."

@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, config, db, game, moderation, prompts, ratelimit, svg
+from . import agent, config, db, game, moderation, prompts, ratelimit, roll as roller
 from .ratelimit import RateLimited
 
 app = FastAPI(title="Jianghu Chronicles")
@@ -111,62 +111,55 @@ def _draft(conn, draft_id: str, vid: str) -> dict:
     return d
 
 
-@app.post("/api/drafts/{draft_id}/chat")
-def storyteller_chat(draft_id: str, body: Message, request: Request):
-    vid = request.state.vid
+def _open_draft(draft_id: str, vid: str) -> None:
     with db.session() as conn:
         if _draft(conn, draft_id, vid)["released"]:
             raise HTTPException(409, "This NPC is already in the jianghu. Start a new one.")
-    client = llm()
-
-    def events():
-        with db.session() as conn:
-            draft = _draft(conn, draft_id, vid)
-            turn = agent.Turn()
-            tools = game.storyteller_tools(conn, draft["sheet"], turn)
-            messages = [{"role": "system", "content": prompts.STORYTELLER}, *agent.history(draft["turns"]),
-                        {"role": "system", "content": prompts.storyteller_state(draft["sheet"], game.missing(draft["sheet"]), body.message)},
-                        {"role": "user", "content": body.message}]
-            try:
-                for ev in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid):
-                    if ev["type"] == "done":
-                        draft["turns"] += [{"role": "user", "content": body.message},
-                                           {"role": "assistant", "content": ev["text"] or "…"}]
-                    yield ev
-            finally:
-                db.save_draft(conn, draft)   # keep sheet changes even if the reply failed
-    return sse(guarded(events()))
 
 
-@app.post("/api/drafts/{draft_id}/portrait")
-def paint(draft_id: str, request: Request):
-    vid = request.state.vid
+def _storyteller_events(client, draft_id: str, vid: str, message: str) -> Iterator[dict]:
+    """One Storyteller turn: stream its reply and tool effects, and keep the sheet in the database."""
     with db.session() as conn:
         draft = _draft(conn, draft_id, vid)
-    if game.missing(draft["sheet"]):
-        raise HTTPException(400, "Finish the scroll before painting.")
+        turn = agent.Turn()
+        tools = game.storyteller_tools(conn, draft["sheet"], turn)
+        messages = [{"role": "system", "content": prompts.STORYTELLER}, *agent.history(draft["turns"]),
+                    {"role": "system", "content": prompts.storyteller_state(draft["sheet"], game.missing(draft["sheet"]), message)},
+                    {"role": "user", "content": message}]
+        try:
+            # the first reply carries a whole scroll of fields, so it needs room for the tool call
+            for ev in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=1600):
+                if ev["type"] == "done":
+                    draft["turns"] += [{"role": "user", "content": message},
+                                       {"role": "assistant", "content": ev["text"] or "…"}]
+                yield ev
+        finally:
+            db.save_draft(conn, draft)   # keep sheet changes even if the reply failed
+
+
+@app.post("/api/drafts/{draft_id}/chat")
+def storyteller_chat(draft_id: str, body: Message, request: Request):
+    vid = request.state.vid
+    _open_draft(draft_id, vid)
     client = llm()
+    return sse(guarded(_storyteller_events(client, draft_id, vid, body.message)))
+
+
+@app.post("/api/drafts/{draft_id}/roll")
+def roll(draft_id: str, request: Request):
+    """Build a random character: the dice are rolled here, the Storyteller does the rest."""
+    vid = request.state.vid
+    _open_draft(draft_id, vid)
+    client = llm()
+    seed = roller.random_seed()
+    with db.session() as conn:
+        draft = _draft(conn, draft_id, vid)
+        draft["sheet"], draft["turns"] = game.blank_sheet(), []
+        db.save_draft(conn, draft)
 
     def events():
-        ratelimit.check(vid)
-        stream = client.chat.completions.create(
-            model=config.PORTRAIT_MODEL, stream=True, max_tokens=8000,
-            messages=[{"role": "user", "content": prompts.portrait(draft["sheet"])}],
-            extra_body={"thinking": {"type": "disabled"}})
-        text = []
-        for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta.content:
-                text.append(chunk.choices[0].delta.content)
-                yield {"type": "text", "delta": chunk.choices[0].delta.content}
-        clean = svg.clean(svg.extract("".join(text)) or "")
-        if not clean:
-            yield {"type": "error", "code": "bad_svg", "message": "The painting came out unreadable. Paint it again."}
-            return
-        with db.session() as conn:
-            d = _draft(conn, draft_id, vid)
-            d["sheet"]["svg"] = clean
-            db.save_draft(conn, d)
-        yield {"type": "portrait", "svg": clean}
+        yield {"type": "roll", "text": seed["summary"]}
+        yield from _storyteller_events(client, draft_id, vid, roller.roll_message(seed))
     return sse(guarded(events()))
 
 
@@ -177,8 +170,8 @@ def release(draft_id: str, body: Release, request: Request):
         draft = _draft(conn, draft_id, vid)
     if draft["released"]:
         return {"id": draft["released"], "pending": False}
-    if game.missing(draft["sheet"]) or not draft["sheet"].get("svg"):
-        raise HTTPException(400, "Finish the scroll and paint the portrait first.")
+    if game.missing(draft["sheet"]):
+        raise HTTPException(400, "The scroll isn't finished yet. Ask the Storyteller to fill the rest.")
 
     sheet = {**draft["sheet"], "creator_name": game.clip(body.creator_name, 40)}
     try:
@@ -230,7 +223,7 @@ def new_session(body: NewSession, request: Request):
         trust = game.STARTING_TRUST.get(npc.get("alignment"), 3)
         sid = db.create_session(conn, vid, trust, npc_id=body.npc_id if body.npc_id else None,
                                 draft_id=None if body.npc_id else body.draft_id)
-    card = {k: npc.get(k) for k in ("name", "title", "sect", "location", "alignment", "greeting", "svg")}
+    card = {k: npc.get(k) for k in ("name", "title", "sect", "location", "alignment", "greeting", "appearance", "svg")}
     return {"id": sid, "npc": card, "trust": trust, "revealed": False, "has_secret": has_secret,
             "threshold": config.SECRET_TRUST_THRESHOLD, "rehearsal": not body.npc_id}
 
@@ -303,6 +296,46 @@ def admin_delete(npc_id: str):
         if not db.delete_npc(conn, npc_id):
             raise HTTPException(404, "No such NPC.")
     return {"ok": True}
+
+
+class SeedRequest(BaseModel):
+    count: int = Field(default=3, ge=1, le=5)
+
+
+def _generate_npc(client, creator_name: str) -> tuple[str | None, str]:
+    """Roll a character, check it, and release it. Returns (npc id or None, note)."""
+    vid = "admin-seed"
+    with db.session() as conn:
+        draft_id = db.create_draft(conn, vid, game.blank_sheet())
+    seed = roller.random_seed()
+    for _ in _storyteller_events(client, draft_id, vid, roller.roll_message(seed)):
+        pass
+    with db.session() as conn:
+        draft = _draft(conn, draft_id, vid)
+    if game.missing(draft["sheet"]):
+        return None, f"{seed['summary']}: the Storyteller left fields empty"
+    verdict, reason = moderation.check(client, config.CHAT_MODEL, {**draft["sheet"], "creator_name": creator_name})
+    if verdict == "block":
+        return None, f"{seed['summary']}: blocked ({reason})"
+    with db.session() as conn:
+        npc_id = db.insert_npc(conn, draft["sheet"], vid, creator_name,
+                               hidden=verdict == "review", flag=reason if verdict == "review" else "")
+    return npc_id, draft["sheet"]["name"]
+
+
+@app.post("/api/admin/seed", dependencies=[Depends(require_admin)])
+def admin_seed(body: SeedRequest):
+    """Populate the world with generated citizens signed 'Ray', so the first visitor isn't alone."""
+    client = llm()
+    made, notes = [], []
+    for _ in range(body.count):
+        try:
+            npc_id, note = _generate_npc(client, "Ray")
+        except (RateLimited, openai.APIError) as e:
+            notes.append(f"Stopped early: {e}")
+            break
+        (made if npc_id else notes).append(note)
+    return {"created": made, "notes": notes}
 
 
 @app.get("/api/admin/export", dependencies=[Depends(require_admin)])

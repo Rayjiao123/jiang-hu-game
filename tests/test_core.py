@@ -8,30 +8,7 @@ from types import SimpleNamespace as NS
 os.environ["DATABASE_PATH"] = str(Path(tempfile.mkdtemp()) / "test.db")
 os.environ["DEEPSEEK_API_KEY"] = ""
 
-from app import agent, config, db, game, svg  # noqa: E402
-
-
-# ---------- svg sanitiser ----------
-
-def test_svg_keeps_shapes_and_strips_danger():
-    dirty = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" onload="alert(1)">'
-             '<script>alert(1)</script><rect width="160" height="160" fill="#ebe1c8" onclick="x()"/>'
-             '<circle cx="80" cy="60" r="20" fill="url(#evil)"/><image href="http://x/y.png"/>'
-             '<foreignObject><div>hi</div></foreignObject></svg>')
-    out = svg.clean(dirty)
-    assert out and "<rect" in out and "<circle" in out
-    for bad in ("script", "onload", "onclick", "url(", "image", "foreignObject", "alert"):
-        assert bad not in out
-
-
-def test_svg_rejects_entities_and_garbage():
-    assert svg.clean('<!DOCTYPE svg [<!ENTITY a "aaaa">]><svg>&a;</svg>') is None
-    assert svg.clean("not svg at all") is None
-    assert svg.clean("<html></html>") is None
-
-
-def test_extract_finds_svg_in_chatter():
-    assert svg.extract('Here you go:\n<svg viewBox="0 0 1 1"></svg>\nEnjoy') == '<svg viewBox="0 0 1 1"></svg>'
+from app import agent, config, db, game, roll  # noqa: E402
 
 
 def test_reply_language_is_decided_in_code():
@@ -46,12 +23,46 @@ def test_reply_language_is_decided_in_code():
 def test_apply_fields_clamps_and_validates():
     s = game.blank_sheet()
     changed = game.apply_fields(s, {"name": "  柳寒烟   Liu  Hanyan ", "alignment": "chaotic",
-                                     "stats": {"neigong": 99, "qinggong": "x"}, "traits": ["a", "", "b"]})
+                                     "traits": ["a", "", "b", "c", "d"]})
     assert s["name"] == "柳寒烟 Liu Hanyan"
     assert s["alignment"] == "neutral"
-    assert s["stats"]["neigong"] == 10 and s["stats"]["qinggong"] == 5
-    assert s["traits"] == ["a", "b"]
-    assert {"name", "alignment", "stats", "traits"} <= set(changed)
+    assert s["traits"] == ["a", "b", "c"]            # exactly three quirks at most
+    assert {"name", "alignment", "traits"} <= set(changed)
+
+
+def test_appearance_keeps_valid_choices_and_fills_the_rest():
+    s = game.blank_sheet()
+    game.apply_fields(s, {"name": "Old Wu", "appearance": {"hair_style": "Twin Buns", "aura": "flame", "weapon": "bazooka"}})
+    a = s["appearance"]
+    assert a["hair_style"] == "twin_buns" and a["aura"] == "flame"      # tidied and kept
+    assert a["weapon"] in game.APPEARANCE["weapon"] and a["weapon"] != "bazooka"   # invalid value replaced
+    assert set(a) == set(game.APPEARANCE)                               # every option present
+
+    first = dict(a)
+    game.apply_fields(s, {"appearance": {"hair_color": "silver"}})        # a later tweak changes only that option
+    assert s["appearance"]["hair_color"] == "silver"
+    assert {k: v for k, v in s["appearance"].items() if k != "hair_color"} == {k: v for k, v in first.items() if k != "hair_color"}
+
+
+def test_a_sheet_is_complete_only_when_every_part_is_filled():
+    s = game.blank_sheet()
+    assert set(game.missing(s)) == set(game.REQUIRED)
+    game.apply_fields(s, {k: "x" for k in game.TEXT_FIELDS} | {"alignment": "neutral", "traits": ["a", "b", "c"]})
+    assert game.missing(s) == ["appearance"]
+    game.apply_fields(s, {"appearance": {}})          # even an empty look is filled in with defaults
+    assert game.missing(s) == []
+
+
+def test_dice_give_varied_valid_seeds():
+    import random
+    seeds = [roll.random_seed(random.Random(i)) for i in range(40)]
+    assert len({x["summary"] for x in seeds}) > 30
+    for x in seeds:
+        for key, value in x["look"].items():
+            assert value in game.APPEARANCE[key]
+        assert x["look"]["aura"] != "none"
+    msg = roll.roll_message(seeds[0])
+    assert seeds[0]["summary"] in msg and "aura=" in msg
 
 
 def test_secret_is_gated_by_server_trust():

@@ -1,8 +1,10 @@
 # 江湖录 Jianghu Chronicles
 
 A website for a Song-dynasty wuxia game where every NPC is an AI agent created by a visitor.
-Visitors design an NPC with the Storyteller agent, rehearse talking to it, paint its ink-wash
-portrait and release it into a shared world. Anyone can then talk to any NPC as the hero.
+A visitor says one line (or just presses **Roll a stranger**) and the Storyteller agent writes a
+whole character: name, epithet, quirks, secret, signature move, and an anime-style portrait drawn
+from their personality. They can talk to the NPC to try it out, release it into the shared world,
+and anyone can then talk to any NPC as the hero (or just **Wander** and meet someone).
 
 The AI runs on [DeepSeek](https://api-docs.deepseek.com/) through its OpenAI-compatible API.
 
@@ -20,15 +22,18 @@ Open http://localhost:8000. Run the tests (no API calls, no cost) with `.\.venv\
 ## How it fits together
 
 ```
-static/index.html      the whole page: hero painting, Storyteller chat, scroll, NPC cards, conversations
+static/index.html      page markup and styles
+static/app.js          Storyteller chat, roll, scroll, conversations, NPC cards, wander
+static/portrait.js     anime portrait builder: appearance options in, SVG out
+static/hero.js         the animated ink-wash painting behind the introduction
+static/admin.html      password-protected review page: approve, hide, delete, add citizens, back up
 app/main.py            FastAPI routes; streams replies to the page as server-sent events
 app/agent.py           streaming tool-use loop for DeepSeek (OpenAI chat format)
 app/game.py            game rules and the tools each agent may call
-app/prompts.py         world bible, era rules, Storyteller and NPC instructions, portrait brief
-app/svg.py             whitelist sanitiser for model-drawn portraits
+app/prompts.py         world bible, era rules, Storyteller and NPC instructions
+app/roll.py            the dice: random role, place, twist and look for "Roll a stranger"
 app/moderation.py      automatic content check before an NPC goes public
 app/db.py              SQLite: npcs, npc_secrets, drafts, sessions
-static/admin.html      password-protected review page: approve, hide, delete, back up
 app/ratelimit.py       per-visitor and daily caps on model calls
 ```
 
@@ -42,6 +47,21 @@ a secret is stored in its own table and only given to the model after the server
 [system: current state + reply language] [user message]`. The first part is identical every turn,
 so DeepSeek's automatic prefix cache bills it at the cache-hit rate.
 
+**One line in, a whole character out.** The Storyteller fills every field in a single `set_fields`
+call, so a visitor never fills in a form. Later requests ("make her hair red") send only what changes.
+The scroll shows eight things (name, epithet, origin, signature move, three quirks, first words, what
+they want, secret). How they speak, what they know and don't, and their look work behind the scenes.
+
+**Roll a stranger.** `app/roll.py` rolls a role, a place, a twist and four visual cues in code,
+because a model asked for "a random character" keeps producing the same one. The Storyteller builds
+the character from that seed.
+
+**Anime portraits, drawn from the personality.** DeepSeek's API doesn't generate images, so the
+Storyteller picks 16 appearance options (hair, eyes, outfit, weapon, aura, scene and so on) from fixed
+lists in `app/game.py`, and `static/portrait.js` draws the matching layers. Every portrait shares one
+game-art style, appears instantly, costs nothing, and cannot carry unsafe markup. To use a real
+image model later, send the same `appearance` object to it as a prompt.
+
 **Reply language is decided in code** (`prompts.reply_language`), because the model otherwise
 drifts into the character's own language.
 
@@ -53,8 +73,8 @@ drifts into the character's own language.
 | GET | `/api/npcs` | public NPC cards (never secrets) and bond count |
 | POST | `/api/drafts` | start a new NPC |
 | POST | `/api/drafts/{id}/chat` | talk to the Storyteller (stream) |
-| POST | `/api/drafts/{id}/portrait` | paint the portrait (stream) |
-| POST | `/api/drafts/{id}/release` | publish the NPC |
+| POST | `/api/drafts/{id}/roll` | roll a random character (stream) |
+| POST | `/api/drafts/{id}/release` | check and publish the NPC |
 | POST | `/api/sessions` | start talking to an NPC (`npc_id`) or rehearse a draft (`draft_id`) |
 | POST | `/api/sessions/{id}/chat` | talk to the NPC (stream) |
 
@@ -69,7 +89,8 @@ reason the creator can fix with the Storyteller. If the check itself fails, the 
 and marked "needs review" rather than going live unchecked.
 
 Set `ADMIN_PASSWORD` and open `/admin.html` to approve, hide, restore or delete NPCs (including
-reading their secrets) and to download a JSON backup of every NPC.
+reading their secrets), to download a JSON backup, and to press **Add 3 citizens**, which rolls
+and releases characters signed "Ray" so the first visitor isn't alone in an empty world.
 
 ## Deploying to Railway
 
