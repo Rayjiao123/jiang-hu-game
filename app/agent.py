@@ -8,7 +8,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterator
 
-from . import config, ratelimit
+from . import bilingual, config, ratelimit
 
 
 class ToolError(Exception):
@@ -127,4 +127,6 @@ def _call(tool: Tool | None, raw_args: str) -> Any:
 
 def history(turns: list[dict]) -> list[dict]:
     """Only plain user/assistant text is kept between requests; tool effects live in game state."""
-    return [{"role": t["role"], "content": t["content"]} for t in turns[-config.MAX_HISTORY_TURNS:]]
+    # the visitor's own lines are stored as "English ||| 中文"; the model reads them as "English / 中文"
+    return [{"role": t["role"], "content": bilingual.plain(t["content"]) if t["role"] == "user" else t["content"]}
+            for t in turns[-config.MAX_HISTORY_TURNS:]]

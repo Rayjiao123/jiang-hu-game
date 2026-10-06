@@ -2,12 +2,12 @@
 import random
 import re
 
-from . import bilingual, config, db
+from . import bilingual, config, db, world
 from .agent import Tool, ToolError, Turn
 
 # Everything a portrait can show. The Storyteller picks from these lists and the page
 # (static/portrait.js) draws the matching layers, so every character gets the same game-art look.
-COLORS = ["ink", "crimson", "jade", "azure", "violet", "gold", "white", "ash"]
+COLORS = ["ink", "crimson", "jade", "azure", "violet", "gold", "white", "ash", "pink"]
 APPEARANCE = {
     "build": ["feminine", "masculine", "androgynous"],
     "age": ["young", "adult", "elder"],
@@ -20,7 +20,7 @@ APPEARANCE = {
     "outfit": ["robe", "scholar", "fighter", "monk", "hermit", "noble"],
     "outfit_color": COLORS,
     "accent_color": COLORS,
-    "headwear": ["none", "headband", "bamboo_hat", "scholar_cap", "hairpin", "flower"],
+    "headwear": ["none", "headband", "bamboo_hat", "scholar_cap", "hairpin", "flower", "crown"],
     "mark": ["none", "scar", "beard", "mask", "eyepatch", "forehead_mark"],
     "weapon": ["sword", "saber", "staff", "spear", "fan", "flute", "brush", "none"],
     "aura": ["flame", "ice", "wind", "petals", "lightning", "moon", "ink", "none"],
@@ -28,7 +28,7 @@ APPEARANCE = {
 }
 
 # The scroll shows eight things; speech, knowledge and appearance work behind the scenes.
-REQUIRED = ["name", "title", "sect", "location", "alignment", "art", "traits", "speech", "greeting",
+REQUIRED = ["name", "title", "sect", "location", "region", "alignment", "art", "traits", "speech", "greeting",
             "goal", "knowledge", "secret", "appearance"]
 # Lengths allow for both languages in one string ("English ||| 中文").
 TEXT_FIELDS = {"name": 40, "title": 110, "sect": 90, "location": 110, "art": 170, "speech": 480, "goal": 360,
@@ -36,6 +36,25 @@ TEXT_FIELDS = {"name": 40, "title": 110, "sect": 90, "location": 110, "art": 170
 BILINGUAL = {"title", "sect", "location", "art", "speech", "greeting", "goal", "knowledge", "secret"}
 ALIGNMENTS = ("orthodox", "unorthodox", "neutral")
 STARTING_TRUST = {"orthodox": 4, "unorthodox": 2, "neutral": 3}
+
+
+def starting_trust(npc: dict, hero: dict) -> tuple[int, str]:
+    """How much an NPC trusts a particular hero on first meeting, and why (as 'English ||| 中文')."""
+    trust = STARTING_TRUST.get(npc.get("alignment"), 3)
+    n, h = npc.get("alignment"), hero.get("alignment")
+    if h == n and h in ("orthodox", "unorthodox"):
+        trust, why = trust + 1, "You walk the same path. ||| 道不同不相为谋，但你们走的是同一条路。"
+    elif {n, h} == {"orthodox", "unorthodox"}:
+        trust, why = trust - 2, "Your paths are opposed; they are wary of you. ||| 正邪殊途，他对你满怀戒心。"
+    elif h == "neutral":
+        why = "They cannot read you yet. ||| 他一时看不透你的来路。"
+    else:
+        why = "A stranger on the road. ||| 路上初逢的陌生人。"
+    known = any(b.get("toId") == hero.get("id") for b in npc.get("bonds") or []) or \
+        any(b.get("toId") == npc.get("id") for b in hero.get("bonds") or [])
+    if known:
+        trust, why = trust + 1, "You share a history. ||| 你们之间有一段旧事。"
+    return max(0, min(10, trust)), why
 
 
 def clip(value, n: int) -> str:
@@ -47,7 +66,7 @@ def clip(value, n: int) -> str:
 
 
 def blank_sheet() -> dict:
-    return {"name": "", "title": "", "sect": "", "location": "", "alignment": "", "art": "", "traits": [],
+    return {"name": "", "title": "", "sect": "", "location": "", "region": "", "alignment": "", "art": "", "traits": [],
             "speech": "", "greeting": "", "goal": "", "knowledge": "", "secret": "", "appearance": {}, "bonds": []}
 
 
@@ -100,6 +119,12 @@ def apply_fields(sheet: dict, fields: dict, rejected: list | None = None) -> lis
             continue
         sheet[k] = value
         changed.append(k)
+    if fields.get("region") is not None:
+        if world.valid(fields["region"]):
+            sheet["region"] = str(fields["region"]).strip().lower()
+            changed.append("region")
+        elif rejected is not None:
+            rejected.append("region")
     if fields.get("alignment") is not None:
         a = str(fields["alignment"]).lower()
         sheet["alignment"] = a if a in ALIGNMENTS else "neutral"
@@ -127,8 +152,8 @@ def storyteller_tools(conn, sheet: dict, turn: Turn) -> list[Tool]:
         turn.emit(type="sheet", sheet=sheet, changed=changed, missing=missing(sheet))
         if rejected:
             return {"ok": False, "saved": changed, "missing": missing(sheet),
-                    "error": f"NOT saved: {', '.join(rejected)}. Each of these must be one string written as 'English text ||| 中文文字' "
-                             "(English first, then |||, then Chinese). Send them again in that form."}
+                    "error": f"NOT saved: {', '.join(rejected)}. Text fields must each be one string written as 'English text ||| 中文文字' "
+                             f"(English first, then |||, then Chinese); region must be one of: {', '.join(world.IDS)}. Send them again in that form."}
         return {"ok": True, "missing": missing(sheet)}
 
     def list_jianghu(_args):
@@ -154,10 +179,11 @@ def storyteller_tools(conn, sheet: dict, turn: Turn) -> list[Tool]:
     return [
         Tool("set_fields", "Write fields of the NPC scroll the visitor sees. On the first call fill EVERY field. Afterwards send only the fields being changed (for appearance, only the options being changed). Returns the fields still missing.",
              {"type": "object", "properties": {
-                 "name": {"type": "string", "description": "Chinese name, optionally followed by pinyin, e.g. '柳寒烟 Liu Hanyan'"},
+                 "name": {"type": "string", "description": "the person's own name only, never their epithet or title: Chinese name then pinyin, e.g. '柳寒烟 Liu Hanyan'"},
                  "title": {"type": "string", "description": "wuxia epithet, at most 6 words each language, e.g. 'Ferryman of the Broken Oar ||| 断桨渡人'"},
                  "sect": {"type": "string", "description": "sect or guild name only, or unaffiliated, e.g. 'Emei Sect ||| 峨眉派' or 'Unaffiliated ||| 无门无派'"},
                  "location": {"type": "string", "description": "where the hero finds them, a short place name, e.g. 'Frost Bell Monastery ||| 霜铃寺'"},
+                 "region": {"type": "string", "enum": world.IDS, "description": "which part of the jianghu they live in; the visitor's character starts the game here and others meet them here"},
                  "alignment": {"type": "string", "enum": list(ALIGNMENTS)},
                  "art": {"type": "string", "description": "the poetic name of their signature move plus a few words on what it does, e.g. 'Nine-Fold Wind Step: runs on wind-wake ||| 九重风步：踏风而行'"},
                  "traits": {"type": "array", "items": text, "description": "exactly 3 fun quirks, 2-5 words each, concrete and funny or telling, each written 'English ||| 中文', e.g. 'Never forgives a debt ||| 有债必讨', 'Talks to his lantern ||| 对灯笼说话'"},

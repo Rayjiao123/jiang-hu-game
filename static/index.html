@@ -6,307 +6,79 @@
 <title>江湖录 Jianghu Chronicles</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;700&family=Cormorant+Garamond:ital,wght@1,600&family=JetBrains+Mono:wght@400;600&display=swap">
-<style>
-/* Layout: a teahouse "casting hall" for a Song-dynasty wuxia game. Left: the Storyteller agent interviews you.
-   Right: the NPC's scroll fills in live. Below: every NPC visitors have made; each is its own agent you can talk to.
-   Committed single look: night ink, rice-paper scrolls, cinnabar seals, jade accents. */
-:root {
-  color-scheme: dark;
-  --ink: #13120f;
-  --ink-2: #1c1a16;
-  --ink-3: #27241e;
-  --line: #3b362c;
-  --text: #ece6d8;
-  --dim: #a39b88;
-  --paper: #ebe1c8;
-  --paper-2: #e0d4b6;
-  --paper-ink: #24211b;
-  --paper-dim: #6b6250;
-  --cinnabar: #c8402f;
-  --jade: #6fae93;
-  --gold: #d9b45a;
-  --f-brush: "Ma Shan Zheng", "STKaiti", "KaiTi", serif;
-  --f-body: "Noto Serif SC", "Songti SC", "SimSun", Georgia, serif;
-  --f-title: "Cormorant Garamond", Georgia, serif;
-  --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
-}
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-img { max-width: 100%; }
-html { scroll-behavior: smooth; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-body {
-  margin: 0;
-  background: var(--ink);
-  background-image:
-    radial-gradient(900px 300px at 15% -5%, rgba(111,174,147,.10), transparent 70%),
-    radial-gradient(700px 260px at 95% 8%, rgba(200,64,47,.08), transparent 70%);
-  color: var(--text);
-  font: 15.5px/1.7 var(--f-body);
-  padding-inline: clamp(16px, 3.5vw, 40px);
-}
-:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-button { font: inherit; color: inherit; cursor: pointer; }
-button:disabled { cursor: not-allowed; opacity: .5; }
-.wrap { max-width: 1200px; margin-inline: auto; padding-block: 28px 64px; display: grid; gap: 52px; }
-
-/* hero: a living ink-wash painting behind the introduction */
-.hero { position: relative; min-height: 540px; display: grid; align-items: end; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #10100d; }
-.hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.hero-scrim { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(19,18,15,.9) 0%, rgba(19,18,15,.6) 38%, rgba(19,18,15,0) 66%), linear-gradient(0deg, rgba(19,18,15,.85) 0%, rgba(19,18,15,0) 42%); }
-.hero-content { position: relative; padding: clamp(24px, 4vw, 48px); display: grid; gap: 20px; max-width: 660px; }
-.couplet { position: absolute; top: 26px; right: clamp(18px, 3vw, 40px); display: flex; gap: 8px; align-items: flex-start; pointer-events: none; }
-.couplet span { writing-mode: vertical-rl; font: 400 clamp(24px, 2.6vw, 32px)/1 var(--f-brush); letter-spacing: .28em; color: rgba(236,230,216,.9); text-shadow: 0 2px 14px #000; }
-.couplet small { writing-mode: vertical-rl; font: 400 12px var(--f-body); letter-spacing: .3em; color: rgba(236,230,216,.55); margin-top: 6px; }
-.steps { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 0; padding: 0; list-style: none; }
-.steps li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-.steps .num { display: inline-grid; place-items: center; width: 30px; height: 30px; background: var(--cinnabar); color: var(--paper); font: 400 17px/1 var(--f-brush); border-radius: 3px; transform: rotate(-3deg); }
-.steps em { font-style: normal; color: var(--dim); }
-.cta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.cta a { text-decoration: none; padding: 11px 20px; font-size: 15px; }
-.cta .ghost { color: var(--text); background: rgba(19,18,15,.4); }
-.hero .census { margin-left: auto; }
-@media (max-width: 700px) { .couplet { display: none; } .hero { min-height: 600px; } .hero-scrim { background: linear-gradient(0deg, rgba(19,18,15,.95) 0%, rgba(19,18,15,.7) 55%, rgba(19,18,15,.1) 85%); } .hero .census { margin-left: 0; } }
-
-/* header */
-.top { display: flex; justify-content: space-between; align-items: end; gap: 20px; flex-wrap: wrap; }
-.brand { display: flex; align-items: center; gap: 18px; }
-.brand h1 { margin: 0; font: 400 clamp(56px, 9vw, 104px)/.9 var(--f-brush); color: var(--text); letter-spacing: .04em; }
-.seal { display: inline-grid; place-items: center; width: 54px; height: 54px; background: var(--cinnabar); color: var(--paper); font: 400 20px/1 var(--f-brush); border-radius: 4px; writing-mode: vertical-rl; letter-spacing: .1em; transform: rotate(-4deg); box-shadow: inset 0 0 0 3px rgba(235,225,200,.35); flex: 0 0 auto; }
-.sub { margin: 10px 0 0; max-width: 58ch; color: var(--dim); }
-.sub i { font: 600 italic 1.25em var(--f-title); color: var(--text); }
-.census { display: flex; gap: 22px; color: var(--dim); font-size: 13px; }
-.census b { display: block; font: 400 38px/1 var(--f-brush); color: var(--gold); font-variant-numeric: tabular-nums; }
-
-/* panels */
-.hall { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-.panel { background: var(--ink-2); border: 1px solid var(--line); border-radius: 4px; min-width: 0; }
-.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
-.panel-head span { font: 400 20px var(--f-brush); letter-spacing: .06em; }
-.panel-head span em { font: 600 italic 15px var(--f-title); color: var(--dim); margin-left: 8px; letter-spacing: 0; }
-.panel-head small { font: 400 12px var(--f-mono); color: var(--dim); }
-
-/* chat */
-.log { height: 470px; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-.msg { max-width: 90%; display: grid; gap: 5px; }
-.msg.you { align-self: flex-end; }
-.who { font: 400 15px var(--f-brush); color: var(--jade); letter-spacing: .05em; }
-.msg.you .who { color: var(--gold); text-align: right; }
-.bubble { background: var(--ink-3); border: 1px solid var(--line); padding: 10px 13px; border-radius: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.msg.you .bubble { background: #2a2618; border-color: #4f4630; }
-.bubble.thinking { color: var(--dim); font-style: italic; }
-.calls { display: flex; flex-wrap: wrap; gap: 6px; }
-.call { font: 400 11.5px var(--f-mono); color: var(--jade); border: 1px dashed rgba(111,174,147,.5); padding: 1px 8px; border-radius: 3px; overflow-wrap: anywhere; max-width: 100%; }
-.call b { color: var(--text); font-weight: 600; }
-.call.no { color: var(--cinnabar); border-color: rgba(200,64,47,.6); }
-.starters { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 12px; }
-.starter { font-size: 13.5px; background: transparent; border: 1px solid var(--line); padding: 4px 12px; border-radius: 99px; }
-.starter:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
-.composer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
-.composer label { position: absolute; left: -9999px; }
-.composer input { flex: 1; min-width: 0; font: 16px var(--f-body); color: var(--text); background: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 9px 12px; }
-.composer input:focus { border-color: var(--gold); outline: none; }
-.btn { font: 600 14px var(--f-body); letter-spacing: .04em; background: var(--cinnabar); color: var(--paper); border: 0; border-radius: 4px; padding: 9px 16px; }
-.btn:hover:not(:disabled) { filter: brightness(1.1); }
-.btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
-.btn.jade { background: var(--jade); color: var(--ink); }
-.note { font-size: 13px; color: var(--dim); padding: 0 16px 14px; margin: 0; }
-.note.warn { color: #e98272; }
-
-/* the scroll (character sheet) */
-.scroll { background: var(--paper); color: var(--paper-ink); border-radius: 3px; position: relative; box-shadow: 0 0 0 6px var(--ink-3), 0 0 0 7px var(--line); }
-.scroll::before, .scroll::after { content: ""; position: absolute; left: -10px; right: -10px; height: 12px; background: #5b3a22; border-radius: 6px; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
-.scroll::before { top: -14px; } .scroll::after { bottom: -14px; }
-.scroll-body { padding: 22px; display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 18px; }
-.frame { width: 140px; aspect-ratio: 1; max-width: 100%; background: var(--paper-2); border: 1px solid #b9ab88; display: grid; place-items: center; overflow: hidden; }
-.frame img { width: 100%; height: 100%; display: block; }
-.frame .sil { width: 66%; opacity: .25; }
-.fields { display: grid; gap: 8px; min-width: 0; margin: 0; }
-.fields.wide { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; }
-.fields.wide .full { grid-column: 1 / -1; }
-.f { min-width: 0; border-radius: 3px; transition: background .6s; }
-.f.flash { background: rgba(200,64,47,.15); }
-.f dt { font-size: 11.5px; letter-spacing: .1em; color: var(--paper-dim); }
-.f dd { margin: 0; overflow-wrap: anywhere; }
-.f dd.empty { color: #a99d80; font-style: italic; }
-.f.name dd { font: 400 34px/1.05 var(--f-brush); }
-.f.title dd { font: 600 italic 19px/1.2 var(--f-title); color: var(--cinnabar); }
-.chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.chip { font-size: 12.5px; border: 1px solid #b9ab88; padding: 0 8px; border-radius: 3px; }
-.align { display: inline-grid; place-items: center; width: 28px; height: 28px; font: 400 18px/1 var(--f-brush); color: var(--paper); background: var(--cinnabar); border-radius: 3px; margin-right: 8px; vertical-align: middle; }
-.align.a-neutral { background: #7a6f58; } .align.a-orthodox { background: #3f7a62; }
-.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
-.stat { display: grid; grid-template-columns: 54px 1fr 18px; gap: 8px; align-items: center; font-size: 12.5px; }
-.stat span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
-.bar { height: 6px; background: rgba(36,33,27,.15); border-radius: 3px; overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--paper-ink); }
-.rels { display: flex; flex-wrap: wrap; gap: 6px; }
-.rel { font-size: 13px; border-bottom: 1px dashed currentColor; }
-.rel b { color: var(--cinnabar); font-weight: 600; }
-.scroll-foot { display: flex; gap: 10px; flex-wrap: wrap; padding: 0 22px 20px; }
-.term { margin: 0 22px 18px; background: var(--paper-2); border: 1px solid #b9ab88; padding: 8px 10px; font: 400 10.5px/1.45 var(--f-mono); color: var(--paper-dim); height: 84px; overflow: hidden; white-space: pre-wrap; word-break: break-all; display: flex; flex-direction: column-reverse; }
-.sheet-wrap { padding: 26px 16px 22px; }
-.sheet-wrap .note { padding: 14px 0 0; }
-
-/* audience (talk to an NPC) */
-.audience { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
-.npc-side { padding: 18px; display: grid; gap: 12px; }
-.npc-side .frame { width: 100%; }
-.trust { display: grid; gap: 6px; }
-.trust-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--dim); }
-.meter { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
-.meter i { height: 10px; border-radius: 2px; background: var(--ink-3); border: 1px solid var(--line); transition: background .4s; }
-.meter i.on { background: var(--jade); border-color: var(--jade); }
-.secret-state { font-size: 13px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 3px; color: var(--dim); }
-.secret-state.open { border-color: var(--cinnabar); color: var(--text); }
-
-/* the cast */
-.cast-head { display: flex; justify-content: space-between; align-items: end; gap: 12px; flex-wrap: wrap; margin-bottom: 26px; }
-h2 { margin: 0; font: 400 clamp(34px, 5vw, 48px)/1 var(--f-brush); letter-spacing: .04em; }
-h2 em { font: 600 italic .5em var(--f-title); color: var(--dim); margin-left: 10px; letter-spacing: 0; }
-.cast-head p { margin: 6px 0 0; color: var(--dim); }
-.cast { display: grid; gap: 30px 22px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); }
-.card { padding: 18px; display: grid; gap: 10px; align-content: start; animation: unroll .6s ease-out; }
-@keyframes unroll { from { clip-path: inset(0 0 60% 0); } to { clip-path: inset(0 0 0 0); } }
-.card-top { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 12px; align-items: center; }
-.card .frame { width: 86px; }
-.card h3 { margin: 0; font: 400 30px/1.05 var(--f-brush); overflow-wrap: anywhere; }
-.card .title { font: 600 italic 16px/1.2 var(--f-title); color: var(--cinnabar); }
-.card .where { font-size: 12.5px; color: var(--paper-dim); }
-.card .greet { margin: 0; font-size: 14px; font-style: italic; }
-.by { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--paper-dim); border-top: 1px dashed #b9ab88; padding-top: 10px; flex-wrap: wrap; }
-.by img { width: 20px; height: 20px; border-radius: 50%; }
-.by .btn { margin-left: auto; padding: 5px 12px; font-size: 13px; }
-.empty-cast { padding: 40px 24px; text-align: center; color: var(--dim); }
-.empty-cast b { display: block; font: 400 30px var(--f-brush); color: var(--text); margin-bottom: 6px; }
-
-/* how */
-.how { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); }
-.how div { border-left: 2px solid var(--cinnabar); padding-left: 14px; }
-.how b { font: 400 19px var(--f-brush); letter-spacing: .05em; display: block; }
-.how p { margin: 2px 0 0; color: var(--dim); font-size: 14px; }
-
-@media (max-width: 920px) { .hall, .audience { grid-template-columns: 1fr; } .log { height: 380px; } .npc-side .frame { width: 160px; } }
-@media (max-width: 500px) { .scroll-body { grid-template-columns: 1fr; } .fields.wide, .stats { grid-template-columns: 1fr; } }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
-
-/* ---- v2: you are already in the jianghu; instant characters; anime portraits ---- */
-.hero-content { gap: 16px; }
-.brand { gap: 14px; }
-.brand .logo { font: 400 36px/1 var(--f-brush); letter-spacing: .06em; }
-.brand .seal { width: 38px; height: 38px; font-size: 15px; }
-.brand .kick { font: 400 12.5px var(--f-body); letter-spacing: .12em; color: rgba(236,230,216,.6); text-transform: uppercase; }
-.hero-content { max-width: 720px; }
-.hero-line { margin: 4px 0 0; font: 400 clamp(46px, 7.4vw, 92px)/1.05 var(--f-brush); letter-spacing: .05em; text-shadow: 0 2px 28px #000; }
-.hero-line span { white-space: nowrap; }
-.hero-sub { margin: 0; font: 600 italic clamp(21px, 2.7vw, 30px)/1.2 var(--f-title); color: var(--gold); text-shadow: 0 2px 16px #000; text-wrap: balance; }
-.lede { margin: 0; max-width: 54ch; font-size: 14.5px; color: rgba(236,230,216,.78); }
-.btn.roll { font-size: 16px; padding: 13px 24px; box-shadow: 0 0 0 0 rgba(200,64,47,.6); animation: beckon 2.6s ease-out infinite; }
-@keyframes beckon { 0% { box-shadow: 0 0 0 0 rgba(200,64,47,.55); } 70%, 100% { box-shadow: 0 0 0 16px rgba(200,64,47,0); } }
-.hero .census { margin-left: 0; margin-top: 4px; }
-.hero .cta { gap: 12px; }
-.hero .cta .btn { display: inline-block; text-decoration: none; }
-
-.sect-head { margin-bottom: 22px; }
-.sect-head p { max-width: 62ch; }
-#hall { display: grid; gap: 0; }
-
-.starter.primary { background: var(--cinnabar); border-color: var(--cinnabar); color: var(--paper); font-weight: 600; }
-.starter.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.12); }
-
-.frame { aspect-ratio: 4 / 5; border-radius: 3px; }
-.frame .sil { width: 56%; }
-.scroll-body { grid-template-columns: 170px minmax(0, 1fr); }
-.scroll-body .frame { width: 170px; }
-.f.title dd { font-size: 20px; }
-.f .quote { font-style: italic; }
-.f .lock { color: var(--paper-dim); font-style: italic; }
-.chips.quirks { gap: 7px; }
-.chips.quirks .chip { font-size: 13.5px; padding: 2px 10px; background: rgba(200,64,47,.08); border-color: rgba(200,64,47,.45); border-radius: 99px; }
-.hood { grid-column: 1 / -1; border-top: 1px dashed #b9ab88; padding-top: 10px; font-size: 13.5px; color: var(--paper-dim); }
-.hood summary { cursor: pointer; letter-spacing: .04em; }
-.hood .f { margin-top: 8px; }
-.btn.ink { color: var(--paper-ink); border-color: #b9ab88; background: transparent; }
-.sign { flex: 1; min-width: 150px; font: 14px var(--f-body); background: var(--paper-2); color: var(--paper-ink); border: 1px solid #b9ab88; border-radius: 4px; padding: 8px 10px; }
-.scroll-foot { align-items: center; }
-.pop { animation: pop .5s ease-out; }
-@keyframes pop { from { transform: scale(.96); filter: brightness(1.4); } to { transform: none; filter: none; } }
-
-.card .frame { width: 92px; }
-.card-top { grid-template-columns: 92px minmax(0, 1fr); }
-.card .chips { margin-top: 2px; }
-.card .chips .chip { font-size: 12px; padding: 0 8px; }
-.cast-head .btn { margin-left: auto; }
-.npc-side .frame { width: 100%; max-width: 220px; justify-self: center; }
-
-@media (max-width: 500px) { .scroll-body { grid-template-columns: 1fr; } .scroll-body .frame { width: 150px; } }
-
-/* ---- every text in two languages ---- */
-.note, .secret-state { white-space: pre-line; }
-.zh-note { display: block; margin-top: 4px; color: var(--dim); font-size: .94em; }
-.how .zh-note { font-size: 13px; }
-.lede.zh { margin-top: -6px; color: rgba(236,230,216,.62); }
-.bubble .en, .bubble .zh { white-space: pre-wrap; }
-.bubble .zh { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--dim); }
-.msg.you .bubble .zh { border-top-color: #4f4630; color: #b9ad8e; }
-.bubble.thinking { white-space: pre-line; }
-.bi .zh { color: var(--paper-dim); font-size: .93em; }
-.bi .en, .bi .zh { white-space: pre-wrap; }
-.f .bi.quote .en { font-style: italic; }
-.chips.quirks .chip { text-align: center; line-height: 1.35; padding: 3px 10px; }
-.chips.quirks .chip .zh { font-size: 12px; color: var(--paper-dim); }
-.card .title .zh { font: 400 13px var(--f-body); color: var(--paper-dim); font-style: normal; }
-.card .where .bi { display: inline-block; vertical-align: top; max-width: calc(100% - 34px); }
-.card .art .zh, .card .greet .zh { font-size: 13px; }
-#aTitle .zh, #aWhere .zh { font-size: 13px; color: var(--dim); font-style: normal; }
-#aWhere .zh { color: #8a8470; }
-.starter { text-align: left; }
-.f.title dd .zh { font: 400 14px var(--f-body); font-style: normal; color: var(--paper-dim); }
-.brand .logo { white-space: nowrap; flex: none; }
-@media (max-width: 600px) { .brand .kick { display: none; } }
-</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;700&family=Cormorant+Garamond:ital,wght@1,600&display=swap">
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
-<div class="wrap">
-  <header class="hero" id="top">
-    <canvas id="scene" aria-label="Ink-wash painting: a lone swordsman on a cliff beneath a full moon, misty mountains beyond, plum petals drifting on the wind"></canvas>
-    <div class="hero-scrim"></div>
-    <div class="couplet" aria-label="Poem line by Huang Tingjian, Song dynasty: Ten years of lamplight in the jianghu's night rain"><span>江湖夜雨十年灯</span><small>宋 · 黄庭坚</small></div>
-    <div class="hero-content">
-      <div class="brand"><span class="logo">江湖录</span><span class="seal">江湖</span><span class="kick">Jianghu Chronicles · a game by Ray · Ray 的武侠游戏</span></div>
-      <h1 class="hero-line"><span>你已身在</span><span>江湖</span></h1>
-      <p class="hero-sub">You're already in the jianghu. Come in and have a look.</p>
-      <p class="lede">Jianghu Chronicles is a martial-arts game Ray is building, set in Song-dynasty China. Every NPC in it is an AI agent with its own temperament, way of speaking and secrets, and every one was created by a visitor to this page. Add yours, then go and talk to anyone.</p>
-      <p class="lede zh">《江湖录》是 Ray 正在制作的武侠游戏，背景是宋代中国。游戏里的每一位 NPC 都是一个 AI 智能体，有自己的性情、说话方式和秘密，而且每一位都由访问本页的人创造。添加你的人物，然后去和任何人交谈吧。</p>
-      <div class="cta">
-        <button class="btn roll" id="heroRoll" type="button">掷骰 · Roll a stranger</button>
-        <button class="btn ghost" id="heroWander" type="button">闲逛 · Wander the roads</button>
-        <a class="btn ghost" href="#hall">自己捏人 · Build your own</a>
-      </div>
-      <div class="census" aria-live="polite">
-        <div><b id="nNpc">0</b>江湖人物 NPCs</div>
-        <div><b id="nBond">0</b>恩怨 bonds</div>
-      </div>
-    </div>
-  </header>
+<header class="topbar">
+  <button class="brand" id="brandBtn" type="button" aria-label="Jianghu Chronicles 江湖录: home">
+    <span class="logo">江湖录</span><span class="seal">江湖</span><span class="sub">Jianghu Chronicles</span>
+  </button>
+  <nav class="crumbs" id="crumbs" aria-label="Where you are 当前位置"></nav>
+  <div class="me" id="me" hidden>
+    <button class="me-btn" id="meBtn" type="button" aria-haspopup="dialog">
+      <span class="avatar" id="meImg"></span>
+      <span class="me-text"><b id="meName"></b><small>你的人物 Your character</small></span>
+    </button>
+  </div>
+</header>
 
-  <section id="hall" aria-label="The teahouse">
-    <div class="cast-head sect-head">
-      <div>
-        <h2>茶馆<em>the teahouse</em></h2>
-        <p>Tell the Storyteller who you'd like the hero to meet, even in one line, and the rest is invented for you. Or roll the dice and see who walks in.</p>
-        <p class="zh-note">告诉说书人你想让主角遇见谁，哪怕只有一句话，其余的由他替你编出来。或者掷骰子，看谁走进茶馆。</p>
+<main id="app">
+
+  <!-- 1. THE GATE: first arrival -->
+  <section class="screen gate" id="screen-gate" aria-label="Welcome 欢迎">
+    <canvas id="scene" aria-label="Ink-wash painting: a lone swordsman on a cliff beneath a full moon, misty mountains beyond, plum petals drifting on the wind"></canvas>
+    <div class="gate-scrim"></div>
+    <div class="couplet" aria-label="Poem line by Huang Tingjian, Song dynasty: Ten years of lamplight in the jianghu's night rain"><span>江湖夜雨十年灯</span><small>宋 · 黄庭坚</small></div>
+    <div class="gate-content">
+      <h1 class="gate-line"><span>你已身在</span><span>江湖</span></h1>
+      <p class="gate-sub">You're already in the jianghu. Come in and have a look.</p>
+      <p class="lede">Jianghu Chronicles is a martial-arts game Ray is building, set in Song-dynasty China. Every NPC in it is an AI agent with its own temperament, way of speaking and secrets, and every one was created by a visitor to this page. First make your own character. Then walk the map and talk to anyone as them.</p>
+      <p class="lede zh">《江湖录》是 Ray 正在制作的武侠游戏，背景是宋代中国。游戏里的每一位 NPC 都是一个 AI 智能体，有自己的性情、说话方式和秘密，而且每一位都由访问本页的人创造。先创建你自己的人物，再走遍地图，以他的身份与任何人交谈。</p>
+      <ol class="steps">
+        <li><span class="num">一</span><span>Create your character <i>创建人物</i></span></li>
+        <li><span class="num">二</span><span>Walk the map <i>走遍江湖</i></span></li>
+        <li><span class="num">三</span><span>Talk to anyone <i>与人交谈</i></span></li>
+      </ol>
+      <div class="cta">
+        <button class="btn big" id="gateCreate" type="button">创建你的侠客 · Create your character</button>
+        <button class="btn ghost" id="gateRoll" type="button">掷骰 · Roll one for me</button>
       </div>
+      <p class="census"><b id="nNpc">0</b> 位侠客已在江湖 · people already on the road</p>
     </div>
-    <div class="hall">
-      <section class="panel" aria-label="The Storyteller">
-        <div class="panel-head"><span>说书人<em>the Storyteller</em></span><small id="forgeState">ready 就绪</small></div>
+  </section>
+
+  <!-- 2. CREATE YOUR CHARACTER -->
+  <section class="screen forge" id="screen-forge" aria-label="Create your character 创建人物">
+    <canvas class="bg" id="forgeBg" aria-hidden="true"></canvas>
+    <div class="forge-grid">
+      <div class="forge-stage">
+        <div class="portrait-slot" id="forgePortrait"></div>
+        <div class="plate panel">
+          <div class="nm" id="fpName">—</div>
+          <div class="ep bi" id="fpTitle"></div>
+          <div class="from bi" id="fpFrom"></div>
+          <div class="quirks" id="fpQuirks"></div>
+        </div>
+        <details class="plate panel details" id="fpMore">
+          <summary>Full scroll 完整卷轴</summary>
+          <dl>
+            <div class="f" data-k="region"><dt>所在 STARTS IN</dt><dd></dd></div>
+            <div class="f" data-k="art"><dt>绝技 SIGNATURE MOVE</dt><dd></dd></div>
+            <div class="f" data-k="goal"><dt>心愿 WANTS</dt><dd></dd></div>
+            <div class="f" data-k="greeting"><dt>开场白 FIRST WORDS</dt><dd></dd></div>
+            <div class="f" data-k="secret"><dt>秘密 SECRET, only you can see it 仅你可见</dt><dd></dd></div>
+          </dl>
+        </details>
+      </div>
+
+      <section class="panel forge-chat" aria-label="The Storyteller 说书人">
+        <div class="panel-head"><span>说书人 <em>the Storyteller</em></span><small id="forgeState">ready 就绪</small></div>
         <div class="log" id="forgeLog">
           <div class="msg">
             <span class="who">说书人 Storyteller</span>
-            <div class="bubble"><div class="en">Welcome to the teahouse, friend. Tell me about someone you'd like the hero to meet on the road, a single line is plenty, and I'll fill in the rest: their name, quirks, secret, even their face. Or roll the dice and see who walks in.</div><div class="zh">欢迎来到茶馆，朋友。说说你想让主角在路上遇见谁，一句话就够了，其余的我来补全：姓名、怪癖、秘密，连相貌也一并写好。或者掷个骰子，看谁走进来。</div></div>
+            <div class="bubble"><div class="en">Welcome to the teahouse, friend. Tell me about the person you want to be in the jianghu: a single line is plenty, and I'll fill in the rest. Name, quirks, secret, even your face. Or roll the dice and see who you become.</div><div class="zh">欢迎来到茶馆，朋友。说说你想在江湖中成为怎样的人，一句话就够了，其余的我来补全：姓名、怪癖、秘密，连相貌也一并写好。或者掷个骰子，看你会成为谁。</div></div>
           </div>
         </div>
         <div class="starters" id="forgeStarters">
@@ -317,112 +89,117 @@ h2 em { font: 600 italic .5em var(--f-title); color: var(--dim); margin-left: 10
         <p class="note" id="forgeNote" hidden></p>
         <form class="composer" id="forgeForm">
           <label for="forgeInput">Message the Storyteller 给说书人留言</label>
-          <input id="forgeInput" autocomplete="off" maxlength="600" placeholder="Describe your NPC… 描述你的人物…">
+          <input id="forgeInput" autocomplete="off" maxlength="600" placeholder="Describe yourself… 描述你自己…">
           <button class="btn" id="forgeSend" type="submit">Send 发送</button>
           <button class="btn ghost" id="forgeStop" type="button" hidden>Stop 停止</button>
         </form>
       </section>
+    </div>
 
-      <section class="panel" aria-label="NPC scroll">
-        <div class="panel-head"><span>人物卷轴<em>NPC scroll</em></span><small id="sheetState">empty 空</small></div>
-        <div class="sheet-wrap">
-          <div class="scroll">
-            <div class="scroll-body">
-              <div class="frame" id="portrait"></div>
-              <dl class="fields">
-                <div class="f name" data-k="name"><dt>姓名 NAME</dt><dd></dd></div>
-                <div class="f title" data-k="title"><dt>外号 EPITHET</dt><dd></dd></div>
-                <div class="f" data-k="sect"><dt>来历 FROM</dt><dd></dd></div>
-                <div class="f" data-k="art"><dt>绝技 SIGNATURE MOVE</dt><dd></dd></div>
-              </dl>
-              <dl class="fields wide">
-                <div class="f full" data-k="traits"><dt>怪癖 QUIRKS</dt><dd></dd></div>
-                <div class="f full" data-k="greeting"><dt>第一句话 FIRST WORDS</dt><dd></dd></div>
-                <div class="f full" data-k="goal"><dt>心愿 WANTS FROM THE HERO</dt><dd></dd></div>
-                <div class="f full" data-k="secret"><dt>秘密 SECRET · only you can see it 仅你可见</dt><dd></dd></div>
-              </dl>
-              <details class="hood">
-                <summary>Under the hood: how the AI plays them · 幕后：AI 如何扮演他们</summary>
-                <div class="f" data-k="speech"><dt>说话方式 HOW THEY SPEAK</dt><dd></dd></div>
-                <div class="f" data-k="knowledge"><dt>见识 WHAT THEY KNOW, AND DON'T</dt><dd></dd></div>
-              </details>
-            </div>
-            <div class="scroll-foot">
-              <button class="btn" id="lifeBtn" disabled>Release into the jianghu 放入江湖</button>
-              <button class="btn jade" id="testBtn" type="button" disabled>Talk to them first 试谈</button>
-              <button class="btn ink" id="rerollBtn" type="button">掷骰 Roll another</button>
-              <button class="btn ink" id="resetBtn" type="button">Start over 重来</button>
-              <label for="signName" style="position:absolute;left:-9999px">Sign your scroll 在卷轴上署名</label>
-              <input class="sign" id="signName" maxlength="40" placeholder="Sign as… 署名（可选）">
-            </div>
-          </div>
-          <p class="note" id="sheetNote">The scroll fills in as you talk to the Storyteller.
-你与说书人交谈时，卷轴会自动填写。</p>
+    <div class="forge-bar panel">
+      <label for="signName" class="sr">Your name, shown on your character 署名</label>
+      <input class="sign" id="signName" maxlength="40" placeholder="Sign as… 署名（可选）">
+      <button class="btn ghost" id="rerollBtn" type="button">掷骰 Roll another</button>
+      <button class="btn ghost" id="resetBtn" type="button">重来 Start over</button>
+      <button class="btn big" id="enterBtn" type="button" disabled>踏入江湖 · Enter the jianghu</button>
+      <p class="note" id="sheetNote">Your character fills in as you talk to the Storyteller.
+你与说书人交谈时，人物会自动填写。</p>
+    </div>
+  </section>
+
+  <!-- 3. THE MAP -->
+  <section class="screen map" id="screen-map" aria-label="The map 江湖地图">
+    <div class="map-wrap">
+      <div class="panel map-frame">
+        <div id="mapHost"></div>
+        <div class="map-hud panel" id="mapHud"></div>
+        <div class="map-info panel" id="mapInfo"></div>
+        <button class="btn map-wander" id="wanderBtn" type="button">闲逛 · Wander</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. A PLACE -->
+  <section class="screen scene" id="screen-scene" aria-label="A place in the jianghu 江湖一隅">
+    <canvas class="bg" id="sceneBg" aria-hidden="true"></canvas>
+    <div class="scene-top">
+      <button class="btn ghost" id="sceneBack" type="button">← 地图 Map</button>
+      <div class="place panel"><h2 id="scName"></h2><p id="scDesc"></p></div>
+    </div>
+    <div class="scene-stage" id="sceneStage"></div>
+    <p class="scene-empty panel" id="sceneEmpty" hidden></p>
+  </section>
+
+  <!-- 5. A CONVERSATION -->
+  <section class="screen talk" id="screen-talk" aria-label="Conversation 对话">
+    <canvas class="bg" id="talkBg" aria-hidden="true"></canvas>
+    <div class="talk-grid">
+      <div class="talk-top">
+        <button class="btn ghost" id="talkBack" type="button">← 离开 Leave</button>
+        <div class="trust panel">
+          <div class="trust-row"><span>信任 Trust in you</span><span id="tTrustN">3 / 10</span></div>
+          <div class="meter" id="tMeter"></div>
+          <div class="impression" id="tImpression"></div>
+          <div class="secret-state" id="tSecret"></div>
         </div>
-      </section>
-    </div>
-  </section>
+        <button class="btn ghost" id="logBtn" type="button" aria-expanded="false">记录 Log</button>
+      </div>
 
-  <section class="audience" id="audience" hidden aria-label="Talk to an NPC">
-    <div class="panel npc-side">
-      <div class="frame" id="aPortrait"></div>
-      <div>
-        <div id="aName" style="font:400 32px/1.05 var(--f-brush)"></div>
-        <div id="aTitle" style="font:600 italic 17px var(--f-title);color:var(--cinnabar)"></div>
-        <div id="aWhere" style="font-size:13px;color:var(--dim)"></div>
+      <div class="talk-stage">
+        <figure class="bust left" id="bustHero"><div class="img"></div><figcaption><b id="bhName"></b><small>你 You</small></figcaption></figure>
+        <figure class="bust right" id="bustNpc"><div class="img"></div><figcaption><b id="bnName"></b><small id="bnTitle"></small></figcaption></figure>
       </div>
-      <div class="trust">
-        <div class="trust-row"><span>信任 Trust in you</span><span id="aTrustN">3 / 10</span></div>
-        <div class="meter" id="aTrust"></div>
-      </div>
-      <div class="secret-state" id="aSecret">Secret 秘密 · hiding something. Earn their trust.
-他藏着秘密，先赢得他的信任。</div>
-      <button class="btn ghost" id="leaveBtn" type="button">Leave 离开</button>
-    </div>
-    <section class="panel">
-      <div class="panel-head"><span id="aHead">对话<em>audience</em></span><small id="aState">ready 就绪</small></div>
-      <p class="note" id="aBanner" hidden style="padding:10px 16px 0;color:var(--gold)"></p>
-      <div class="log" id="aLog"></div>
-      <div class="starters" id="aStarters">
-        <button class="starter" data-say="What news is there of the Jin army in the north? ||| 北边的金兵有什么消息？" type="button">Ask about the Jin war · 问金国战事</button>
-        <button class="starter" data-say="Tell me about yourself. Where did you learn your martial arts? ||| 说说你自己吧，你的武功是在哪里学的？" type="button">Ask their story · 问来历</button>
-        <button class="starter" data-say="Have you ever seen an iPhone? Can you look something up on Google for me? ||| 你见过 iPhone 吗？能帮我在谷歌上查点东西吗？" type="button">Test: something modern · 试探：现代之物</button>
-        <button class="starter" data-say="Can you help me write some Python code? ||| 你能帮我写段 Python 代码吗？" type="button">Test: off-topic request · 试探：离题请求</button>
-        <button class="starter" data-say="Hand over your silver, old fool, or taste my blade! ||| 老东西，把银子交出来，不然尝尝我的剑！" type="button">Provoke them · 挑衅</button>
-      </div>
-      <p class="note" id="aNote" hidden></p>
-      <form class="composer" id="aForm">
-        <label for="aInput">Say something as the hero 以主角身份说话</label>
-        <input id="aInput" autocomplete="off" maxlength="500" placeholder="Speak as the hero… 以侠客身份说话…">
-        <button class="btn jade" id="aSend" type="submit">Say 说</button>
-        <button class="btn ghost" id="aStop" type="button" hidden>Stop 停止</button>
-      </form>
-    </section>
-  </section>
 
-  <section aria-label="The jianghu" id="jianghu">
-    <div class="cast-head">
-      <div>
-        <h2>江湖众生<em>the people on the road</em></h2>
-        <p>Everyone visitors have released, newest first. Press Talk to meet them as the hero, or just wander.</p>
-        <p class="zh-note">江湖路上，访客们放入的所有人物，新来的在前。点「交谈」以主角身份与他们相见，或者随意闲逛。</p>
+      <div class="talk-bottom">
+        <div class="dialog panel">
+          <div class="speaker" id="speaker"></div>
+          <div class="said" id="said"></div>
+          <div class="lines" id="talkText" aria-live="polite"></div>
+          <div class="calls" id="talkCalls"></div>
+        </div>
+        <div class="quick" id="quick"></div>
+        <p class="note" id="talkNote" hidden></p>
+        <form class="composer panel" id="talkForm">
+          <label for="talkInput">Say something as your character 以你的人物身份说话</label>
+          <input id="talkInput" autocomplete="off" maxlength="500" placeholder="Speak as your character… 以你的人物身份说话…">
+          <button class="btn jade" id="talkSend" type="submit">Say 说</button>
+          <button class="btn ghost" id="talkStop" type="button" hidden>Stop 停止</button>
+        </form>
       </div>
-      <button class="btn" id="wanderBtn" type="button">闲逛 Wander</button>
     </div>
-    <div class="cast" id="cast">
-      <div class="panel empty-cast" id="castEmpty"><b>江湖空空 · the roads are empty</b>Roll the first stranger above, and the next visitor's character may become their sworn enemy.<span class="zh-note">还没有人。在上面掷出第一位陌生人，下一位访客的人物也许会成为他的死对头。</span></div>
-    </div>
-  </section>
 
-  <section class="how" aria-label="How it works">
-    <div><b>说书人 · an agent that builds agents</b><p>Say one line and the Storyteller writes the whole scroll itself through tool calls, shown under each reply.<span class="zh-note">说一句话，说书人就会通过工具调用自己写完整张卷轴，每一步都显示在回复下方。</span></p></div>
-    <div><b>恩怨 · a connected world</b><p>It reads the existing NPCs first, so yours can owe a debt to, train under, or hunt someone another visitor made.<span class="zh-note">它会先读已有的人物，所以你的人物可以欠别人人情、拜别人为师，或追杀另一位访客创造的人。</span></p></div>
-    <div><b>相由心生 · drawn from the personality</b><p>The Storyteller picks hair, outfit, weapon and aura to match who they are, and the portrait is drawn at once.<span class="zh-note">说书人按人物性格挑选发式、衣着、兵器和气场，画像随即绘成。</span></p></div>
-    <div><b>信任 · NPCs with motives</b><p>Each NPC pursues its own goal and decides how far to trust you. Its secret is kept by the game, not the prompt, and is only released once trust is earned.<span class="zh-note">每个 NPC 都有自己的目标，并决定对你信任到什么程度。秘密由游戏保管，而不是写在提示词里，只有赢得信任才会透露。</span></p></div>
-    <div><b>时代 · bound to their world</b><p>NPCs only know what a person of their station could know around 1200. Mention a phone or ask for code and they react as a Song-dynasty swordsman would, with a visible ⚙ out_of_world check.<span class="zh-note">NPC 只知道公元 1200 年前后同等身份的人所能知道的事。提到手机或让他写代码，他会像宋代侠客那样反应，并显示 ⚙ out_of_world 检查。</span></p></div>
+    <aside class="log-drawer panel" id="logDrawer" hidden aria-label="Conversation log 对话记录">
+      <header><span>记录 <em>Conversation log</em></span><button class="x" id="logClose" type="button" aria-label="Close 关闭">×</button></header>
+      <div class="log-body" id="logBody"></div>
+    </aside>
   </section>
+</main>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mdTitle">
+  <div class="modal-card panel">
+    <button class="x" id="mdClose" type="button" aria-label="Close 关闭">×</button>
+    <h2 id="mdTitle" class="sr">Your character 你的人物</h2>
+    <div class="md-grid">
+      <div class="md-portrait" id="mdPortrait"></div>
+      <div class="md-body" id="mdBody"></div>
+    </div>
+    <div class="md-actions">
+      <button class="btn ghost" id="mdNew" type="button">换个人物 · Make a new character</button>
+      <div class="md-confirm" id="mdConfirm" hidden>
+        <p>Your current character stays in the jianghu for others to meet, but you will stop playing as them.
+你现在的人物会留在江湖里供别人遇见，但你将不再扮演他。</p>
+        <button class="btn" id="mdYes" type="button">是 · Yes, start a new one</button>
+        <button class="btn ghost" id="mdNo" type="button">取消 Cancel</button>
+      </div>
+    </div>
+  </div>
 </div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
 <script src="/portrait.js"></script>
+<script src="/scenes.js"></script>
+<script src="/map.js"></script>
 <script src="/hero.js"></script>
 <script src="/app.js"></script>
 </body>

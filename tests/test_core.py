@@ -8,7 +8,7 @@ from types import SimpleNamespace as NS
 os.environ["DATABASE_PATH"] = str(Path(tempfile.mkdtemp()) / "test.db")
 os.environ["DEEPSEEK_API_KEY"] = ""
 
-from app import agent, bilingual, config, db, game, roll  # noqa: E402
+from app import agent, bilingual, config, db, game, prompts, roll, world  # noqa: E402
 
 
 def test_language_detection():
@@ -105,7 +105,7 @@ def test_a_sheet_is_complete_only_when_every_part_is_filled():
     s = game.blank_sheet()
     assert set(game.missing(s)) == set(game.REQUIRED)
     both = {k: "English text ||| 中文文字" for k in game.BILINGUAL}
-    game.apply_fields(s, both | {"name": "Old Wu", "alignment": "neutral", "traits": ["bold ||| 勇", "calm ||| 静", "wry ||| 俏"]})
+    game.apply_fields(s, both | {"name": "Old Wu", "alignment": "neutral", "region": "emei", "traits": ["bold ||| 勇", "calm ||| 静", "wry ||| 俏"]})
     assert game.missing(s) == ["appearance"]
     game.apply_fields(s, {"appearance": {}})          # even an empty look is filled in with defaults
     assert game.missing(s) == []
@@ -229,3 +229,84 @@ def test_text_that_follows_tool_calls_in_the_same_round_is_not_the_reply():
         events = list(agent.run(client, "m", [{"role": "user", "content": "hi"}], tools, turn, "visitor-d"))
     assert "retract" in [e["type"] for e in events]
     assert events[-1]["text"] == "The real reply ||| 正式回复"
+
+
+# ---------- the world, first impressions and tailored prompts ----------
+
+def test_regions_have_a_name_a_scene_and_a_place_on_the_map():
+    assert len(world.REGIONS) == 12
+    for rid, r in world.REGIONS.items():
+        assert bilingual.language_of(r["en"]) == "English" and bilingual.language_of(r["zh"]) == "Chinese"
+        assert bilingual.language_of(r["desc_zh"]) == "Chinese" and r["scene"]
+        assert 0 <= r["x"] <= 1000 and 0 <= r["y"] <= 640
+
+
+def test_every_dice_place_points_at_a_real_region():
+    assert {pl[2] for pl in roll.PLACES} <= set(world.IDS)
+
+
+def test_old_characters_without_a_region_get_a_stable_one():
+    a = world.region_for({"id": "abc123", "name": "x"})
+    assert a in world.IDS and a == world.region_for({"id": "abc123", "name": "y"})
+    assert world.region_for({"id": "abc123", "region": "emei"}) == "emei"
+    assert world.region_for({"id": "abc123", "region": "mars"}) == a
+
+
+def test_region_must_be_a_real_one():
+    s = game.blank_sheet()
+    rejected: list[str] = []
+    game.apply_fields(s, {"region": "Mars"}, rejected)
+    assert s["region"] == "" and rejected == ["region"]
+    game.apply_fields(s, {"region": " Huashan "})
+    assert s["region"] == "huashan"
+
+
+def test_first_impression_depends_on_who_is_asking():
+    npc = {"id": "n", "alignment": "orthodox", "bonds": []}
+    same, _ = game.starting_trust(npc, {"id": "h", "alignment": "orthodox", "bonds": []})
+    other, why = game.starting_trust(npc, {"id": "h", "alignment": "unorthodox", "bonds": []})
+    neutral, _ = game.starting_trust(npc, {"id": "h", "alignment": "neutral", "bonds": []})
+    assert same > neutral > other
+    assert bilingual.is_pair(why)
+    known, why2 = game.starting_trust(npc, {"id": "h", "alignment": "unorthodox", "bonds": [{"toId": "n", "relation": "x ||| 甲"}]})
+    assert known == other + 1 and bilingual.is_pair(why2)             # a shared history softens it
+    assert 0 <= game.starting_trust({"alignment": "unorthodox"}, {"alignment": "orthodox"})[0] <= 10
+
+
+def _character(name, **fields):
+    s = game.blank_sheet()
+    both = {k: f"{k} text ||| {k}文字" for k in game.BILINGUAL}
+    game.apply_fields(s, both | {"name": name, "region": "emei", "alignment": "orthodox",
+                                 "traits": ["cries at sunsets ||| 见落日必哭", "hates swords ||| 厌恶刀剑", "sleeps on roofs ||| 睡屋顶"],
+                                 "secret": "buried the treasure ||| 把宝藏埋了", **fields})
+    game.apply_fields(s, {"appearance": {"hair_color": "silver", "weapon": "flute"}})
+    return {**s, "id": name}
+
+
+def test_npc_prompt_describes_this_particular_hero_and_never_their_secret():
+    npc, hero = _character("Old Wu"), _character("柳寒烟 Liu Hanyan", alignment="unorthodox", sect="Poison Hall ||| 毒堂")
+    text = prompts.npc_system(npc, [], [], hero)
+    assert "柳寒烟 Liu Hanyan" in text and "Poison Hall / 毒堂" in text and "unorthodox" in text
+    assert "cries at sunsets / 见落日必哭" in text                     # their habits are visible
+    assert "silver hair" in text and "flute" in text                  # and so is how they look
+    assert "buried the treasure" not in text.split("The person in front of you")[1]   # the hero's secret never reaches an NPC
+    other = prompts.npc_system(npc, [], [], _character("Su Ling", alignment="orthodox"))
+    assert other != text                                               # a different hero gives a different prompt
+
+
+def test_the_opening_turn_is_addressed_to_the_hero():
+    assert "walked up" in prompts.npc_state(3, False, opening=True)
+    assert "walked up" not in prompts.npc_state(3, False)
+
+
+def test_a_reply_is_tidied_into_one_english_half_and_one_chinese_half():
+    clean = "Hello there.\n|||\n你好。"
+    assert bilingual.normalize(clean) == clean
+    # the separator forgotten: sort the paragraphs by language
+    assert bilingual.normalize("*Waves.* Hello there.\n\n*挥手。* 你好。") == "*Waves.* Hello there.\n|||\n*挥手。* 你好。"
+    # the separator repeated for every paragraph
+    messy = "First part. ||| 第一段。\n\nSecond part.\n|||\n第二段。"
+    assert bilingual.normalize(messy) == "First part.\n\nSecond part.\n|||\n第一段。\n\n第二段。"
+    # one language only is left for the translator
+    assert bilingual.normalize("Only English here.") == "Only English here."
+    assert bilingual.SEP not in bilingual.normalize("只有中文。")

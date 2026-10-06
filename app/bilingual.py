@@ -38,6 +38,21 @@ def is_pair(text: str) -> bool:
     return bool(_LATIN_WORD.search(en)) and bool(_CJK.search(zh))
 
 
+def normalize(text: str) -> str:
+    """Put a reply into the form 'English ||| 中文'. The model sometimes forgets the separator, or repeats it
+    for every paragraph; sort the paragraphs by language and join them with a single separator. A reply
+    that is in one language only is returned unchanged (the caller translates it)."""
+    text = str(text or "").strip()
+    if text.count(SEP) == 1 and is_pair(text):
+        return text
+    paragraphs = [p.strip() for p in re.split(r"\n{2,}", text.replace(SEP, "\n\n")) if p.strip()]
+    en = [p for p in paragraphs if language_of(p) == "English"]
+    zh = [p for p in paragraphs if language_of(p) == "Chinese"]
+    if en and zh:
+        return "\n\n".join(en) + f"\n{SEP}\n" + "\n\n".join(zh)
+    return text
+
+
 def plain(text: str) -> str:
     """For prompts and logs: 'English ||| 中文' becomes 'English / 中文'."""
     return " / ".join(part.strip() for part in str(text or "").split(SEP))
@@ -64,7 +79,8 @@ def counterpart(client, model: str, text: str) -> str:
 
 
 # Added to every prompt so the format is the last thing the model reads.
-REPLY_FORMAT = ("Write every reply in BOTH languages: the English version first, then a line containing only |||, "
-                "then the same message in Chinese (same meaning, same *actions*). Never skip either half.")
+REPLY_FORMAT = ("Write every reply in BOTH languages: the complete English version first, then ONE line containing only |||, "
+                "then the complete Chinese version (same meaning, same *actions*). Use the ||| line exactly once per reply, "
+                "never once per paragraph, and never skip either half.")
 FIELD_FORMAT = ("Every text field except name is written in both languages in one string, English first: "
                 "'English text ||| 中文文字'. The name is Chinese followed by pinyin.")

@@ -6,7 +6,7 @@ import time
 import uuid
 from contextlib import contextmanager
 
-from . import config
+from . import config, world
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS npcs (
@@ -31,11 +31,18 @@ CREATE TABLE IF NOT EXISTS drafts (
     released   TEXT,                     -- npc id once released
     updated_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS players (
+    visitor_id TEXT PRIMARY KEY,         -- the character this visitor plays as
+    draft_id   TEXT NOT NULL,
+    npc_id     TEXT NOT NULL,
+    updated_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS sessions (
     id         TEXT PRIMARY KEY,
     visitor_id TEXT NOT NULL,
-    npc_id     TEXT,                     -- a released NPC ...
-    draft_id   TEXT,                     -- ... or a draft being rehearsed
+    npc_id     TEXT,                     -- the character being talked to
+    draft_id   TEXT,                     -- (unused since rehearsals were replaced by playing a character)
+    hero_id    TEXT,                     -- the visitor's own character in this conversation
     trust      INTEGER NOT NULL,
     revealed   INTEGER NOT NULL DEFAULT 0,
     turns      TEXT NOT NULL DEFAULT '[]',
@@ -43,7 +50,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 """
 
-PUBLIC_FIELDS = ("name", "title", "sect", "location", "alignment", "art", "traits", "greeting", "bonds", "appearance")
+PUBLIC_FIELDS = ("name", "title", "sect", "location", "alignment", "art", "traits", "greeting", "goal", "bonds", "appearance")
 
 
 def new_id() -> str:
@@ -77,6 +84,9 @@ def init() -> None:
             conn.execute("ALTER TABLE npcs ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
         if "flag" not in cols:
             conn.execute("ALTER TABLE npcs ADD COLUMN flag TEXT NOT NULL DEFAULT ''")
+        scols = {r["name"] for r in conn.execute("PRAGMA table_info(sessions)")}
+        if "hero_id" not in scols:
+            conn.execute("ALTER TABLE sessions ADD COLUMN hero_id TEXT")
 
 
 # ---------- NPCs ----------
@@ -118,7 +128,8 @@ def public_card(npc: dict) -> dict:
     """What any visitor may see."""
     out = {k: npc.get(k) for k in PUBLIC_FIELDS}
     out.update(id=npc["id"], svg=npc.get("svg", ""), creator_name=npc.get("creator_name", ""),
-               created_at=npc.get("created_at"), has_secret=bool(npc.get("has_secret")))
+               created_at=npc.get("created_at"), has_secret=bool(npc.get("has_secret")),
+               region=world.region_for(npc))
     return out
 
 
@@ -157,20 +168,45 @@ def save_draft(conn, draft: dict) -> None:
                   draft.get("released"), time.time(), draft["id"]))
 
 
-# ---------- conversation sessions ----------
+# ---------- the character a visitor plays ----------
 
-def create_session(conn, visitor_id: str, trust: int, npc_id: str | None = None, draft_id: str | None = None) -> str:
+def set_player(conn, visitor_id: str, draft_id: str, npc_id: str) -> None:
+    conn.execute("INSERT INTO players (visitor_id, draft_id, npc_id, updated_at) VALUES (?,?,?,?) "
+                 "ON CONFLICT(visitor_id) DO UPDATE SET draft_id = excluded.draft_id, npc_id = excluded.npc_id, updated_at = excluded.updated_at",
+                 (visitor_id, draft_id, npc_id, time.time()))
+
+
+def get_player(conn, visitor_id: str) -> dict | None:
+    r = conn.execute("SELECT * FROM players WHERE visitor_id = ?", (visitor_id,)).fetchone()
+    return {"draft_id": r["draft_id"], "npc_id": r["npc_id"]} if r else None
+
+
+def clear_player(conn, visitor_id: str) -> None:
+    conn.execute("DELETE FROM players WHERE visitor_id = ?", (visitor_id,))
+
+
+# ---------- conversation sessions: one per (visitor, their character, the NPC), kept between visits ----------
+
+def find_session(conn, visitor_id: str, hero_id: str, npc_id: str) -> dict | None:
+    r = conn.execute("SELECT * FROM sessions WHERE visitor_id = ? AND hero_id = ? AND npc_id = ? ORDER BY updated_at DESC LIMIT 1",
+                     (visitor_id, hero_id, npc_id)).fetchone()
+    return _session(r) if r else None
+
+
+def create_session(conn, visitor_id: str, trust: int, npc_id: str, hero_id: str) -> str:
     sid = new_id()
-    conn.execute("INSERT INTO sessions (id, visitor_id, npc_id, draft_id, trust, updated_at) VALUES (?,?,?,?,?,?)",
-                 (sid, visitor_id, npc_id, draft_id, trust, time.time()))
+    conn.execute("INSERT INTO sessions (id, visitor_id, npc_id, hero_id, trust, updated_at) VALUES (?,?,?,?,?,?)",
+                 (sid, visitor_id, npc_id, hero_id, trust, time.time()))
     return sid
 
 
 def get_session(conn, sid: str, visitor_id: str) -> dict | None:
     r = conn.execute("SELECT * FROM sessions WHERE id = ? AND visitor_id = ?", (sid, visitor_id)).fetchone()
-    if not r:
-        return None
-    return {"id": r["id"], "npc_id": r["npc_id"], "draft_id": r["draft_id"], "trust": r["trust"],
+    return _session(r) if r else None
+
+
+def _session(r) -> dict:
+    return {"id": r["id"], "npc_id": r["npc_id"], "hero_id": r["hero_id"], "trust": r["trust"],
             "revealed": bool(r["revealed"]), "turns": json.loads(r["turns"])}
 
 

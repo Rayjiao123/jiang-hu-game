@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, bilingual, config, db, game, moderation, prompts, ratelimit, roll as roller
+from . import agent, bilingual, config, db, game, moderation, prompts, ratelimit, roll as roller, world
 from .bilingual import bi
 from .ratelimit import RateLimited
 
@@ -40,6 +40,8 @@ async def visitor_cookie(request: Request, call_next):
         vid = uuid.uuid4().hex
     request.state.vid = vid
     response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache"      # re-check pages and scripts each visit, so updates show up at once
     if fresh:
         response.set_cookie("vid", vid, max_age=60 * 60 * 24 * 365, httponly=True, samesite="lax",
                             secure=request.url.scheme == "https")
@@ -55,8 +57,7 @@ class Release(BaseModel):
 
 
 class NewSession(BaseModel):
-    npc_id: str | None = None
-    draft_id: str | None = None
+    npc_id: str
 
 
 def sse(events: Iterator[dict]) -> StreamingResponse:
@@ -80,25 +81,50 @@ def guarded(events: Iterator[dict]) -> Iterator[dict]:
         print("DeepSeek error:", repr(e))
 
 
-@app.post("/api/translate")
-def translate(body: Message, request: Request):
-    """The other-language version of something the visitor typed, shown under their message."""
-    vid = request.state.vid
-    if bilingual.has_both(body.message):
-        return {"text": ""}
-    client = llm()
-    try:
-        ratelimit.check(vid)
-    except RateLimited as e:
-        raise HTTPException(429, str(e))
-    return {"text": bilingual.counterpart(client, config.CHAT_MODEL, body.message)}
-
-
 # ---------- read-only ----------
 
 @app.get("/api/status")
 def status():
     return {"ai": bool(config.DEEPSEEK_API_KEY)}
+
+
+@app.get("/api/world")
+def get_world():
+    return {"regions": world.public()}
+
+
+def _hero(conn, vid: str) -> dict:
+    """The character this visitor plays. Conversations need one."""
+    player = db.get_player(conn, vid)
+    hero = db.get_npc(conn, player["npc_id"], include_hidden=True) if player else None
+    if not hero:
+        raise HTTPException(409, bi("Create your character first.", "请先创建你的人物。"))
+    return hero
+
+
+@app.get("/api/me")
+def me(request: Request):
+    """The visitor's own character, with the parts only they may see."""
+    vid = request.state.vid
+    with db.session() as conn:
+        player = db.get_player(conn, vid)
+        hero = db.get_npc(conn, player["npc_id"], include_hidden=True) if player else None
+        if not hero:
+            if player:
+                db.clear_player(conn, vid)       # an admin removed them
+            return {"hero": None}
+        card = db.public_card(hero)
+        card.update(secret=db.get_secret(conn, hero["id"]), speech=hero.get("speech", ""),
+                    knowledge=hero.get("knowledge", ""), pending=bool(hero["hidden"] and hero["flag"]))
+    return {"hero": card}
+
+
+@app.post("/api/me/reset")
+def me_reset(request: Request):
+    """Stop playing as this character and make a new one. The old character stays in the world."""
+    with db.session() as conn:
+        db.clear_player(conn, request.state.vid)
+    return {"ok": True}
 
 
 @app.get("/api/npcs")
@@ -134,35 +160,53 @@ def _open_draft(draft_id: str, vid: str) -> None:
 
 def _finish(client, vid: str, ev: dict) -> Iterator[dict]:
     """On a reply that is in one language only, translate it and append the other half (the model sometimes forgets)."""
-    text = ev["text"]
-    if text and bilingual.SEP not in text and not bilingual.has_both(text):
+    text = bilingual.normalize(ev["text"])
+    if text and bilingual.SEP not in text:
         try:
             ratelimit.check(vid)
             other = bilingual.counterpart(client, config.CHAT_MODEL, text)
         except RateLimited:
             other = ""
         if other:
-            extra = f"\n{bilingual.SEP}\n{other}"
-            yield {"type": "text", "delta": extra}
-            ev = {"type": "done", "text": text + extra}
-    yield ev
+            en, zh = (other, text) if bilingual.language_of(text) == "Chinese" else (text, other)
+            text = f"{en}\n{bilingual.SEP}\n{zh}"
+    yield {"type": "done", "text": text}      # the page replaces what it streamed with this tidied version
 
 
-def _storyteller_events(client, draft_id: str, vid: str, message: str) -> Iterator[dict]:
+def _bilingual_line(client, vid: str, message: str) -> str:
+    """The visitor's own line as 'English ||| 中文', so both languages show under it and in the history."""
+    if bilingual.SEP in message or bilingual.has_both(message):
+        return message
+    try:
+        ratelimit.check(vid)
+    except RateLimited:
+        return message
+    other = bilingual.counterpart(client, config.CHAT_MODEL, message)
+    if not other:
+        return message
+    en, zh = (other, message) if bilingual.language_of(message) == "Chinese" else (message, other)
+    return f"{en} {bilingual.SEP} {zh}"
+
+
+def _storyteller_events(client, draft_id: str, vid: str, message: str, translate: bool = True) -> Iterator[dict]:
     """One Storyteller turn: stream its reply and tool effects, and keep the sheet in the database."""
+    line = message
+    if translate:
+        line = _bilingual_line(client, vid, message)
+        yield {"type": "user", "text": line}
     with db.session() as conn:
         draft = _draft(conn, draft_id, vid)
         turn = agent.Turn()
         tools = game.storyteller_tools(conn, draft["sheet"], turn)
         messages = [{"role": "system", "content": prompts.STORYTELLER}, *agent.history(draft["turns"]),
                     {"role": "system", "content": prompts.storyteller_state(draft["sheet"], game.missing(draft["sheet"]))},
-                    {"role": "user", "content": message}]
+                    {"role": "user", "content": bilingual.plain(line)}]
         try:
             # the first reply carries a whole scroll of fields, so it needs room for the tool call
             for raw in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=1800):
                 for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
                     if ev["type"] == "done":
-                        draft["turns"] += [{"role": "user", "content": message},
+                        draft["turns"] += [{"role": "user", "content": line},
                                            {"role": "assistant", "content": ev["text"] or "…"}]
                     yield ev
         finally:
@@ -191,7 +235,7 @@ def roll(draft_id: str, request: Request):
 
     def events():
         yield {"type": "roll", "text": seed["summary"], "text_zh": seed["summary_zh"]}
-        yield from _storyteller_events(client, draft_id, vid, roller.roll_message(seed))
+        yield from _storyteller_events(client, draft_id, vid, roller.roll_message(seed), translate=False)
     return sse(guarded(events()))
 
 
@@ -201,6 +245,8 @@ def release(draft_id: str, body: Release, request: Request):
     with db.session() as conn:
         draft = _draft(conn, draft_id, vid)
     if draft["released"]:
+        with db.session() as conn:
+            db.set_player(conn, vid, draft_id, draft["released"])
         return {"id": draft["released"], "pending": False}
     if game.missing(draft["sheet"]):
         raise HTTPException(400, bi("The scroll isn't finished yet. Ask the Storyteller to fill the rest.", "卷轴还没写完，请让说书人补全。"))
@@ -216,7 +262,7 @@ def release(draft_id: str, body: Release, request: Request):
     verdict, reason = moderation.check(client, config.CHAT_MODEL, sheet)
     if verdict == "block":
         why_en, why_zh = bilingual.split(reason)
-        raise HTTPException(422, bi(f"This NPC can't be released yet: {why_en or reason} Ask the Storyteller to change it, then try again.",
+        raise HTTPException(422, bi(f"This character can't enter the jianghu yet: {why_en or reason} Ask the Storyteller to change it, then try again.",
                                     f"暂时不能放入江湖：{why_zh or why_en} 请让说书人修改后再试。"))
 
     with db.session() as conn:
@@ -225,72 +271,95 @@ def release(draft_id: str, body: Release, request: Request):
                                hidden=verdict == "review", flag=reason if verdict == "review" else "")
         draft["released"] = npc_id
         db.save_draft(conn, draft)
+        db.set_player(conn, vid, draft_id, npc_id)       # from now on the visitor plays as this character
     return {"id": npc_id, "pending": verdict == "review"}
 
 
-# ---------- talking to an NPC (released, or a draft in rehearsal) ----------
+# ---------- talking to an NPC as the visitor's own character ----------
 
-def _npc_for(conn, sess: dict, vid: str) -> tuple[dict, str]:
-    if sess.get("npc_id"):
-        npc = db.get_npc(conn, sess["npc_id"])
-        if not npc:
-            raise HTTPException(404, bi("That NPC has left the jianghu.", "这位人物已离开江湖。"))
-        return npc, db.get_secret(conn, npc["id"])
-    sheet = _draft(conn, sess["draft_id"], vid)["sheet"]
-    return {**sheet, "id": "draft"}, sheet.get("secret", "")
+def _card(npc: dict) -> dict:
+    return {k: npc.get(k) for k in ("id", "name", "title", "sect", "location", "alignment", "greeting", "appearance")} | {"region": world.region_for(npc)}
 
 
 @app.post("/api/sessions")
 def new_session(body: NewSession, request: Request):
+    """Start talking to an NPC, or pick up where this character and that NPC left off."""
     vid = request.state.vid
     with db.session() as conn:
-        if body.npc_id:
-            npc = db.get_npc(conn, body.npc_id)
-            if not npc:
-                raise HTTPException(404, bi("That NPC has left the jianghu.", "这位人物已离开江湖。"))
-            has_secret = bool(db.get_secret(conn, npc["id"]))
-        elif body.draft_id:
-            npc = {**_draft(conn, body.draft_id, vid)["sheet"], "id": "draft"}
-            has_secret = bool(npc.get("secret"))
-        else:
-            raise HTTPException(400, bi("Say who to talk to.", "请选择要交谈的人。"))
-        trust = game.STARTING_TRUST.get(npc.get("alignment"), 3)
-        sid = db.create_session(conn, vid, trust, npc_id=body.npc_id if body.npc_id else None,
-                                draft_id=None if body.npc_id else body.draft_id)
-    card = {k: npc.get(k) for k in ("name", "title", "sect", "location", "alignment", "greeting", "appearance", "svg")}
-    return {"id": sid, "npc": card, "trust": trust, "revealed": False, "has_secret": has_secret,
-            "threshold": config.SECRET_TRUST_THRESHOLD, "rehearsal": not body.npc_id}
+        hero = _hero(conn, vid)
+        npc = db.get_npc(conn, body.npc_id)
+        if not npc:
+            raise HTTPException(404, bi("That NPC has left the jianghu.", "这位人物已离开江湖。"))
+        if npc["id"] == hero["id"]:
+            raise HTTPException(400, bi("That is your own character.", "那是你自己的人物。"))
+        trust0, why = game.starting_trust(npc, hero)
+        sess = db.find_session(conn, vid, hero["id"], npc["id"])
+        if not sess:
+            sid = db.create_session(conn, vid, trust0, npc["id"], hero["id"])
+            sess = db.get_session(conn, sid, vid)
+        has_secret = bool(db.get_secret(conn, npc["id"]))
+    shown = [t for t in sess["turns"] if not t.get("hidden")][-40:]
+    return {"id": sess["id"], "npc": _card(npc), "trust": sess["trust"], "revealed": sess["revealed"], "has_secret": has_secret,
+            "threshold": config.SECRET_TRUST_THRESHOLD, "impression": why, "turns": shown, "fresh": not sess["turns"]}
+
+
+def _npc_turn(client, sid: str, vid: str, message: str | None) -> Iterator[dict]:
+    """One NPC turn. message=None means the hero has just walked up and the NPC speaks first."""
+    opening = message is None
+    line = "*approaches you* ||| *走上前来*" if opening else _bilingual_line(client, vid, message)
+    if not opening:
+        yield {"type": "user", "text": line}
+    with db.session() as conn:
+        sess = db.get_session(conn, sid, vid)
+        if not sess:
+            raise HTTPException(404, bi("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。"))
+        hero = _hero(conn, vid)
+        npc = db.get_npc(conn, sess["npc_id"])
+        if not npc:
+            raise HTTPException(404, bi("That NPC has left the jianghu.", "这位人物已离开江湖。"))
+        secret = db.get_secret(conn, npc["id"])
+        others = [n for n in db.list_npcs(conn) if n["id"] not in (npc["id"], hero["id"])]
+        turn = agent.Turn()
+        tools = game.npc_tools(conn, npc, secret, sess, turn)
+        messages = [{"role": "system", "content": prompts.npc_system(npc, others, game.admirers(conn, npc["id"]), hero)},
+                    *agent.history(sess["turns"]),
+                    {"role": "system", "content": prompts.npc_state(sess["trust"], sess["revealed"], opening)},
+                    {"role": "user", "content": bilingual.plain(line)}]
+        try:
+            for raw in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=800):
+                for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
+                    if ev["type"] == "done":
+                        sess["turns"] += [{"role": "user", "content": line, **({"hidden": True} if opening else {})},
+                                          {"role": "assistant", "content": ev["text"] or "…"}]
+                    yield ev
+        finally:
+            db.save_session(conn, sess)
+
+
+def _own_session(sid: str, vid: str) -> dict:
+    with db.session() as conn:
+        sess = db.get_session(conn, sid, vid)
+    if not sess:
+        raise HTTPException(404, bi("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。"))
+    return sess
+
+
+@app.post("/api/sessions/{sid}/open")
+def npc_open(sid: str, request: Request):
+    """The NPC speaks first, to this particular hero."""
+    vid = request.state.vid
+    if _own_session(sid, vid)["turns"]:
+        raise HTTPException(409, bi("This conversation has already begun.", "这段对话已经开始。"))
+    client = llm()
+    return sse(guarded(_npc_turn(client, sid, vid, None)))
 
 
 @app.post("/api/sessions/{sid}/chat")
 def npc_chat(sid: str, body: Message, request: Request):
     vid = request.state.vid
-    with db.session() as conn:
-        if not db.get_session(conn, sid, vid):
-            raise HTTPException(404, bi("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。"))
+    _own_session(sid, vid)
     client = llm()
-
-    def events():
-        with db.session() as conn:
-            sess = db.get_session(conn, sid, vid)
-            npc, secret = _npc_for(conn, sess, vid)
-            others = [n for n in db.list_npcs(conn) if n["id"] != npc["id"]]
-            turn = agent.Turn()
-            tools = game.npc_tools(conn, npc, secret, sess, turn)
-            messages = [{"role": "system", "content": prompts.npc_system(npc, others, game.admirers(conn, npc["id"]))},
-                        *agent.history(sess["turns"]),
-                        {"role": "system", "content": prompts.npc_state(sess["trust"], sess["revealed"])},
-                        {"role": "user", "content": body.message}]
-            try:
-                for raw in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=800):
-                    for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
-                        if ev["type"] == "done":
-                            sess["turns"] += [{"role": "user", "content": body.message},
-                                              {"role": "assistant", "content": ev["text"] or "…"}]
-                        yield ev
-            finally:
-                db.save_session(conn, sess)
-    return sse(guarded(events()))
+    return sse(guarded(_npc_turn(client, sid, vid, body.message)))
 
 
 # ---------- admin: review, hide, restore, delete, export ----------
@@ -343,7 +412,7 @@ def _generate_npc(client, creator_name: str) -> tuple[str | None, str]:
     with db.session() as conn:
         draft_id = db.create_draft(conn, vid, game.blank_sheet())
     seed = roller.random_seed()
-    for _ in _storyteller_events(client, draft_id, vid, roller.roll_message(seed)):
+    for _ in _storyteller_events(client, draft_id, vid, roller.roll_message(seed), translate=False):
         pass
     with db.session() as conn:
         draft = _draft(conn, draft_id, vid)

@@ -28,15 +28,15 @@ ROLES = [
 ]
 
 PLACES = [
-    ("the Grand Canal", "大运河"), ("West Lake", "西湖"), ("Mount Hua", "华山"),
-    ("a Yangtze river crossing", "长江渡口"), ("the foothills of Wudang", "武当山脚"),
-    ("Lin'an's night market", "临安夜市"), ("the salt marshes of Yangzhou", "扬州盐场"),
-    ("a snowbound monastery on Mount Emei", "峨眉山雪中古寺"), ("a Sichuan tea road", "蜀中茶马道"),
-    ("the bamboo sea of Shu", "蜀南竹海"), ("the Jin-held northern border", "金国控制的北方边境"),
-    ("a pearl harbour in Guangdong", "广东采珠港"), ("the borderlands of Dali", "大理边境"),
-    ("the fishing villages of Dongting Lake", "洞庭湖渔村"), ("Suzhou's garden quarter", "苏州园林街"),
-    ("the islands of Lake Tai", "太湖岛上"), ("the tea hills of Fujian", "福建茶山"),
-    ("Hangzhou's silk workshops", "杭州绸缎坊"),
+    ("the Grand Canal", "大运河", "canal"), ("West Lake", "西湖", "westlake"), ("Mount Hua", "华山", "huashan"),
+    ("a Yangtze river crossing", "长江渡口", "yangtze"), ("the foothills of Wudang", "武当山脚", "wudang"),
+    ("Lin'an's night market", "临安夜市", "linan"), ("the salt marshes of Yangzhou", "扬州盐场", "canal"),
+    ("a snowbound monastery on Mount Emei", "峨眉山雪中古寺", "emei"), ("a Sichuan tea road", "蜀中茶马道", "shu"),
+    ("the bamboo sea of Shu", "蜀南竹海", "shu"), ("the Jin-held northern border", "金国控制的北方边境", "border"),
+    ("a pearl harbour in the south", "南方采珠港", "dali"), ("the borderlands of Dali", "大理边境", "dali"),
+    ("the fishing villages of Lake Tai", "太湖渔村", "taihu"), ("Suzhou's garden quarter", "苏州园林街", "taihu"),
+    ("the islands of Lake Tai", "太湖岛上", "taihu"), ("Shaolin's pagoda forest", "少林塔林", "shaolin"),
+    ("Hangzhou's silk workshops", "杭州绸缎坊", "linan"),
 ]
 
 TWISTS = [
@@ -69,19 +69,20 @@ def _a(phrase: str) -> str:
 
 def random_seed(rng: random.Random | None = None) -> dict:
     rng = rng or random.Random()
-    (role, role_zh), (place, place_zh), (twist, twist_zh) = rng.choice(ROLES), rng.choice(PLACES), rng.choice(TWISTS)
+    (role, role_zh), (place, place_zh, region), (twist, twist_zh) = rng.choice(ROLES), rng.choice(PLACES), rng.choice(TWISTS)
     look = {
         "aura": rng.choice([a for a in game.APPEARANCE["aura"] if a != "none"]),
         "scene": rng.choice(game.APPEARANCE["scene"]),
-        "hair_color": rng.choice(game.APPEARANCE["hair_color"]),
+        "hair_color": rng.choice(["black", "black", "black", "brown", "brown", "silver", "white", "red"]),
         "outfit_color": rng.choice(game.APPEARANCE["outfit_color"]),
     }
     return {"summary": f"{_a(role)} from {place} who {twist}",
-            "summary_zh": f"一位{role_zh}，来自{place_zh}，{twist_zh}", "look": look}
+            "summary_zh": f"一位{role_zh}，来自{place_zh}，{twist_zh}", "look": look, "region": region}
 
 
 def roll_message(seed: dict) -> str:
     look = ", ".join(f"{k}={v}" for k, v in seed["look"].items())
     return (f"Roll me a random character: {seed['summary']} ({seed['summary_zh']}). "
+            f"They live in the region '{seed['region']}'. "
             f"For their appearance, use exactly these options even if they seem unusual, and make the story fit them: {look}. "
             "Fill every field now in one go, then introduce them to me.")
