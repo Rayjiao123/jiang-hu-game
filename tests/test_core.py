@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 os.environ["DATABASE_PATH"] = str(Path(tempfile.mkdtemp()) / "test.db")
+os.environ["SEED_WORLD"] = "0"
 os.environ["DEEPSEEK_API_KEY"] = ""
 
 from app import agent, bilingual, config, db, game, prompts, roll, world  # noqa: E402
@@ -105,7 +106,7 @@ def test_a_sheet_is_complete_only_when_every_part_is_filled():
     s = game.blank_sheet()
     assert set(game.missing(s)) == set(game.REQUIRED)
     both = {k: "English text ||| 中文文字" for k in game.BILINGUAL}
-    game.apply_fields(s, both | {"name": "Old Wu", "alignment": "neutral", "region": "emei", "traits": ["bold ||| 勇", "calm ||| 静", "wry ||| 俏"]})
+    game.apply_fields(s, both | {"name": "Old Wu", "alignment": "neutral", "region": "huashan", "traits": ["bold ||| 勇", "calm ||| 静", "wry ||| 俏"]})
     assert game.missing(s) == ["appearance"]
     game.apply_fields(s, {"appearance": {}})          # even an empty look is filled in with defaults
     assert game.missing(s) == []
@@ -247,7 +248,7 @@ def test_every_dice_place_points_at_a_real_region():
 
 def test_old_characters_without_a_region_get_a_stable_one():
     a = world.region_for({"id": "abc123", "name": "x"})
-    assert a in world.IDS and a == world.region_for({"id": "abc123", "name": "y"})
+    assert a in world.open_ids() and a == world.region_for({"id": "abc123", "name": "y"})      # and lands somewhere that is open
     assert world.region_for({"id": "abc123", "region": "emei"}) == "emei"
     assert world.region_for({"id": "abc123", "region": "mars"}) == a
 
@@ -259,6 +260,9 @@ def test_region_must_be_a_real_one():
     assert s["region"] == "" and rejected == ["region"]
     game.apply_fields(s, {"region": " Huashan "})
     assert s["region"] == "huashan"
+    rejected.clear()
+    game.apply_fields(s, {"region": "emei"}, rejected)             # a real place that has not opened yet
+    assert s["region"] == "huashan" and rejected == ["region"]
 
 
 def test_first_impression_depends_on_who_is_asking():
@@ -276,7 +280,7 @@ def test_first_impression_depends_on_who_is_asking():
 def _character(name, **fields):
     s = game.blank_sheet()
     both = {k: f"{k} text ||| {k}文字" for k in game.BILINGUAL}
-    game.apply_fields(s, both | {"name": name, "region": "emei", "alignment": "orthodox",
+    game.apply_fields(s, both | {"name": name, "region": "huashan", "alignment": "orthodox",
                                  "traits": ["cries at sunsets ||| 见落日必哭", "hates swords ||| 厌恶刀剑", "sleeps on roofs ||| 睡屋顶"],
                                  "secret": "buried the treasure ||| 把宝藏埋了", **fields})
     game.apply_fields(s, {"appearance": {"hair_color": "silver", "weapon": "flute"}})
@@ -310,3 +314,10 @@ def test_a_reply_is_tidied_into_one_english_half_and_one_chinese_half():
     # one language only is left for the translator
     assert bilingual.normalize("Only English here.") == "Only English here."
     assert bilingual.SEP not in bilingual.normalize("只有中文。")
+
+
+def test_the_translator_is_told_how_to_spell_the_cast():
+    assert bilingual.glossary(["陆沉舟 Lu Chenzhou", "谢三碗 Xie Sanwan", "no chinese here"]) == "Lu Chenzhou = 陆沉舟; Xie Sanwan = 谢三碗"
+    t = Translator("陆沉舟在哪里？")
+    assert bilingual.counterpart(t, "m", "Where is Lu Chenzhou?", "Lu Chenzhou = 陆沉舟") == "陆沉舟在哪里？"
+    assert "Lu Chenzhou = 陆沉舟" in t.prompts[0]

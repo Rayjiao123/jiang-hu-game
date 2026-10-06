@@ -82,12 +82,12 @@
   /* ---------- portraits ---------- */
   const hasLook = c => !!(c?.appearance && Object.keys(c.appearance).length);
   const svgUrl = svg => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-  function portraitImg(c, bg, alt) {
-    const i = new Image(); i.alt = alt || ""; i.src = svgUrl(window.renderPortrait(c.appearance, c.name || "", { bg })); return i;
+  function portraitImg(c, bg, alt, aura = true) {
+    const i = new Image(); i.alt = alt || ""; i.src = svgUrl(window.renderPortrait(c.appearance, c.name || "", { bg, aura })); return i;
   }
-  function setPortrait(el, c, bg = false) {
+  function setPortrait(el, c, bg = false, aura = true) {
     el.textContent = "";
-    if (hasLook(c)) el.append(portraitImg(c, bg, splitBi(c.name)[0])); else el.innerHTML = SIL;
+    if (hasLook(c)) el.append(portraitImg(c, bg, splitBi(c.name)[0], aura)); else el.innerHTML = SIL;
   }
   const alignEl = a => { const d = ALIGN[a] || ALIGN.neutral; const s = document.createElement("span"); s.className = "align " + d[1]; s.textContent = d[0]; s.title = d[2]; return s; };
   function quirks(box, traits) {
@@ -102,6 +102,7 @@
     if (S.bg) { S.bg.stop(); S.bg = null; }
     if (name !== "talk") { S.talkCtl?.abort(); closeLog(); }
     $("#screen-loading").classList.remove("on");
+    $("#aboutBtn").hidden = name === "gate";
     SCREENS.forEach(s => $("#screen-" + s).classList.toggle("on", s === name));
     S.screen = name;
     window.scrollTo(0, 0);
@@ -123,7 +124,7 @@
   /* ---------- the visitor's own character ---------- */
   async function refreshMe() {
     try { S.hero = (await api("/api/me")).hero; } catch { S.hero = null; }
-    if (S.hero && !S.here) S.here = S.hero.region;
+    if (S.hero && !S.here) S.here = isOpen(S.hero.region) ? S.hero.region : firstOpen();
     renderMe();
   }
   function renderMe() {
@@ -134,17 +135,62 @@
   }
   async function loadNpcs() {
     try { const d = await api("/api/npcs"); S.npcs = d.npcs; } catch { /* keep what we have */ }
-    const others = S.npcs.filter(n => n.id !== S.hero?.id);
-    $("#nNpc").textContent = others.length;
   }
   const others = () => S.npcs.filter(n => n.id !== S.hero?.id);
   const npcsIn = id => others().filter(n => n.region === id);
+  const isOpen = id => !!S.byId[id]?.open;
+  const firstOpen = () => (S.regions.find(r => r.open) || {}).id;
+  const lockedMsg = id => bi(`${regionName(id).en} isn't open yet. Everything starts at Mount Hua; the other places open later.`, `${regionName(id).zh}尚未开放。一切先从华山开始，其他地方之后陆续开放。`);
+  const countsByRegion = () => { const c = {}; others().forEach(n => { c[n.region] = (c[n.region] || 0) + 1; }); return c; };
 
-  /* ---------- 1. gate ---------- */
-  function enterGate() { /* the painting animates itself (hero.js) */ }
-  $("#gateCreate").addEventListener("click", () => go("forge"));
+  /* ---------- 1. gate: a landing page that shows what the game is ---------- */
+  const SAMPLE_LOOK = { build: "feminine", age: "young", skin: "fair", hair_style: "long", hair_color: "black", eyes: "soft", eye_color: "brown", expression: "smile", outfit: "robe", outfit_color: "pink", accent_color: "white", headwear: "hairpin", mark: "none", weapon: "flute", aura: "petals", scene: "bamboo" };
+  const SAMPLE_TALK = [
+    ["you", `Innkeeper, has the champion come down the mountain? ${SEP} 掌柜，魁首下山了吗？`],
+    ["npc", `*wipes a cup that is already clean* Who's asking, little guest? A man who asks after champions usually owes one a fight. ${SEP} *擦着一只早就干净的杯子* 谁问的，小客官？打听魁首的人，多半是欠他一场架。`],
+  ];
+  const residents = () => others().filter(n => n.resident);
+  function beginCreate() { S.hero ? go("map") : go("forge"); }
+  function enterGate() { renderGate(); }
+  function renderGate() {
+    const back = !!S.hero;
+    $("#gateCreate").textContent = $("#gateCreate2").textContent = back ? "回到江湖 · Back to the map" : "创建你的侠客 · Create your character";
+    $("#gateRoll").hidden = back;
+    // some of the people on the mountain, standing in the painting
+    const cast = $("#gateCast"); cast.textContent = "";
+    const pool = residents(), picked = ["su", "lu", "leng"].map(k => pool.find(n => n.seed_key === k)).filter(Boolean);
+    (picked.length ? picked : pool).slice(0, 3).forEach(n => { const d = document.createElement("div"); d.className = "bu"; setPortrait(d, n, false, false); cast.append(d); });
+    // how it plays: a sample character and a sample exchange
+    const a1 = $("#howArt1"); a1.textContent = ""; a1.append(portraitImg({ appearance: SAMPLE_LOOK, name: "sample" }, true, ""));
+    const mock = $("#howArt3"); mock.textContent = "";
+    SAMPLE_TALK.forEach(([who, t]) => { const d = document.createElement("div"); d.className = "l " + who; fillBi(d, t); mock.append(d); });
+    // who is on the mountain
+    const row = $("#meetRow"); row.textContent = "";
+    residents().forEach(n => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "meet-card"; b.setAttribute("aria-label", `${n.name}: meet them`);
+      const pic = document.createElement("div"); pic.className = "pic"; if (hasLook(n)) pic.append(portraitImg(n, true, ""));
+      const nm = document.createElement("b"); nm.textContent = nameParts(n.name).zh;
+      const ep = document.createElement("div"); ep.className = "ep bi"; fillBi(ep, n.title || "");
+      const q = document.createElement("div"); q.className = "q bi"; fillBi(q, n.greeting || "", true);
+      b.append(pic, nm, ep, q); b.addEventListener("click", () => meetFromGate(n)); row.append(b);
+    });
+    const visitors = others().filter(n => !n.resident).length;
+    $("#meetNote").textContent = visitors ? `And ${visitors} ${visitors === 1 ? "character" : "characters"} made by other visitors.\n另有 ${visitors} 位由其他访客创造的人物。`
+      : "Characters made by other visitors will appear here as they arrive.\n其他访客创造的人物，会在这里陆续出现。";
+    // the map: Mount Hua open, the rest padlocked
+    if (!S.gateMap) S.gateMap = window.JianghuMap.build($("#gateMap"), S.regions, { onPick: id => isOpen(id) ? beginCreate() : toast(lockedMsg(id)) });
+    S.gateMap.update({ counts: countsByRegion(), here: null });
+  }
+  function meetFromGate(n) {
+    if (S.hero) { S.here = n.region; openTalk(n.id); return; }
+    toast(bi("Create your character first, then you can talk to them.", "先创建你的人物，才能和他们交谈。"));
+    go("forge");
+  }
+  $("#gateCreate").addEventListener("click", beginCreate);
+  $("#gateCreate2").addEventListener("click", beginCreate);
   $("#gateRoll").addEventListener("click", () => { go("forge"); roll(); });
   $("#brandBtn").addEventListener("click", () => go(S.hero ? "map" : "gate"));
+  $("#aboutBtn").addEventListener("click", () => go("gate"));
 
   /* ---------- 2. create your character ---------- */
   const missing = () => REQUIRED.filter(k => { const v = S.sheet?.[k]; return k === "appearance" ? !(v && Object.keys(v).length) : Array.isArray(v) ? !v.length : !v; });
@@ -290,13 +336,12 @@
   function enterMap() {
     S.talkCtl?.abort();
     if (!S.map) {
-      S.map = window.JianghuMap.build($("#mapHost"), S.regions, { onPick: travel, onHover: showInfo });
+      S.map = window.JianghuMap.build($("#mapHost"), S.regions, { onPick: id => isOpen(id) ? travel(id) : toast(lockedMsg(id)), onHover: showInfo });
     }
     renderMap();
   }
   function renderMap() {
-    const counts = {}; others().forEach(n => { counts[n.region] = (counts[n.region] || 0) + 1; });
-    S.map.update({ counts, here: S.here });
+    S.map.update({ counts: countsByRegion(), here: S.here });
     const hud = $("#mapHud"); hud.textContent = "";
     const av = document.createElement("span"); av.className = "avatar"; if (hasLook(S.hero)) av.append(portraitImg(S.hero, true, ""));
     const tx = document.createElement("div"); const b = document.createElement("b"); b.textContent = nameParts(S.hero?.name).zh;
@@ -306,11 +351,12 @@
   }
   function showInfo(id) {
     const box = $("#mapInfo"); box.textContent = "";
-    if (!id) { box.innerHTML = '<span class="zh">选择要前往的地方</span> · Choose a place to travel to'; return; }
+    if (!id) { box.innerHTML = '<span class="zh">华山已开放，更多地方即将开放。点「华山」出发。</span><br>Mount Hua is open; more places open soon. Tap Mount Hua to set out.'; return; }
     const r = regionName(id), c = npcsIn(id).length;
     const b = document.createElement("b"); b.textContent = r.zh; box.append(b, `${r.en}`);
     const p = document.createElement("div"); p.textContent = r.desc_en; const z = document.createElement("div"); z.className = "zh"; z.textContent = r.desc_zh;
-    const cnt = document.createElement("span"); cnt.className = "count"; cnt.textContent = c ? `${c} ${c === 1 ? "person" : "people"} on the road here 此处有 ${c} 人` : "No one here yet 此处暂无他人";
+    const cnt = document.createElement("span"); cnt.className = "count";
+    cnt.textContent = !r.open ? "Opens later 即将开放" : c ? `${c} ${c === 1 ? "person" : "people"} here 此处有 ${c} 人` : "No one here yet 此处暂无他人";
     box.append(p, z, cnt);
   }
   function travel(id) { S.here = id; go("scene", { region: id }); }
@@ -329,11 +375,13 @@
     paintBg("#sceneBg", r.scene || "huashan");
     const h2 = $("#scName"); h2.textContent = r.zh; const em = document.createElement("em"); em.textContent = r.en; h2.append(em);
     $("#scDesc").textContent = `${r.desc_en}\n${r.desc_zh}`;
+    const news = $("#scNews"); news.hidden = !r.news_en; news.textContent = "";
+    if (r.news_en) { const b = document.createElement("b"); b.textContent = "今日传闻"; const e = document.createElement("span"); e.textContent = r.news_en + " "; const z = document.createElement("div"); z.className = "zh"; z.textContent = r.news_zh; news.append(b, e, z); }
     renderStage();
   }
   function renderStage() {
     const stage = $("#sceneStage"); stage.textContent = "";
-    const list = npcsIn(S.here);
+    const here = npcsIn(S.here), list = here.filter(n => n.resident), visitors = here.filter(n => !n.resident);
     const me = document.createElement("div"); me.className = "stand me";
     const mi = document.createElement("div"); mi.className = "img"; setPortrait(mi, S.hero, false);
     const mt = document.createElement("div"); mt.className = "tag"; const mb = document.createElement("b"); mb.textContent = nameParts(S.hero?.name).zh; const ms = document.createElement("span"); ms.textContent = "你 You";
@@ -350,8 +398,18 @@
       b.addEventListener("click", () => openTalk(n.id));
       stage.append(b);
     });
-    const empty = $("#sceneEmpty"); empty.hidden = list.length > 0;
+    const empty = $("#sceneEmpty"); empty.hidden = here.length > 0;
     empty.textContent = bi("No one else is here yet. Try another place, or press Wander on the map.", "此地暂无他人。去别处看看，或在地图上点「闲逛」。");
+    // characters made by other visitors
+    const tl = $("#travList"); tl.textContent = "";
+    if (!visitors.length) { const p = document.createElement("p"); p.className = "trav-empty"; p.textContent = "No other visitors yet. Share this page: the next person's character will appear here.\n暂时还没有其他访客。分享本页，下一位访客创造的人物会出现在这里。"; tl.append(p); }
+    visitors.forEach(n => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "trav"; b.setAttribute("aria-label", `Talk to ${n.name} 与${nameParts(n.name).zh}交谈`);
+      const av = document.createElement("span"); av.className = "avatar"; if (hasLook(n)) av.append(portraitImg(n, true, ""));
+      const tx = document.createElement("div"); const nm = document.createElement("b"); nm.textContent = nameParts(n.name).zh;
+      const t1 = document.createElement("span"); t1.textContent = biText(n.title || ""); const t2 = document.createElement("span"); t2.append(alignEl(n.alignment), biText(n.sect || ""));
+      tx.append(nm, t1, t2); b.append(av, tx); b.addEventListener("click", () => openTalk(n.id)); tl.append(b);
+    });
   }
   $("#sceneBack").addEventListener("click", () => go("map"));
 
@@ -486,7 +544,7 @@
       const before = others().map(n => n.id).join();
       await loadNpcs();
       if (others().map(n => n.id).join() === before) return;
-      if (S.screen === "map") renderMap(); else if (S.screen === "scene") renderStage();
+      if (S.screen === "map") renderMap(); else if (S.screen === "scene") renderStage(); else if (S.screen === "gate") renderGate();
     }, 25000);
   }
   boot();

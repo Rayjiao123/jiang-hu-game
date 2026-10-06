@@ -113,7 +113,7 @@
     ctx.lineTo(W * .9 + off, H * .6); ctx.lineTo(W * .82 + off, H * .64); ctx.lineTo(W * .76 + off, H * .655);
     ctx.lineTo(W * .735 + off, H * .7); ctx.lineTo(W * .75 + off, H * .82); ctx.lineTo(W * .72 + off, H); ctx.lineTo(W + 10, H); ctx.closePath(); ctx.fill();
     pine(W * .93 + off, H * .6, s);
-    figure(t, W * .79 + off, H * .645, s);
+    if (cv.dataset.figure !== "off") figure(t, W * .79 + off, H * .645, s);
 
     petals.forEach(p => {   // plum petals on the wind
       if (!still) { p.x -= p.v * 1.2 + Math.sin(t + p.w) * .3; p.y += p.v; p.a += .02; if (p.y > H + 10 || p.x < -10) { p.x = W * (.4 + Math.random() * .7); p.y = -10; } }

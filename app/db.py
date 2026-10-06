@@ -114,6 +114,24 @@ def delete_npc(conn, npc_id: str) -> bool:
     return conn.execute("DELETE FROM npcs WHERE id = ?", (npc_id,)).rowcount > 0
 
 
+def update_npc(conn, npc_id: str, sheet: dict) -> None:
+    """Rewrite a character's card and secret in place (used to refresh the hand-written residents)."""
+    secret = sheet.get("secret", "")
+    card = {k: v for k, v in sheet.items() if k not in ("secret", "svg")}
+    card["has_secret"] = bool(secret)
+    conn.execute("UPDATE npcs SET card = ? WHERE id = ?", (json.dumps(card, ensure_ascii=False), npc_id))
+    conn.execute("DELETE FROM npc_secrets WHERE npc_id = ?", (npc_id,))
+    if secret:
+        conn.execute("INSERT INTO npc_secrets (npc_id, secret) VALUES (?,?)", (npc_id, secret))
+
+
+def set_bonds(conn, npc_id: str, bonds: list) -> None:
+    r = conn.execute("SELECT card FROM npcs WHERE id = ?", (npc_id,)).fetchone()
+    if r:
+        card = json.loads(r["card"]); card["bonds"] = bonds
+        conn.execute("UPDATE npcs SET card = ? WHERE id = ?", (json.dumps(card, ensure_ascii=False), npc_id))
+
+
 def get_secret(conn, npc_id: str) -> str:
     r = conn.execute("SELECT secret FROM npc_secrets WHERE npc_id = ?", (npc_id,)).fetchone()
     return r["secret"] if r else ""
@@ -129,7 +147,7 @@ def public_card(npc: dict) -> dict:
     out = {k: npc.get(k) for k in PUBLIC_FIELDS}
     out.update(id=npc["id"], svg=npc.get("svg", ""), creator_name=npc.get("creator_name", ""),
                created_at=npc.get("created_at"), has_secret=bool(npc.get("has_secret")),
-               region=world.region_for(npc))
+               region=world.region_for(npc), resident=bool(npc.get("seed_key")), seed_key=npc.get("seed_key"))
     return out
 
 

@@ -2,10 +2,13 @@
 
 A website for a Song-dynasty wuxia game where every NPC is an AI agent created by a visitor.
 
-**The journey.** A visitor arrives at the gate, makes their own character (one line, or **Roll one**:
+**The journey.** A visitor arrives at a landing page that shows what the game is (the cast, how it plays, the map),
+makes their own character (one line, or **Roll one**:
 the Storyteller agent writes the name, quirks, secret, signature move and a painted portrait), and
 steps into the jianghu. They walk an ink-wash map of Song China, visit a place, and talk to the people
-standing there **as their own character**. Every NPC is told exactly who is in front of them (name,
+standing there **as their own character**. **Only Mount Hua is open for now**: it has six hand-written
+residents (`app/seed.py`) and a story (the Summit Sword Gathering opens in seven days and the champion has
+vanished), and everything else on the map shows as "opens later". Every NPC is told exactly who is in front of them (name,
 epithet, sect, alignment, look, habits, ties), so it greets and treats each character differently.
 Each character is also released into the world as an NPC for the next visitor to meet.
 
@@ -25,7 +28,7 @@ Open http://localhost:8000. Run the tests (no API calls, no cost) with `.\.venv\
 ## How it fits together
 
 ```
-static/index.html      the five screens: gate, create your character, map, a place, a conversation
+static/index.html      the screens: landing page, create your character, map, a place, a conversation
 static/style.css       the game interface: lacquer panels and gold frames over painted scenes
 static/app.js          the journey: screens, Storyteller chat, map, places, conversations
 static/portrait.js     painted character portraits (soft Jin Yong game-art style), with a cutout mode
@@ -36,7 +39,8 @@ static/admin.html      password-protected review page: approve, hide, delete, ad
 app/main.py            FastAPI routes; streams replies to the page as server-sent events
 app/agent.py           streaming tool-use loop for DeepSeek (OpenAI chat format)
 app/game.py            game rules, first impressions, and the tools each agent may call
-app/world.py           the twelve regions and their places on the map
+app/world.py           the twelve regions, which are open, and what is happening in each place
+app/seed.py            the hand-written residents of Mount Hua, added or refreshed on start-up
 app/prompts.py         world bible, era rules, Storyteller and NPC instructions
 app/roll.py            the dice: random role, place, twist and look for "Roll one" (English and Chinese)
 app/bilingual.py       the "English ||| 中文" format, tidying replies, and the fallback translation
@@ -105,6 +109,20 @@ code. The admin page is English only.
 | POST | `/api/sessions/{id}/chat` | say something to the NPC (stream) |
 
 Visitors are identified by an anonymous `vid` cookie, which owns their drafts and conversations.
+
+## Opening more places
+
+Everything on the map exists, but only the regions listed in `OPEN_REGIONS` (default `huashan`) can be entered.
+The Storyteller may only place new characters in open regions, `/api/npcs` only returns people in open
+regions, and a conversation with someone in a closed region is refused. To open a place:
+
+1. Write its residents in `app/seed.py` (copy the Mount Hua entries: a goal, a secret, a way of speaking,
+   ties to each other) and give the place a rumour in `world.SITUATION`.
+2. Add a few places in that region to `PLACES` in `app/roll.py` so rolled characters can live there.
+3. Set `OPEN_REGIONS=huashan,shaolin` (comma-separated) and restart.
+
+The residents are matched by `seed_key`, so editing them in `seed.py` updates a running world without
+duplicating anyone. `SEED_WORLD=0` turns the start-up seeding off.
 
 ## Moderation and admin
 

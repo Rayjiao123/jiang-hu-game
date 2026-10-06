@@ -22,6 +22,9 @@ CHAT_MODEL = os.getenv("CHAT_MODEL", "deepseek-flash")
 # Password for /admin.html (hide, restore, delete NPCs). Admin is switched off when empty.
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
+# Add (or refresh) the hand-written residents of the open places when the server starts. Set to 0 to skip.
+SEED_WORLD = os.getenv("SEED_WORLD", "1") != "0"
+
 DATABASE_PATH =Path(os.getenv("DATABASE_PATH", ROOT / "data" / "jianghu.db"))
 
 # Abuse and spend protection. Every model request counts as one call

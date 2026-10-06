@@ -1,6 +1,10 @@
 """The map of the jianghu. One list, used by the server (where an NPC lives), the Storyteller
 (which regions it may choose) and the page (the map, via /api/world). Positions are on a
-1000 x 640 canvas, north at the top."""
+1000 x 640 canvas, north at the top.
+
+Only some places are open. Set OPEN_REGIONS (comma-separated ids, default "huashan") to open more;
+everything else shows on the map as "opens later"."""
+import os
 import zlib
 
 REGIONS = {
@@ -8,8 +12,8 @@ REGIONS = {
                  "desc_en": "The Jin frontier: cold wind, watchtowers and men who have seen war.",
                  "desc_zh": "金国边境：朔风、烽燧，和见过战火的人。"},
     "huashan":  {"en": "Mount Hua", "zh": "华山", "x": 360, "y": 192, "scene": "huashan",
-                 "desc_en": "Sheer granite peaks where swordsmen settle things.",
-                 "desc_zh": "绝壁孤峰，剑客在此了断恩怨。"},
+                 "desc_en": "Sheer granite peaks where swordsmen settle things. This week, the Summit Sword Gathering begins.",
+                 "desc_zh": "绝壁孤峰，剑客在此了断恩怨。本周，绝顶剑会即将开幕。"},
     "shaolin":  {"en": "Shaolin, Mount Song", "zh": "嵩山少林", "x": 565, "y": 205, "scene": "shaolin",
                  "desc_en": "The old monastery, its pagoda forest and its martial legends.",
                  "desc_zh": "千年古寺，塔林与武学传说。"},
@@ -43,19 +47,46 @@ REGIONS = {
 }
 
 IDS = list(REGIONS)
+OPEN = {r.strip().lower() for r in os.getenv("OPEN_REGIONS", "huashan").split(",") if r.strip().lower() in REGIONS} or {"huashan"}
+
+# What is happening in a place right now. Every character there knows it, and the page shows it as the day's rumour.
+SITUATION = {
+    "huashan": {
+        "en": "The Summit Sword Gathering, held on the cliff-top terrace once every three years, opens in seven days. "
+              "Swordsmen from every sect are climbing the mountain. The last champion, Lu Chenzhou of Cloud Sword Pavilion, "
+              "has not been seen in public for a month, and the whole mountain is whispering about why.",
+        "zh": "三年一度的绝顶剑会，七日后将在峰顶剑台开幕。各门各派的剑客正陆续登山。"
+              "上届魁首、云剑阁的陆沉舟已有一个月没有公开露面，整座山都在窃窃私语，猜他为何不见。",
+    },
+}
 
 
 def valid(region_id) -> bool:
     return str(region_id or "").strip().lower() in REGIONS
 
 
+def is_open(region_id) -> bool:
+    return valid(region_id) and str(region_id).strip().lower() in OPEN
+
+
+def open_ids() -> list[str]:
+    return [i for i in IDS if i in OPEN]
+
+
 def region_for(npc: dict) -> str:
-    """The region an NPC lives in. Older NPCs made before regions existed get a stable one from their id."""
+    """The region an NPC lives in. Older characters made before regions existed get a stable open one from their id."""
     r = str(npc.get("region", "")).strip().lower()
     if r in REGIONS:
         return r
-    return IDS[zlib.crc32(str(npc.get("id", npc.get("name", ""))).encode()) % len(IDS)]
+    pool = open_ids() or IDS
+    return pool[zlib.crc32(str(npc.get("id", npc.get("name", ""))).encode()) % len(pool)]
 
 
 def public() -> list[dict]:
-    return [{"id": k, **v} for k, v in REGIONS.items()]
+    out = []
+    for k, v in REGIONS.items():
+        item = {"id": k, **v, "open": k in OPEN}
+        if k in SITUATION and k in OPEN:
+            item.update(news_en=SITUATION[k]["en"], news_zh=SITUATION[k]["zh"])
+        out.append(item)
+    return out

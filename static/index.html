@@ -16,6 +16,7 @@
     <span class="logo">江湖录</span><span class="seal">江湖</span><span class="sub">Jianghu Chronicles</span>
   </button>
   <nav class="crumbs" id="crumbs" aria-label="Where you are 当前位置"></nav>
+  <button class="about" id="aboutBtn" type="button">简介 About</button>
   <div class="me" id="me" hidden>
     <button class="me-btn" id="meBtn" type="button" aria-haspopup="dialog">
       <span class="avatar" id="meImg"></span>
@@ -36,26 +37,80 @@
     </div>
   </section>
 
-  <!-- 1. THE GATE: first arrival -->
+  <!-- 1. THE GATE: what this game is, how it plays, who lives there -->
   <section class="screen gate" id="screen-gate" aria-label="Welcome 欢迎">
-    <canvas id="scene" aria-label="Ink-wash painting: a lone swordsman on a cliff beneath a full moon, misty mountains beyond, plum petals drifting on the wind"></canvas>
-    <div class="gate-scrim"></div>
-    <div class="couplet" aria-label="Poem line by Huang Tingjian, Song dynasty: Ten years of lamplight in the jianghu's night rain"><span>江湖夜雨十年灯</span><small>宋 · 黄庭坚</small></div>
-    <div class="gate-content">
-      <h1 class="gate-line"><span>你已身在</span><span>江湖</span></h1>
-      <p class="gate-sub">You're already in the jianghu. Come in and have a look.</p>
-      <p class="lede">Jianghu Chronicles is a martial-arts game Ray is building, set in Song-dynasty China. Every NPC in it is an AI agent with its own temperament, way of speaking and secrets, and every one was created by a visitor to this page. First make your own character. Then walk the map and talk to anyone as them.</p>
-      <p class="lede zh">《江湖录》是 Ray 正在制作的武侠游戏，背景是宋代中国。游戏里的每一位 NPC 都是一个 AI 智能体，有自己的性情、说话方式和秘密，而且每一位都由访问本页的人创造。先创建你自己的人物，再走遍地图，以他的身份与任何人交谈。</p>
-      <ol class="steps">
-        <li><span class="num">一</span><span>Create your character <i>创建人物</i></span></li>
-        <li><span class="num">二</span><span>Walk the map <i>走遍江湖</i></span></li>
-        <li><span class="num">三</span><span>Talk to anyone <i>与人交谈</i></span></li>
-      </ol>
-      <div class="cta">
-        <button class="btn big" id="gateCreate" type="button">创建你的侠客 · Create your character</button>
-        <button class="btn ghost" id="gateRoll" type="button">掷骰 · Roll one for me</button>
+    <div class="gate-hero">
+      <canvas id="scene" data-figure="off" aria-label="Ink-wash painting: a cliff beneath a full moon, misty mountains beyond, plum petals drifting on the wind"></canvas>
+      <div class="gate-scrim"></div>
+      <div class="couplet" aria-label="Poem line by Huang Tingjian, Song dynasty: Ten years of lamplight in the jianghu's night rain"><span>江湖夜雨十年灯</span><small>宋 · 黄庭坚</small></div>
+      <div class="gate-content">
+        <p class="kicker"><span>武侠 AI 游戏</span> · A wuxia game where every character is alive</p>
+        <h1 class="gate-line"><span>你已身在</span><span>江湖</span></h1>
+        <p class="gate-sub">You're already in the jianghu. Come in and have a look.</p>
+        <p class="pitch"><b>Make your own swordsman</b> in one sentence, walk into <b>Mount Hua</b> in the week of its great sword gathering, and talk to the people there: a champion in hiding, a proud young swordswoman, an innkeeper who knows too much. Every one is an AI with secrets of their own, and every one reacts to <b>who you are</b>.</p>
+        <p class="pitch zh"><b>一句话创建你的侠客</b>，在华山剑会前夕走上山去，和山上的人交谈：隐匿的魁首、骄傲的少女剑客、知道得太多的客栈掌柜。每个人都是有自己秘密的 AI，并且会根据<b>你是谁</b>做出不同的反应。</p>
+        <div class="cta">
+          <button class="btn big" id="gateCreate" type="button">创建你的侠客 · Create your character</button>
+          <button class="btn ghost" id="gateRoll" type="button">掷骰 · Roll one for me</button>
+        </div>
+        <ul class="facts">
+          <li><b>AI</b> characters with secrets<i>有秘密的 AI 人物</i></li>
+          <li>Made by <b>Ray and by players</b><i>由作者与玩家共同创造</i></li>
+          <li><b>English + 中文</b> in every line<i>每句话中英双语</i></li>
+        </ul>
       </div>
-      <p class="census"><b id="nNpc">0</b> 位侠客已在江湖 · people already on the road</p>
+      <div class="gate-cast" id="gateCast" aria-hidden="true"></div>
+      <a class="scroll-cue" href="#how">玩法 How it plays ↓</a>
+    </div>
+
+    <div class="gate-body">
+      <section class="how" id="how" aria-labelledby="howT">
+        <h2 id="howT">玩法 <em>How it plays</em></h2>
+        <ol class="how-steps">
+          <li class="card">
+            <span class="num">一</span>
+            <div class="art" id="howArt1"></div>
+            <h3>创建你的人物 <em>Create your character</em></h3>
+            <p>Say one sentence, or roll the dice. The Storyteller writes your name, quirks, secret and face.</p>
+            <p class="zh">说一句话，或掷骰子。说书人为你写好姓名、怪癖、秘密和相貌。</p>
+          </li>
+          <li class="card">
+            <span class="num">二</span>
+            <div class="art seals" aria-hidden="true"><span class="s on">华</span><span class="s">武</span><span class="s">嵩</span><span class="s">峨</span><span class="s">临</span></div>
+            <h3>走进地图 <em>Open the map</em></h3>
+            <p>Mount Hua is open now. Eleven more places open later, each with its own people.</p>
+            <p class="zh">华山现已开放。另有十一处地方将陆续开放，各有各的人物。</p>
+          </li>
+          <li class="card">
+            <span class="num">三</span>
+            <div class="art talk-mock" id="howArt3" aria-hidden="true"></div>
+            <h3>以你的身份交谈 <em>Talk as you</em></h3>
+            <p>Everyone knows who you are: your sect, your path, your habits. They greet you, doubt you, trust you, or test you.</p>
+            <p class="zh">每个人都知道你是谁：你的门派、你的正邪、你的习惯。他们会招呼你、怀疑你、信任你，或试探你。</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="meet" aria-labelledby="meetT">
+        <h2 id="meetT">华山上的人 <em>Who is on Mount Hua right now</em></h2>
+        <p class="lede-s">Seven days until the Summit Sword Gathering. The last champion has not been seen for a month. Everyone you meet wants something from you, and is hiding something.
+七日后绝顶剑会开幕，上届魁首已一月不见。你遇到的每个人都想从你这里得到点什么，也都在隐瞒点什么。</p>
+        <div class="meet-row" id="meetRow"></div>
+        <p class="meet-note" id="meetNote"></p>
+      </section>
+
+      <section class="soon" aria-labelledby="soonT">
+        <h2 id="soonT">江湖正在展开 <em>The jianghu is opening up</em></h2>
+        <div class="soon-grid">
+          <div class="map-box"><div id="gateMap"></div></div>
+          <div class="soon-text">
+            <p>We are starting with <b>one</b> iconic place, and filling it with real characters, before opening the rest. Tap Mount Hua to begin. The padlocked places open later, one by one.</p>
+            <p class="zh">我们先从<b>一个</b>标志性的地方开始，把它填满真正的人物，再陆续开放其他地方。点「华山」即可开始，带锁的地方之后逐一开放。</p>
+            <button class="btn big" id="gateCreate2" type="button">创建你的侠客 · Create your character</button>
+          </div>
+        </div>
+      </section>
+      <footer class="gate-foot">江湖录 Jianghu Chronicles · a game by Ray</footer>
     </div>
   </section>
 
@@ -134,10 +189,14 @@
     <canvas class="bg" id="sceneBg" aria-hidden="true"></canvas>
     <div class="scene-top">
       <button class="btn ghost" id="sceneBack" type="button">← 地图 Map</button>
-      <div class="place panel"><h2 id="scName"></h2><p id="scDesc"></p></div>
+      <div class="place panel"><h2 id="scName"></h2><p id="scDesc"></p><div class="news" id="scNews" hidden></div></div>
     </div>
     <div class="scene-stage" id="sceneStage"></div>
     <p class="scene-empty panel" id="sceneEmpty" hidden></p>
+    <section class="travellers panel" id="travellers" aria-labelledby="travT">
+      <h3 id="travT">同路人 <em>Fellow travellers</em><small>characters made by other visitors 其他访客创造的人物</small></h3>
+      <div class="trav-list" id="travList"></div>
+    </section>
   </section>
 
   <!-- 5. A CONVERSATION -->

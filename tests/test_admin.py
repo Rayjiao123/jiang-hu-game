@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 os.environ.setdefault("DATABASE_PATH", str(Path(tempfile.mkdtemp()) / "test.db"))
+os.environ.setdefault("SEED_WORLD", "0")
 os.environ.setdefault("DEEPSEEK_API_KEY", "")
 
 import pytest  # noqa: E402

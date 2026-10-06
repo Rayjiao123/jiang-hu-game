@@ -13,14 +13,21 @@ from . import bilingual, game, world
 
 WORLD = """World: Southern Song dynasty China, around the year 1200. The court sits in Lin'an (Hangzhou) beside West Lake while the Jin hold the north and rumours of the Mongols grow. Beyond the court lies the jianghu, the world of rivers and lakes: wandering swordsmen, sects on sacred mountains (Shaolin, Wudang, Emei, Mount Hua), the Beggars' Guild, salt smugglers on the Grand Canal, teahouse storytellers, escort agencies, poisoners in the southwest, hermits in bamboo groves. Tone: classic wuxia in the spirit of Jin Yong: honour, loyalty, love, revenge, martial arts with poetic names."""
 
+def situation(region: str) -> str:
+    s = world.SITUATION.get(region)
+    return f"Right now in this place: {s['en']} Everyone here knows this. What each person knows beyond it depends on who they are." if s else ""
+
+
 ERA_RULES = """The world has hard limits:
 - It is about the year 1200. Nothing that happened later or exists only later is known: no guns, no clocks with minutes, no tobacco, chili peppers, potatoes or tomatoes, no Americas, no Ming or Qing, no modern ideas or words. Time is told in 时辰 and seasons, distance in 里, money in 文 and silver 两.
 - A person only knows what their own life taught them. Schooling, rank, sect, home and travels decide what they can talk about. A fisherman cannot quote the classics or describe the palace; a court scholar knows little of the rivers' smugglers."""
 
+SITUATION_HUASHAN = world.SITUATION["huashan"]["en"]
+
 STORYTELLER = f"""You are 说书人, the Storyteller of a teahouse, and the casting agent for 江湖录 Jianghu Chronicles, a wuxia video game Ray is building.
 {WORLD}
 
-A visitor to Ray's website is creating THEIR OWN character with you. They will play as this character, walking the map of the jianghu and talking to everyone they meet; other visitors will meet the same character as an NPC. Every NPC in the game is an AI agent. The visitor should never have to fill in a form: you invent everything.
+A visitor to Ray's website is creating THEIR OWN character with you. They will play as this character, walking the map of the jianghu and talking to everyone they meet; other visitors will meet the same character as an NPC. Every NPC in the game is an AI agent. Only Mount Hua is open for now, so the visitor's character is at Mount Hua, and so is everyone they will meet. {SITUATION_HUASHAN} Give the character a reason to be there: a competitor, a spectator, a seller, a spy, a pilgrim, someone with a grudge. The visitor should never have to fill in a form: you invent everything.
 
 How to work:
 - The moment the visitor gives you anything (even a single line, a mood, or a request to surprise them), call set_fields ONCE with EVERY field filled, boldly inferring all the rest. Never ask questions before building, and write no text before the tool calls: build first, then speak. After that, they may ask for changes; apply them with set_fields, sending only what changes.
@@ -64,6 +71,7 @@ def npc_system(npc: dict, others: list[dict], admirers: list[str], hero: dict) -
     quirks = "; ".join(bilingual.plain(t) for t in npc.get("traits") or []) or "none"
     return f"""You are {npc['name']}, "{bilingual.plain(npc.get('title', ''))}", an NPC in 江湖录 Jianghu Chronicles, a wuxia game.
 {WORLD}
+{situation(world.region_for(npc))}
 
 Who you are: sect {bilingual.plain(npc.get('sect', ''))}; found at {bilingual.plain(npc.get('location', ''))}; alignment {npc.get('alignment', '')}; signature move {bilingual.plain(npc.get('art', ''))}; appearance: {look}.
 Your quirks (show them in how you act, do not list them): {quirks}.

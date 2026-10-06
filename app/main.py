@@ -11,12 +11,14 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, bilingual, config, db, game, moderation, prompts, ratelimit, roll as roller, world
+from . import agent, bilingual, config, db, game, moderation, prompts, ratelimit, roll as roller, seed, world
 from .bilingual import bi
 from .ratelimit import RateLimited
 
 app = FastAPI(title="Jianghu Chronicles")
 db.init()
+if config.SEED_WORLD:
+    seed.seed_world()
 
 _client: openai.OpenAI | None = None
 
@@ -130,7 +132,7 @@ def me_reset(request: Request):
 @app.get("/api/npcs")
 def list_npcs():
     with db.session() as conn:
-        npcs = db.list_npcs(conn)
+        npcs = [n for n in db.list_npcs(conn) if world.is_open(world.region_for(n))]      # places that are not open yet are empty
     return {"npcs": [db.public_card(n) for n in npcs],
             "bonds": sum(len(n.get("bonds") or []) for n in npcs)}
 
@@ -181,7 +183,9 @@ def _bilingual_line(client, vid: str, message: str) -> str:
         ratelimit.check(vid)
     except RateLimited:
         return message
-    other = bilingual.counterpart(client, config.CHAT_MODEL, message)
+    with db.session() as conn:
+        names = bilingual.glossary(n["name"] for n in db.list_npcs(conn, limit=100))
+    other = bilingual.counterpart(client, config.CHAT_MODEL, message, names)
     if not other:
         return message
     en, zh = (other, message) if bilingual.language_of(message) == "Chinese" else (message, other)
@@ -292,6 +296,8 @@ def new_session(body: NewSession, request: Request):
             raise HTTPException(404, bi("That NPC has left the jianghu.", "这位人物已离开江湖。"))
         if npc["id"] == hero["id"]:
             raise HTTPException(400, bi("That is your own character.", "那是你自己的人物。"))
+        if not world.is_open(world.region_for(npc)):
+            raise HTTPException(403, bi("That place isn't open yet.", "那个地方还没有开放。"))
         trust0, why = game.starting_trust(npc, hero)
         sess = db.find_session(conn, vid, hero["id"], npc["id"])
         if not sess:

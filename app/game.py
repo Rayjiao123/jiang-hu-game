@@ -120,7 +120,7 @@ def apply_fields(sheet: dict, fields: dict, rejected: list | None = None) -> lis
         sheet[k] = value
         changed.append(k)
     if fields.get("region") is not None:
-        if world.valid(fields["region"]):
+        if world.is_open(fields["region"]):
             sheet["region"] = str(fields["region"]).strip().lower()
             changed.append("region")
         elif rejected is not None:
@@ -153,7 +153,7 @@ def storyteller_tools(conn, sheet: dict, turn: Turn) -> list[Tool]:
         if rejected:
             return {"ok": False, "saved": changed, "missing": missing(sheet),
                     "error": f"NOT saved: {', '.join(rejected)}. Text fields must each be one string written as 'English text ||| 中文文字' "
-                             f"(English first, then |||, then Chinese); region must be one of: {', '.join(world.IDS)}. Send them again in that form."}
+                             f"(English first, then |||, then Chinese); region must be one of: {', '.join(world.open_ids())}. Send them again in that form."}
         return {"ok": True, "missing": missing(sheet)}
 
     def list_jianghu(_args):
@@ -183,7 +183,7 @@ def storyteller_tools(conn, sheet: dict, turn: Turn) -> list[Tool]:
                  "title": {"type": "string", "description": "wuxia epithet, at most 6 words each language, e.g. 'Ferryman of the Broken Oar ||| 断桨渡人'"},
                  "sect": {"type": "string", "description": "sect or guild name only, or unaffiliated, e.g. 'Emei Sect ||| 峨眉派' or 'Unaffiliated ||| 无门无派'"},
                  "location": {"type": "string", "description": "where the hero finds them, a short place name, e.g. 'Frost Bell Monastery ||| 霜铃寺'"},
-                 "region": {"type": "string", "enum": world.IDS, "description": "which part of the jianghu they live in; the visitor's character starts the game here and others meet them here"},
+                 "region": {"type": "string", "enum": world.open_ids(), "description": "which open place they are in; the visitor's character starts the game here and others meet them here"},
                  "alignment": {"type": "string", "enum": list(ALIGNMENTS)},
                  "art": {"type": "string", "description": "the poetic name of their signature move plus a few words on what it does, e.g. 'Nine-Fold Wind Step: runs on wind-wake ||| 九重风步：踏风而行'"},
                  "traits": {"type": "array", "items": text, "description": "exactly 3 fun quirks, 2-5 words each, concrete and funny or telling, each written 'English ||| 中文', e.g. 'Never forgives a debt ||| 有债必讨', 'Talks to his lantern ||| 对灯笼说话'"},

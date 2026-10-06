@@ -6,12 +6,13 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 os.environ["DATABASE_PATH"] = str(Path(tempfile.mkdtemp()) / "flow.db")
+os.environ["SEED_WORLD"] = "0"
 os.environ["DEEPSEEK_API_KEY"] = "test-key"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import config, db, game, main  # noqa: E402
+from app import config, db, game, main, seed, world  # noqa: E402
 
 
 def chunk(content=None):
@@ -43,7 +44,7 @@ def api(monkeypatch):
     return c
 
 
-def character(name, alignment="orthodox", region="emei"):
+def character(name, alignment="orthodox", region="huashan"):
     s = game.blank_sheet()
     both = {k: f"{k} text ||| {k}文字" for k in game.BILINGUAL}
     game.apply_fields(s, both | {"name": name, "region": region, "alignment": alignment,
@@ -85,7 +86,7 @@ def test_releasing_a_character_makes_it_the_one_you_play(api):
     hero = become(api)
     me = api.get("/api/me").json()["hero"]
     assert me["id"] == hero and me["name"] == "苏灵 Su Ling" and me["secret"] == "hidden thing ||| 秘事"
-    assert me["region"] == "emei"
+    assert me["region"] == "huashan"
     assert hero in {n["id"] for n in api.get("/api/npcs").json()["npcs"]}      # and others can meet them
     api.post("/api/me/reset")
     assert api.get("/api/me").json() == {"hero": None}
@@ -165,3 +166,71 @@ def test_the_page_stamps_its_scripts_with_a_version(api):
 def test_the_world_endpoint_lists_every_region(api):
     regions = api.get("/api/world").json()["regions"]
     assert len(regions) == 12 and {"id", "en", "zh", "x", "y", "desc_en", "desc_zh", "scene"} <= set(regions[0])
+
+
+def test_places_that_are_not_open_hold_nobody_and_cannot_be_entered(api):
+    become(api)
+    with db.session() as conn:
+        sheet = character("Far Away")
+        sheet["region"] = "emei"                       # written directly: the tools would refuse a closed place
+        far = db.insert_npc(conn, sheet, "other", "Ray")
+    assert far not in {n["id"] for n in api.get("/api/npcs").json()["npcs"]}
+    r = api.post("/api/sessions", json={"npc_id": far})
+    assert r.status_code == 403 and "open" in r.json()["detail"]
+
+
+def test_world_marks_which_places_are_open(api):
+    regions = {r["id"]: r for r in api.get("/api/world").json()["regions"]}
+    assert regions["huashan"]["open"] is True and regions["huashan"]["news_en"] and regions["huashan"]["news_zh"]
+    assert all(not r["open"] and "news_en" not in r for k, r in regions.items() if k != "huashan")
+
+
+def test_a_second_place_opens_with_a_setting(api, monkeypatch):
+    monkeypatch.setattr(world, "OPEN", {"huashan", "emei"})
+    assert {r["id"] for r in api.get("/api/world").json()["regions"] if r["open"]} == {"huashan", "emei"}
+    s = game.blank_sheet()
+    game.apply_fields(s, {"region": "emei"})
+    assert s["region"] == "emei"
+
+
+# ---------- the hand-written residents of Mount Hua ----------
+
+def test_the_residents_are_complete_bilingual_and_original():
+    from app import bilingual
+    keys = {c["key"] for c in seed.CAST}
+    assert len(seed.CAST) >= 6
+    banned = ["令狐", "岳不群", "风清扬", "郭靖", "黄蓉", "杨过", "张无忌", "萧峰", "段誉", "虚竹", "东方不败", "任盈盈", "独孤求败", "洪七公", "欧阳锋"]
+    for c in seed.CAST:
+        sheet = seed._sheet(c)                                          # raises if anything is missing or in one language only
+        assert game.missing(sheet) == [] and sheet["region"] == "huashan"
+        assert all(bilingual.is_pair(sheet[k]) for k in game.BILINGUAL), c["key"]
+        assert all(bilingual.is_pair(t) for t in sheet["traits"]) and len(sheet["traits"]) == 3
+        assert {k for k, _ in c["bonds"]} <= keys                       # every tie points at a real resident
+        assert not any(b in str(c) for b in banned), c["key"]
+
+
+def test_seeding_adds_each_resident_once_and_ties_them_together():
+    db.init()
+    first = seed.seed_world()
+    assert first == len(seed.CAST) and seed.seed_world() == 0         # a second start adds nobody
+    with db.session() as conn:
+        npcs = {n["seed_key"]: n for n in db.list_npcs(conn) if n.get("seed_key")}
+        assert set(npcs) == {c["key"] for c in seed.CAST}
+        lu, su = npcs["lu"], npcs["su"]
+        assert {b["toName"] for b in su["bonds"]} == {lu["name"], npcs["yun"]["name"]}
+        assert all(b["toId"] in {n["id"] for n in npcs.values()} for n in npcs.values() for b in n["bonds"])
+        card = db.public_card(lu)
+        assert card["resident"] is True and card["creator_name"] == "Ray"
+        assert "numb" not in json.dumps(card, ensure_ascii=False) and "numb" in db.get_secret(conn, lu["id"])      # secrets stay out of public cards
+
+
+def test_editing_the_cast_refreshes_a_running_world_without_duplicates(monkeypatch):
+    db.init(); seed.seed_world()
+    changed = [dict(c) for c in seed.CAST]
+    changed[0] = {**changed[0], "title": "Renamed Innkeeper ||| 新名号"}
+    monkeypatch.setattr(seed, "CAST", changed)
+    assert seed.seed_world() == 0
+    with db.session() as conn:
+        xs = [n for n in db.list_npcs(conn) if n.get("seed_key") == "xie"]
+        assert len(xs) == 1 and xs[0]["title"] == "Renamed Innkeeper ||| 新名号"
+        assert xs[0]["bonds"]                                       # ties survive a refresh

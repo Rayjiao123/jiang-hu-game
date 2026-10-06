@@ -58,8 +58,19 @@ def plain(text: str) -> str:
     return " / ".join(part.strip() for part in str(text or "").split(SEP))
 
 
-def counterpart(client, model: str, text: str) -> str:
-    """The same text in the other language. Empty string when it is already bilingual or the call fails."""
+def glossary(names) -> str:
+    """'陆沉舟 Lu Chenzhou' -> a line telling the translator to always spell that person the same way."""
+    pairs = []
+    for n in names:
+        m = re.match(r"^((?:[一-鿿·]+\s*)+)(.*)$", str(n or "").strip())
+        if m and m.group(2).strip():
+            pairs.append(f"{m.group(2).strip()} = {m.group(1).strip()}")
+    return "; ".join(pairs[:60])
+
+
+def counterpart(client, model: str, text: str, names: str = "") -> str:
+    """The same text in the other language. Empty string when it is already bilingual or the call fails.
+    `names` is a glossary (see glossary()) so people keep one spelling in both languages."""
     text = (text or "").strip()
     if not text or has_both(text):
         return ""
@@ -70,7 +81,8 @@ def counterpart(client, model: str, text: str) -> str:
             messages=[
                 {"role": "system", "content": (
                     f"You translate for a Song-dynasty wuxia game website. Translate the user's text into {target}. "
-                    "Keep names, tone and any *asterisk actions* as they are. Output only the translation, nothing else.")},
+                    "Keep names, tone and any *asterisk actions* as they are. Output only the translation, nothing else."
+                    + (f" These people must always be written exactly like this in the two languages: {names}." if names else ""))},
                 {"role": "user", "content": text}])
         return (r.choices[0].message.content or "").strip()
     except Exception as e:  # a missing translation is better than a failed reply

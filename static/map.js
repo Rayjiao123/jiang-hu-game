@@ -1,11 +1,13 @@
 /* The map of the jianghu: an ink-wash map of Song China with a red seal for each region.
  *
  *   const map = JianghuMap.build(container, regions, { onPick(id), onHover(id|null) });
- *   map.update({ counts: {huashan: 2, ...}, here: "emei" });
+ *   map.update({ counts: {huashan: 2, ...}, here: "huashan" });
  *
+ * A region with open:false is drawn locked ("opens later"). Several maps can live on one page.
  * Positions come from /api/world (app/world.py) on a 1000 x 640 canvas, north at the top. */
 (function () {
   "use strict";
+  let instances = 0;
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const rng = seed => { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
@@ -61,15 +63,17 @@
 
   function marker(r) {
     const ch = esc(r.zh.charAt(0));
-    return `<g class="mk" data-id="${r.id}" transform="translate(${r.x} ${r.y})" tabindex="0" role="button" aria-label="${esc(r.en)} ${esc(r.zh)}">
+    return `<g class="mk ${r.open ? "open" : "locked"}" data-id="${r.id}" transform="translate(${r.x} ${r.y})" tabindex="0" role="button" aria-label="${esc(r.en)} ${esc(r.zh)}">
       <g class="pop">
         <circle class="halo" r="30" fill="#c8402f" opacity="0"/>
         <ellipse cx="2" cy="20" rx="20" ry="5" fill="#000" opacity=".12" filter="url(#blur2)"/>
         <g transform="rotate(-5)"><rect class="seal" x="-17" y="-17" width="34" height="34" rx="3" fill="#c8402f" stroke="#7a1f16" stroke-width="1.2"/><rect x="-14" y="-14" width="28" height="28" rx="1.5" fill="none" stroke="#f6e3c8" stroke-width="1" opacity=".65"/></g>
         <text class="ch" y="8" text-anchor="middle" font-family="Ma Shan Zheng, STKaiti, serif" font-size="24" fill="#fbeedd">${ch}</text>
+        <g class="lock" transform="translate(16 -15)"><circle r="10" fill="#2a2118" stroke="#d8b45a" stroke-width="1.2"/><rect x="-4.5" y="-1" width="9" height="7" rx="1.2" fill="#d8b45a"/><path d="M-2.8 -1V-3.2a2.8 2.8 0 0 1 5.6 0V-1" fill="none" stroke="#d8b45a" stroke-width="1.5"/></g>
         <g class="badge" transform="translate(16 -17)"><circle r="9" fill="#2a2118" stroke="#d8b45a" stroke-width="1.2"/><text class="cnt" y="3.6" text-anchor="middle" font-family="Noto Serif SC, serif" font-size="11" font-weight="700" fill="#f6e9c8">0</text></g>
         <text class="nm" y="36" text-anchor="middle" font-family="Ma Shan Zheng, STKaiti, serif" font-size="21" fill="#2a2118" stroke="#f6efdc" stroke-width="5" paint-order="stroke" stroke-linejoin="round">${esc(r.zh)}</text>
         <text class="en" y="51" text-anchor="middle" font-family="Cormorant Garamond, Georgia, serif" font-style="italic" font-weight="600" font-size="13.5" fill="#4a3c2c" stroke="#f6efdc" stroke-width="4" paint-order="stroke" stroke-linejoin="round">${esc(r.en)}</text>
+        <text class="tagline" y="66" text-anchor="middle" font-family="Noto Serif SC, serif" font-size="12" font-weight="700" fill="${r.open ? "#2f6b55" : "#7a6f5a"}" stroke="#f6efdc" stroke-width="4" paint-order="stroke" stroke-linejoin="round">${r.open ? "已开放 OPEN" : "即将开放 SOON"}</text>
       </g>
       <g class="flag" opacity="0"><path d="M0 -20V-62" stroke="#2a2118" stroke-width="2"/><path d="M1 -62L38 -54L1 -44Z" fill="#2a2118"/><text x="9" y="-50" font-family="Ma Shan Zheng, serif" font-size="13" fill="#f6e9c8">你</text></g>
     </g>`;
@@ -77,7 +81,10 @@
 
   function build(container, regions, handlers) {
     handlers = handlers || {};
-    container.innerHTML = `<svg viewBox="0 0 1000 640" role="group" aria-label="Map of the jianghu 江湖地图" preserveAspectRatio="xMidYMid meet">${terrain()}${regions.map(marker).join("")}</svg>`;
+    const prefix = "m" + (++instances) + "-";     // gradient and filter ids must not clash between maps on one page
+    const markup = `<svg viewBox="0 0 1000 640" role="group" aria-label="Map of the jianghu 江湖地图" preserveAspectRatio="xMidYMid meet">${terrain()}${regions.map(marker).join("")}</svg>`
+      .replace(/(\s)id="([\w-]+)"/g, `$1id="${prefix}$2"`).replace(/url\(#([\w-]+)\)/g, `url(#${prefix}$1)`);
+    container.innerHTML = markup;
     const svg = container.firstElementChild, byId = Object.fromEntries(regions.map(r => [r.id, r]));
     svg.querySelectorAll(".mk").forEach(g => {
       const id = g.dataset.id;
@@ -96,7 +103,7 @@
           g.querySelector(".badge").style.opacity = c ? 1 : .55;
           g.classList.toggle("here", id === here);
           g.querySelector(".flag").setAttribute("opacity", id === here ? 1 : 0);
-          g.setAttribute("aria-label", `${byId[id].en} ${byId[id].zh}, ${c} ${c === 1 ? "person" : "people"} 人`);
+          g.setAttribute("aria-label", byId[id].open ? `${byId[id].en} ${byId[id].zh}, ${c} ${c === 1 ? "person" : "people"} 人` : `${byId[id].en} ${byId[id].zh}, opens later 即将开放`);
         });
       },
     };

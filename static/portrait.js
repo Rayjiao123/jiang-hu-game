@@ -423,7 +423,7 @@
 
     let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 300">` + defs(P);
     if (opts.bg !== false) s += background(a.scene, R);
-    s += aura(a.aura, R);
+    if (opts.aura !== false) s += aura(a.aura, R);
     s += `<g transform="translate(120 218) scale(1.14) translate(-120 -218)">`;
     s += weaponBack(a.weapon, P) + `<g ${T}>${hairBack(style, P)}</g>`;
     // neck
