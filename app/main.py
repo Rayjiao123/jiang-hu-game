@@ -7,7 +7,7 @@ from typing import Iterator
 
 import openai
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -446,6 +446,16 @@ def admin_seed(body: SeedRequest):
 def admin_export():
     """Every NPC including secrets, as one JSON file: a simple backup."""
     return JSONResponse(admin_list(), headers={"Content-Disposition": 'attachment; filename="jianghu-npcs.json"'})
+
+
+@app.get("/", include_in_schema=False)
+def index():
+    """The page, with each script and stylesheet stamped with a version so a browser can never mix old and new files."""
+    static = config.ROOT / "static"
+    version = str(int(max(p.stat().st_mtime for p in static.iterdir() if p.is_file())))
+    html = (static / "index.html").read_text(encoding="utf-8")
+    html = re.sub(r'(src|href)="(/[\w.-]+\.(?:js|css))"', lambda m: f'{m.group(1)}="{m.group(2)}?v={version}"', html)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
 app.mount("/", StaticFiles(directory=config.ROOT / "static", html=True), name="static")

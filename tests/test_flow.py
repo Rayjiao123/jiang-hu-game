@@ -152,6 +152,16 @@ def test_conversations_belong_to_the_visitor_who_started_them(api):
     assert other.post(f"/api/sessions/{sid}/chat", json={"message": "hello"}).status_code == 404
 
 
+def test_the_page_stamps_its_scripts_with_a_version(api):
+    r = api.get("/")
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-cache"
+    import re
+    assets = re.findall(r'(?:src|href)="(/[\w.-]+\.(?:js|css))\?v=(\d+)"', r.text)
+    assert {a for a, _ in assets} >= {"/app.js", "/style.css", "/portrait.js", "/scenes.js", "/map.js"}
+    assert len({v for _, v in assets}) == 1                                     # one version for every file
+    assert 'id="screen-loading"' in r.text                                      # never a blank page
+
+
 def test_the_world_endpoint_lists_every_region(api):
     regions = api.get("/api/world").json()["regions"]
     assert len(regions) == 12 and {"id", "en", "zh", "x", "y", "desc_en", "desc_zh", "scene"} <= set(regions[0])

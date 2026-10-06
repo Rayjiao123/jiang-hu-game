@@ -101,6 +101,7 @@
   function go(name, opts = {}) {
     if (S.bg) { S.bg.stop(); S.bg = null; }
     if (name !== "talk") { S.talkCtl?.abort(); closeLog(); }
+    $("#screen-loading").classList.remove("on");
     SCREENS.forEach(s => $("#screen-" + s).classList.toggle("on", s === name));
     S.screen = name;
     window.scrollTo(0, 0);
@@ -469,12 +470,17 @@
   /* ---------- boot ---------- */
   async function boot() {
     try {
-      const [st, w] = await Promise.all([api("/api/status"), api("/api/world")]);
-      S.aiReady = st.ai; S.regions = w.regions; S.byId = Object.fromEntries(w.regions.map(r => [r.id, r]));
-    } catch { S.aiReady = false; }
+      const w = await api("/api/world");
+      S.regions = w.regions; S.byId = Object.fromEntries(w.regions.map(r => [r.id, r]));
+      S.aiReady = (await api("/api/status").catch(() => ({ ai: false }))).ai;
+    } catch {
+      const s = document.querySelector("#screen-loading .slow"); if (s) s.hidden = false;       // cannot reach the server
+      return;
+    }
     if (!S.aiReady) note("#forgeNote", bi("The AI isn't connected on this server yet, so characters can't be created. Browsing still works.", "此服务器尚未连接 AI，暂时无法创建人物，但仍可浏览。"), true);
     await refreshMe(); await loadNpcs();
     go(S.hero ? "map" : "gate");
+    window.__booted = true;
     setInterval(async () => {
       if (document.hidden || !S.hero) return;
       const before = others().map(n => n.id).join();

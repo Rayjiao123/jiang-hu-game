@@ -26,6 +26,16 @@
 
 <main id="app">
 
+  <!-- shown until the game has started; if something breaks it says so instead of staying blank -->
+  <section class="screen on loading" id="screen-loading" aria-live="polite">
+    <div class="loading-card">
+      <div class="logo">江湖录</div>
+      <p>Opening the jianghu… <span class="zh">江湖启封中…</span></p>
+      <p class="slow" hidden>This is taking longer than it should, so something may be wrong.<br>加载时间过长，可能出了问题。<br>
+        <button class="btn" type="button" onclick="location.reload()">刷新 Reload</button></p>
+    </div>
+  </section>
+
   <!-- 1. THE GATE: first arrival -->
   <section class="screen gate" id="screen-gate" aria-label="Welcome 欢迎">
     <canvas id="scene" aria-label="Ink-wash painting: a lone swordsman on a cliff beneath a full moon, misty mountains beyond, plum petals drifting on the wind"></canvas>
@@ -197,6 +207,13 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script>
+  (function () {
+    function slow() { if (window.__booted) return; var s = document.querySelector("#screen-loading .slow"); if (s) s.hidden = false; }
+    window.addEventListener("error", slow);
+    setTimeout(slow, 6000);
+  })();
+</script>
 <script src="/portrait.js"></script>
 <script src="/scenes.js"></script>
 <script src="/map.js"></script>

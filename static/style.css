@@ -66,6 +66,14 @@ canvas.bg { position: absolute; inset: 0; width: 100%; height: 100%; display: bl
 .note.warn { color: #f0a090; }
 .bi .zh, .lines .zh, .bubble .zh { color: var(--gold-text); }
 
+/* ---------- loading ---------- */
+.loading.on { display: grid; place-items: center; background: #0d0f0e; }
+.loading-card { text-align: center; padding: 24px; }
+.loading-card .logo { font: 400 clamp(54px, 10vw, 96px)/1 var(--f-brush); letter-spacing: .08em; }
+.loading-card p { color: var(--dim); margin: 10px 0 0; }
+.loading-card .zh { color: var(--gold-text); }
+.loading-card .btn { margin-top: 12px; }
+
 /* ---------- 1. gate ---------- */
 .gate { overflow: hidden; background: #0d0f0e; display: none; }
 .gate.on { display: grid; align-items: end; }
