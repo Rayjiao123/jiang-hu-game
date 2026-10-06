@@ -6,10 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 os.environ["DATABASE_PATH"] = str(Path(tempfile.mkdtemp()) / "test.db")
-os.environ["SEED_WORLD"] = "0"
 os.environ["DEEPSEEK_API_KEY"] = ""
 
-from app import agent, bilingual, config, db, game, prompts, roll, world  # noqa: E402
+from app import agent, bilingual, game  # noqa: E402
 
 
 def test_language_detection():
@@ -58,102 +57,7 @@ def test_a_failed_translation_never_breaks_a_reply():
 
 # ---------- game rules ----------
 
-def test_apply_fields_clamps_and_validates():
-    s = game.blank_sheet()
-    changed = game.apply_fields(s, {"name": "  柳寒烟   Liu  Hanyan ", "alignment": "chaotic",
-                                     "traits": ["bold ||| 勇", "calm ||| 静", "wry ||| 俏", "mean ||| 刻"]})
-    assert s["name"] == "柳寒烟 Liu Hanyan"
-    assert s["alignment"] == "neutral"
-    assert s["traits"] == ["bold ||| 勇", "calm ||| 静", "wry ||| 俏"]       # exactly three quirks at most
-    assert {"name", "alignment", "traits"} <= set(changed)
 
-
-def test_text_in_one_language_is_not_saved():
-    s = game.blank_sheet()
-    rejected: list[str] = []
-    changed = game.apply_fields(s, {"title": "Ferryman of the Broken Oar", "goal": "Find my brother ||| 找到我的兄弟",
-                                     "traits": ["Never forgives a debt", "Talks to his lantern ||| 对灯笼说话"]}, rejected)
-    assert s["goal"] == "Find my brother ||| 找到我的兄弟" and "goal" in changed
-    assert s["title"] == "" and s["traits"] == []
-    assert set(rejected) == {"title", "traits"}
-
-
-def test_set_fields_tells_the_model_what_to_fix():
-    s = game.blank_sheet()
-    turn = agent.Turn()
-    with db.session() as conn:
-        tools = {t.name: t for t in game.storyteller_tools(conn, s, turn)}
-        result = agent._call(tools["set_fields"], json.dumps({"name": "Old Wu", "goal": "Find my brother"}))
-    assert result["ok"] is False and "goal" in result["error"] and "|||" in result["error"]
-    assert s["name"] == "Old Wu" and s["goal"] == ""           # the good field was kept, the bad one was not
-
-
-def test_appearance_keeps_valid_choices_and_fills_the_rest():
-    s = game.blank_sheet()
-    game.apply_fields(s, {"name": "Old Wu", "appearance": {"hair_style": "Twin Buns", "aura": "flame", "weapon": "bazooka"}})
-    a = s["appearance"]
-    assert a["hair_style"] == "twin_buns" and a["aura"] == "flame"      # tidied and kept
-    assert a["weapon"] in game.APPEARANCE["weapon"] and a["weapon"] != "bazooka"   # invalid value replaced
-    assert set(a) == set(game.APPEARANCE)                               # every option present
-
-    first = dict(a)
-    game.apply_fields(s, {"appearance": {"hair_color": "silver"}})        # a later tweak changes only that option
-    assert s["appearance"]["hair_color"] == "silver"
-    assert {k: v for k, v in s["appearance"].items() if k != "hair_color"} == {k: v for k, v in first.items() if k != "hair_color"}
-
-
-def test_a_sheet_is_complete_only_when_every_part_is_filled():
-    s = game.blank_sheet()
-    assert set(game.missing(s)) == set(game.REQUIRED)
-    both = {k: "English text ||| 中文文字" for k in game.BILINGUAL}
-    game.apply_fields(s, both | {"name": "Old Wu", "alignment": "neutral", "region": "huashan", "traits": ["bold ||| 勇", "calm ||| 静", "wry ||| 俏"]})
-    assert game.missing(s) == ["appearance"]
-    game.apply_fields(s, {"appearance": {}})          # even an empty look is filled in with defaults
-    assert game.missing(s) == []
-
-
-def test_dice_give_varied_valid_seeds_in_both_languages():
-    import random
-    seeds = [roll.random_seed(random.Random(i)) for i in range(40)]
-    assert len({x["summary"] for x in seeds}) > 30
-    for x in seeds:
-        for key, value in x["look"].items():
-            assert value in game.APPEARANCE[key]
-        assert x["look"]["aura"] != "none"
-        assert bilingual.language_of(x["summary"]) == "English" and bilingual.language_of(x["summary_zh"]) == "Chinese"
-    msg = roll.roll_message(seeds[0])
-    assert seeds[0]["summary"] in msg and seeds[0]["summary_zh"] in msg and "aura=" in msg
-
-
-def test_secret_is_gated_by_server_trust():
-    db.init()
-    sess = {"trust": 3, "revealed": False}
-    turn = agent.Turn()
-    with db.session() as conn:
-        tools = {t.name: t for t in game.npc_tools(conn, {"id": "x"}, "I buried the gold", sess, turn)}
-        refused = agent._call(tools["reveal_secret"], "{}")
-        assert "error" in refused and "gold" not in json.dumps(refused)
-        assert sess["revealed"] is False
-        agent._call(tools["adjust_trust"], json.dumps({"delta": 99, "reason": "saved my life"}))
-        assert sess["trust"] == 5           # clamped to +2 per call
-        sess["trust"] = config.SECRET_TRUST_THRESHOLD
-        granted = agent._call(tools["reveal_secret"], "{}")
-        assert granted == {"secret": "I buried the gold"} and sess["revealed"] is True
-
-
-def test_secrets_never_appear_in_public_cards():
-    db.init()
-    sheet = game.blank_sheet()
-    game.apply_fields(sheet, {"name": "Old Wu", "secret": "He poisoned the abbot ||| 他毒死了方丈"})
-    with db.session() as conn:
-        npc_id = db.insert_npc(conn, sheet, "v1", "Ray")
-        card = db.public_card(db.get_npc(conn, npc_id))
-        assert "poisoned" not in json.dumps(card, ensure_ascii=False)
-        assert card["has_secret"] is True
-        assert db.get_secret(conn, npc_id) == "He poisoned the abbot ||| 他毒死了方丈"
-
-
-# ---------- the agent loop, with a fake streaming client ----------
 
 def chunk(content=None, tool=None):
     tcs = None
@@ -176,8 +80,8 @@ class FakeClient:
 def test_agent_runs_tool_then_answers():
     sheet = game.blank_sheet()
     turn = agent.Turn()
-    with db.session() as conn:
-        tools = game.storyteller_tools(conn, sheet, turn)
+    if True:
+        tools = game.storyteller_tools(sheet, turn)
         client = FakeClient([
             [chunk("Let me write that down."),
              chunk(tool={"id": "c1", "name": "set_fields", "args": '{"name": "Old'}),
@@ -195,8 +99,8 @@ def test_agent_runs_tool_then_answers():
 
 def test_agent_survives_bad_tool_arguments():
     turn = agent.Turn()
-    with db.session() as conn:
-        tools = game.storyteller_tools(conn, game.blank_sheet(), turn)
+    if True:
+        tools = game.storyteller_tools(game.blank_sheet(), turn)
         client = FakeClient([[chunk(tool={"id": "c1", "name": "set_fields", "args": "{not json"})], [chunk("Sorry.")]])
         events = list(agent.run(client, "m", [{"role": "user", "content": "hi"}], tools, turn, "visitor-b"))
     assert events[-1] == {"type": "done", "text": "Sorry."}
@@ -211,8 +115,8 @@ def test_quotes_inside_bilingual_text_are_kept():
 
 def test_a_reply_without_narration_is_kept_whole():
     turn = agent.Turn()
-    with db.session() as conn:
-        tools = game.storyteller_tools(conn, game.blank_sheet(), turn)
+    if True:
+        tools = game.storyteller_tools(game.blank_sheet(), turn)
         client = FakeClient([[chunk("Hello there "), chunk("friend ||| 你好，朋友")]])
         events = list(agent.run(client, "m", [{"role": "user", "content": "hi"}], tools, turn, "visitor-c"))
     assert all(e["type"] != "retract" for e in events)
@@ -221,10 +125,10 @@ def test_a_reply_without_narration_is_kept_whole():
 
 def test_text_that_follows_tool_calls_in_the_same_round_is_not_the_reply():
     turn = agent.Turn()
-    with db.session() as conn:
-        tools = game.storyteller_tools(conn, game.blank_sheet(), turn)
+    if True:
+        tools = game.storyteller_tools(game.blank_sheet(), turn)
         client = FakeClient([
-            [chunk(tool={"id": "c1", "name": "list_jianghu", "args": "{}"}), chunk("A first draft of the reply ||| 初稿")],
+            [chunk(tool={"id": "c1", "name": "set_fields", "args": "{}"}), chunk("A first draft of the reply ||| 初稿")],
             [chunk("The real reply ||| 正式回复")],
         ])
         events = list(agent.run(client, "m", [{"role": "user", "content": "hi"}], tools, turn, "visitor-d"))
@@ -233,74 +137,6 @@ def test_text_that_follows_tool_calls_in_the_same_round_is_not_the_reply():
 
 
 # ---------- the world, first impressions and tailored prompts ----------
-
-def test_regions_have_a_name_a_scene_and_a_place_on_the_map():
-    assert len(world.REGIONS) == 12
-    for rid, r in world.REGIONS.items():
-        assert bilingual.language_of(r["en"]) == "English" and bilingual.language_of(r["zh"]) == "Chinese"
-        assert bilingual.language_of(r["desc_zh"]) == "Chinese" and r["scene"]
-        assert 0 <= r["x"] <= 1000 and 0 <= r["y"] <= 640
-
-
-def test_every_dice_place_points_at_a_real_region():
-    assert {pl[2] for pl in roll.PLACES} <= set(world.IDS)
-
-
-def test_old_characters_without_a_region_get_a_stable_one():
-    a = world.region_for({"id": "abc123", "name": "x"})
-    assert a in world.open_ids() and a == world.region_for({"id": "abc123", "name": "y"})      # and lands somewhere that is open
-    assert world.region_for({"id": "abc123", "region": "emei"}) == "emei"
-    assert world.region_for({"id": "abc123", "region": "mars"}) == a
-
-
-def test_region_must_be_a_real_one():
-    s = game.blank_sheet()
-    rejected: list[str] = []
-    game.apply_fields(s, {"region": "Mars"}, rejected)
-    assert s["region"] == "" and rejected == ["region"]
-    game.apply_fields(s, {"region": " Huashan "})
-    assert s["region"] == "huashan"
-    rejected.clear()
-    game.apply_fields(s, {"region": "emei"}, rejected)             # a real place that has not opened yet
-    assert s["region"] == "huashan" and rejected == ["region"]
-
-
-def test_first_impression_depends_on_who_is_asking():
-    npc = {"id": "n", "alignment": "orthodox", "bonds": []}
-    same, _ = game.starting_trust(npc, {"id": "h", "alignment": "orthodox", "bonds": []})
-    other, why = game.starting_trust(npc, {"id": "h", "alignment": "unorthodox", "bonds": []})
-    neutral, _ = game.starting_trust(npc, {"id": "h", "alignment": "neutral", "bonds": []})
-    assert same > neutral > other
-    assert bilingual.is_pair(why)
-    known, why2 = game.starting_trust(npc, {"id": "h", "alignment": "unorthodox", "bonds": [{"toId": "n", "relation": "x ||| 甲"}]})
-    assert known == other + 1 and bilingual.is_pair(why2)             # a shared history softens it
-    assert 0 <= game.starting_trust({"alignment": "unorthodox"}, {"alignment": "orthodox"})[0] <= 10
-
-
-def _character(name, **fields):
-    s = game.blank_sheet()
-    both = {k: f"{k} text ||| {k}文字" for k in game.BILINGUAL}
-    game.apply_fields(s, both | {"name": name, "region": "huashan", "alignment": "orthodox",
-                                 "traits": ["cries at sunsets ||| 见落日必哭", "hates swords ||| 厌恶刀剑", "sleeps on roofs ||| 睡屋顶"],
-                                 "secret": "buried the treasure ||| 把宝藏埋了", **fields})
-    game.apply_fields(s, {"appearance": {"hair_color": "silver", "weapon": "flute"}})
-    return {**s, "id": name}
-
-
-def test_npc_prompt_describes_this_particular_hero_and_never_their_secret():
-    npc, hero = _character("Old Wu"), _character("柳寒烟 Liu Hanyan", alignment="unorthodox", sect="Poison Hall ||| 毒堂")
-    text = prompts.npc_system(npc, [], [], hero)
-    assert "柳寒烟 Liu Hanyan" in text and "Poison Hall / 毒堂" in text and "unorthodox" in text
-    assert "cries at sunsets / 见落日必哭" in text                     # their habits are visible
-    assert "silver hair" in text and "flute" in text                  # and so is how they look
-    assert "buried the treasure" not in text.split("The person in front of you")[1]   # the hero's secret never reaches an NPC
-    other = prompts.npc_system(npc, [], [], _character("Su Ling", alignment="orthodox"))
-    assert other != text                                               # a different hero gives a different prompt
-
-
-def test_the_opening_turn_is_addressed_to_the_hero():
-    assert "walked up" in prompts.npc_state(3, False, opening=True)
-    assert "walked up" not in prompts.npc_state(3, False)
 
 
 def test_a_reply_is_tidied_into_one_english_half_and_one_chinese_half():

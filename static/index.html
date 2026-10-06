@@ -17,6 +17,7 @@
   </button>
   <nav class="crumbs" id="crumbs" aria-label="Where you are 当前位置"></nav>
   <button class="about" id="aboutBtn" type="button">简介 About</button>
+  <button class="about casebtn" id="caseBtn" type="button" aria-haspopup="dialog" aria-expanded="false" hidden>案卷 Case file</button>
   <div class="me" id="me" hidden>
     <button class="me-btn" id="meBtn" type="button" aria-haspopup="dialog">
       <span class="avatar" id="meImg"></span>
@@ -44,18 +45,18 @@
       <div class="gate-scrim"></div>
       <div class="couplet" aria-label="Poem line by Huang Tingjian, Song dynasty: Ten years of lamplight in the jianghu's night rain"><span>江湖夜雨十年灯</span><small>宋 · 黄庭坚</small></div>
       <div class="gate-content">
-        <p class="kicker"><span>武侠 AI 游戏</span> · A wuxia game where every character is alive</p>
-        <h1 class="gate-line"><span>你已身在</span><span>江湖</span></h1>
-        <p class="gate-sub">You're already in the jianghu. Come in and have a look.</p>
-        <p class="pitch"><b>Make your own swordsman</b> in one sentence, walk into <b>Mount Hua</b> in the week of its great sword gathering, and talk to the people there: a champion in hiding, a proud young swordswoman, an innkeeper who knows too much. Every one is an AI with secrets of their own, and every one reacts to <b>who you are</b>.</p>
-        <p class="pitch zh"><b>一句话创建你的侠客</b>，在华山剑会前夕走上山去，和山上的人交谈：隐匿的魁首、骄傲的少女剑客、知道得太多的客栈掌柜。每个人都是有自己秘密的 AI，并且会根据<b>你是谁</b>做出不同的反应。</p>
+        <p class="kicker"><span>武侠 AI 悬疑</span> · A wuxia murder mystery where every suspect is alive</p>
+        <h1 class="gate-line"><span>谁杀了</span><span>你的爱人</span></h1>
+        <p class="gate-sub">Someone on Mount Hua killed the one you love. Find out who.</p>
+        <p class="pitch"><b>Make your hero</b> in one sentence, then climb <b>Mount Hua</b> in the week of its great sword gathering. Question the people there: a proud young swordswoman, an innkeeper who counts footsteps, a healer bound by an oath, a stranger with a saber. Every one is an AI with secrets, and every one reacts to <b>who you are</b>. Earn their trust, gather the clues, and name the killer.</p>
+        <p class="pitch zh"><b>一句话创建你的侠客</b>，在华山剑会前夕走上山去，向山上的人问话：骄傲的少女剑客、数得清脚步声的客栈掌柜、受誓言所缚的医女、带着刀的陌生人。每个人都是有秘密的 AI，并且会根据<b>你是谁</b>做出不同的反应。赢得信任，收集线索，指认凶手。</p>
         <div class="cta">
-          <button class="btn big" id="gateCreate" type="button">创建你的侠客 · Create your character</button>
+          <button class="btn big" id="gateCreate" type="button">创建你的侠客 · Create your hero</button>
           <button class="btn ghost" id="gateRoll" type="button">掷骰 · Roll one for me</button>
         </div>
         <ul class="facts">
-          <li><b>AI</b> characters with secrets<i>有秘密的 AI 人物</i></li>
-          <li>Made by <b>Ray and by players</b><i>由作者与玩家共同创造</i></li>
+          <li><b>One case</b>, one mountain<i>一桩案子，一座山</i></li>
+          <li><b>AI</b> suspects with secrets<i>有秘密的 AI 嫌疑人</i></li>
           <li><b>English + 中文</b> in every line<i>每句话中英双语</i></li>
         </ul>
       </div>
@@ -70,42 +71,42 @@
           <li class="card">
             <span class="num">一</span>
             <div class="art" id="howArt1"></div>
-            <h3>创建你的人物 <em>Create your character</em></h3>
-            <p>Say one sentence, or roll the dice. The Storyteller writes your name, quirks, secret and face.</p>
-            <p class="zh">说一句话，或掷骰子。说书人为你写好姓名、怪癖、秘密和相貌。</p>
+            <h3>创建你的侠客 <em>Make your hero</em></h3>
+            <p>Say one sentence, or roll the dice. You get a path, a manner, a signature move, a quirk, and the person you lost. Change any of them before you go in.</p>
+            <p class="zh">说一句话，或掷骰子。你会得到道、性情、绝技、习癖，以及你失去的爱人。进入江湖前，每一项都能修改。</p>
           </li>
           <li class="card">
             <span class="num">二</span>
-            <div class="art seals" aria-hidden="true"><span class="s on">华</span><span class="s">武</span><span class="s">嵩</span><span class="s">峨</span><span class="s">临</span></div>
-            <h3>走进地图 <em>Open the map</em></h3>
-            <p>Mount Hua is open now. Eleven more places open later, each with its own people.</p>
-            <p class="zh">华山现已开放。另有十一处地方将陆续开放，各有各的人物。</p>
+            <div class="art talk-mock" id="howArt3" aria-hidden="true"></div>
+            <h3>向人问话 <em>Question them as you</em></h3>
+            <p>Everyone on the mountain knows who you are, and reacts to your path and your manner. Win their trust and they give up what they know. Push too hard and they close up.</p>
+            <p class="zh">山上的人都知道你是谁，并会因你的道与性情而不同。赢得信任，他们才肯说出所知；逼得太紧，他们就闭口不言。</p>
           </li>
           <li class="card">
             <span class="num">三</span>
-            <div class="art talk-mock" id="howArt3" aria-hidden="true"></div>
-            <h3>以你的身份交谈 <em>Talk as you</em></h3>
-            <p>Everyone knows who you are: your sect, your path, your habits. They greet you, doubt you, trust you, or test you.</p>
-            <p class="zh">每个人都知道你是谁：你的门派、你的正邪、你的习惯。他们会招呼你、怀疑你、信任你，或试探你。</p>
+            <div class="art seals" aria-hidden="true"><span class="s on">证</span><span class="s">手</span><span class="s">地</span><span class="s">人</span><span class="s">因</span></div>
+            <h3>指认凶手 <em>Name the killer</em></h3>
+            <p>Collect clues in your case file. When you have proof of three different kinds (how, where, who, why, who it could not be), accuse someone. You get three chances.</p>
+            <p class="zh">把线索收进案卷。凑齐三种不同的证据（手法、地点、在场者、动机、排除嫌疑）后，指认凶手。你有三次机会。</p>
           </li>
         </ol>
       </section>
 
       <section class="meet" aria-labelledby="meetT">
-        <h2 id="meetT">华山上的人 <em>Who is on Mount Hua right now</em></h2>
-        <p class="lede-s">Seven days until the Summit Sword Gathering. The last champion has not been seen for a month. Everyone you meet wants something from you, and is hiding something.
-七日后绝顶剑会开幕，上届魁首已一月不见。你遇到的每个人都想从你这里得到点什么，也都在隐瞒点什么。</p>
+        <h2 id="meetT">山上的嫌疑人 <em>The people on the mountain</em></h2>
+        <p class="lede-s">Three days ago a guest was found dead below the Sword Cliff. The Pavilion says it was a fall, and buried them before noon. Seven days until the Sword Gathering. Everyone here knows something, and nobody tells it for free.
+三天前，有位客人被发现死在剑崖下。云剑阁说是失足，中午前就下了葬。七日后剑会开幕。这里每个人都知道些什么，却没人会白白告诉你。</p>
         <div class="meet-row" id="meetRow"></div>
-        <p class="meet-note" id="meetNote"></p>
+        
       </section>
 
       <section class="soon" aria-labelledby="soonT">
-        <h2 id="soonT">江湖正在展开 <em>The jianghu is opening up</em></h2>
+        <h2 id="soonT">更大的江湖 <em>A bigger jianghu, later</em></h2>
         <div class="soon-grid">
           <div class="map-box"><div id="gateMap"></div></div>
           <div class="soon-text">
-            <p>We are starting with <b>one</b> iconic place, and filling it with real characters, before opening the rest. Tap Mount Hua to begin. The padlocked places open later, one by one.</p>
-            <p class="zh">我们先从<b>一个</b>标志性的地方开始，把它填满真正的人物，再陆续开放其他地方。点「华山」即可开始，带锁的地方之后逐一开放。</p>
+            <p>The story takes place on <b>Mount Hua</b>. Other places in the jianghu are on the map, padlocked: they open in later chapters of the story.</p>
+            <p class="zh">这个故事发生在<b>华山</b>。江湖中的其他地方已标在地图上，目前上锁，将在之后的章节中开放。</p>
             <button class="btn big" id="gateCreate2" type="button">创建你的侠客 · Create your character</button>
           </div>
         </div>
@@ -115,7 +116,7 @@
   </section>
 
   <!-- 2. CREATE YOUR CHARACTER -->
-  <section class="screen forge" id="screen-forge" aria-label="Create your character 创建人物">
+  <section class="screen forge" id="screen-forge" aria-label="Create your hero 创建人物">
     <canvas class="bg" id="forgeBg" aria-hidden="true"></canvas>
     <div class="forge-grid">
       <div class="forge-stage">
@@ -123,19 +124,7 @@
         <div class="plate panel">
           <div class="nm" id="fpName">—</div>
           <div class="ep bi" id="fpTitle"></div>
-          <div class="from bi" id="fpFrom"></div>
-          <div class="quirks" id="fpQuirks"></div>
         </div>
-        <details class="plate panel details" id="fpMore">
-          <summary>Full scroll 完整卷轴</summary>
-          <dl>
-            <div class="f" data-k="region"><dt>所在 STARTS IN</dt><dd></dd></div>
-            <div class="f" data-k="art"><dt>绝技 SIGNATURE MOVE</dt><dd></dd></div>
-            <div class="f" data-k="goal"><dt>心愿 WANTS</dt><dd></dd></div>
-            <div class="f" data-k="greeting"><dt>开场白 FIRST WORDS</dt><dd></dd></div>
-            <div class="f" data-k="secret"><dt>秘密 SECRET, only you can see it 仅你可见</dt><dd></dd></div>
-          </dl>
-        </details>
       </div>
 
       <section class="panel forge-chat" aria-label="The Storyteller 说书人">
@@ -143,12 +132,12 @@
         <div class="log" id="forgeLog">
           <div class="msg">
             <span class="who">说书人 Storyteller</span>
-            <div class="bubble"><div class="en">Welcome to the teahouse, friend. Tell me about the person you want to be in the jianghu: a single line is plenty, and I'll fill in the rest. Name, quirks, secret, even your face. Or roll the dice and see who you become.</div><div class="zh">欢迎来到茶馆，朋友。说说你想在江湖中成为怎样的人，一句话就够了，其余的我来补全：姓名、怪癖、秘密，连相貌也一并写好。或者掷个骰子，看你会成为谁。</div></div>
+            <div class="bubble"><div class="en">Welcome to the teahouse, friend. Tell me about the person you want to be in the jianghu: a single line is plenty, and I'll fill in the rest: your path, your manner, your signature move, a quirk, the person you lost, even your face. You can change any of it afterwards. Or roll the dice and see who you become.</div><div class="zh">欢迎来到茶馆，朋友。说说你想在江湖中成为怎样的人，一句话就够了，其余的我来补全：道、性情、绝技、习癖、你失去的爱人，连相貌也一并写好，之后都能修改。或者掷个骰子，看你会成为谁。</div></div>
           </div>
         </div>
         <div class="starters" id="forgeStarters">
           <button class="starter primary" id="rollBtn" type="button">掷骰 · Roll a random character · 随机人物</button>
-          <button class="starter" data-say="A drunken monk who guards a ferry crossing ||| 守渡口的醉和尚" type="button">A drunken monk who guards a ferry crossing · 守渡口的醉和尚</button>
+          <button class="starter" data-say="A drunken monk who guards a ferry crossing ||| 守渡口的醉和尚" type="button">A drunken monk who guards a ferry · 守渡口的醉和尚</button>
           <button class="starter" data-say="A swordswoman living in hiding by West Lake ||| 一位隐居西湖的女剑客" type="button">一位隐居西湖的女剑客 · A swordswoman by West Lake</button>
         </div>
         <p class="note" id="forgeNote" hidden></p>
@@ -161,14 +150,18 @@
       </section>
     </div>
 
+    <section class="panel traits" id="traits" aria-labelledby="traitsT" hidden>
+      <h2 id="traitsT">你的人物 <em>Your hero: check every trait</em></h2>
+      <p class="note">Everything below is yours to change. These few things decide how the mountain treats you.
+下面每一项都可以由你修改。就是这几样，决定山上的人如何对待你。</p>
+      <div class="trait-list" id="traitList"></div>
+    </section>
+
     <div class="forge-bar panel">
-      <label for="signName" class="sr">Your name, shown on your character 署名</label>
-      <input class="sign" id="signName" maxlength="40" placeholder="Sign as… 署名（可选）">
       <button class="btn ghost" id="rerollBtn" type="button">掷骰 Roll another</button>
       <button class="btn ghost" id="resetBtn" type="button">重来 Start over</button>
-      <button class="btn big" id="enterBtn" type="button" disabled>踏入江湖 · Enter the jianghu</button>
-      <p class="note" id="sheetNote">Your character fills in as you talk to the Storyteller.
-你与说书人交谈时，人物会自动填写。</p>
+      <button class="btn big" id="enterBtn" type="button" disabled>确认，踏入江湖 · Confirm and enter the jianghu</button>
+      <p class="note" id="sheetNote"></p>
     </div>
   </section>
 
@@ -188,16 +181,13 @@
   <section class="screen scene" id="screen-scene" aria-label="A place in the jianghu 江湖一隅">
     <canvas class="bg" id="sceneBg" aria-hidden="true"></canvas>
     <div class="scene-top">
-      <button class="btn ghost" id="sceneBack" type="button">← 地图 Map</button>
+      <div class="scene-btns"><button class="btn ghost" id="sceneBack" type="button">← 地图 Map</button>
+        <button class="btn ghost" id="sceneCase" type="button">案卷 Case file</button>
+        <button class="btn" id="sceneAccuse" type="button">指认凶手 · Name the killer</button></div>
       <div class="place panel"><h2 id="scName"></h2><p id="scDesc"></p><div class="news" id="scNews" hidden></div></div>
     </div>
     <div class="scene-stage" id="sceneStage"></div>
-    <p class="scene-empty panel" id="sceneEmpty" hidden></p>
-    <section class="travellers panel" id="travellers" aria-labelledby="travT">
-      <h3 id="travT">同路人 <em>Fellow travellers</em><small>characters made by other visitors 其他访客创造的人物</small></h3>
-      <div class="trav-list" id="travList"></div>
-    </section>
-  </section>
+      </section>
 
   <!-- 5. A CONVERSATION -->
   <section class="screen talk" id="screen-talk" aria-label="Conversation 对话">
@@ -211,7 +201,8 @@
           <div class="impression" id="tImpression"></div>
           <div class="secret-state" id="tSecret"></div>
         </div>
-        <button class="btn ghost" id="logBtn" type="button" aria-expanded="false">记录 Log</button>
+        <div class="talk-btns"><button class="btn ghost" id="talkCase" type="button">案卷 Case</button>
+        <button class="btn ghost" id="logBtn" type="button" aria-expanded="false">记录 Log</button></div>
       </div>
 
       <div class="talk-stage">
@@ -247,20 +238,72 @@
 <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mdTitle">
   <div class="modal-card panel">
     <button class="x" id="mdClose" type="button" aria-label="Close 关闭">×</button>
-    <h2 id="mdTitle" class="sr">Your character 你的人物</h2>
+    <h2 id="mdTitle" class="sr">Your hero 你的人物</h2>
     <div class="md-grid">
       <div class="md-portrait" id="mdPortrait"></div>
       <div class="md-body" id="mdBody"></div>
     </div>
     <div class="md-actions">
-      <button class="btn ghost" id="mdNew" type="button">换个人物 · Make a new character</button>
+      <button class="btn ghost" id="mdNew" type="button">重新开始 · Start a new story</button>
       <div class="md-confirm" id="mdConfirm" hidden>
-        <p>Your current character stays in the jianghu for others to meet, but you will stop playing as them.
-你现在的人物会留在江湖里供别人遇见，但你将不再扮演他。</p>
-        <button class="btn" id="mdYes" type="button">是 · Yes, start a new one</button>
+        <p>This ends your current case and its conversations, and you will make a new hero.
+这会结束当前的案子和所有对话，你需要重新创建人物。</p>
+        <button class="btn" id="mdYes" type="button">是 · Yes, start over</button>
         <button class="btn ghost" id="mdNo" type="button">取消 Cancel</button>
       </div>
     </div>
+  </div>
+</div>
+
+<aside class="log-drawer case-drawer panel" id="caseDrawer" hidden aria-label="Case file 案卷">
+  <header><span>案卷 <em>Case file</em></span><button class="x" id="caseClose" type="button" aria-label="Close 关闭">×</button></header>
+  <div class="log-body" id="caseBody"></div>
+  <footer class="case-foot"><span id="caseAttempts"></span><button class="btn" id="caseAccuse" type="button" hidden>指认凶手 · Name the killer</button></footer>
+</aside>
+
+<div class="modal" id="prologue" hidden role="dialog" aria-modal="true" aria-labelledby="plTitle">
+  <div class="modal-card panel prologue">
+    <div class="md-grid">
+      <div class="md-portrait" id="plPortrait"></div>
+      <div class="md-body">
+        <h2 id="plTitle" class="pl-title">剑崖疑案 <em>The Sword Cliff Murder</em></h2>
+        <div class="bi pl-text" id="plText"></div>
+        <button class="btn big" id="plGo" type="button">上山 · Climb the mountain</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="accuse" hidden role="dialog" aria-modal="true" aria-labelledby="acTitle">
+  <div class="modal-card panel accuse">
+    <button class="x" id="acClose" type="button" aria-label="Close 关闭">×</button>
+    <h2 id="acTitle" class="pl-title">指认凶手 <em>Name the killer</em></h2>
+    <div id="acMain">
+      <h3 class="ac-h">一、是谁？ <em>1. Who did it?</em></h3>
+      <div class="suspects" id="acSuspects" role="radiogroup" aria-label="Suspect 嫌疑人"></div>
+      <h3 class="ac-h">二、凭什么？ <em>2. What is your proof?</em></h3>
+      <p class="note">Choose the clues you will lay before the mountain.
+选出你要当众拿出的线索。</p>
+      <div class="evidence" id="acEvidence"></div>
+      <div class="ac-bar"><button class="btn big" id="acGo" type="button" disabled>指认 · Accuse</button><span id="acCount"></span></div>
+      <p class="note" id="acInfo"></p>
+      <div class="ac-result" id="acResult" hidden role="status"></div>
+    </div>
+    <div id="acFates" hidden>
+      <p class="case-lead">Silence falls over the mountain. He did it, and you have the proof to say so.
+山上一片寂静。就是他，而你手里有足以指认的证据。</p>
+      <h3 class="ac-h">三、你要怎样处置他？ <em>What will you do with him?</em></h3>
+      <div class="fate-list"></div>
+      <p class="note" id="fateNote"></p>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="endModal" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
+  <div class="modal-card panel ending">
+    <h2 id="endTitle" class="pl-title"></h2>
+    <div class="end-text" id="endText"></div>
+    <div class="md-actions"><button class="btn big" id="endAgain" type="button">再来一案 · Play again</button> <button class="btn ghost" id="endStay" type="button">留在华山 · Stay on the mountain</button></div>
   </div>
 </div>
 

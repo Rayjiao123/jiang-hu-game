@@ -52,11 +52,11 @@ OPEN = {r.strip().lower() for r in os.getenv("OPEN_REGIONS", "huashan").split(",
 # What is happening in a place right now. Every character there knows it, and the page shows it as the day's rumour.
 SITUATION = {
     "huashan": {
-        "en": "The Summit Sword Gathering, held on the cliff-top terrace once every three years, opens in seven days. "
-              "Swordsmen from every sect are climbing the mountain. The last champion, Lu Chenzhou of Cloud Sword Pavilion, "
-              "has not been seen in public for a month, and the whole mountain is whispering about why.",
-        "zh": "三年一度的绝顶剑会，七日后将在峰顶剑台开幕。各门各派的剑客正陆续登山。"
-              "上届魁首、云剑阁的陆沉舟已有一个月没有公开露面，整座山都在窃窃私语，猜他为何不见。",
+        "en": "The Summit Sword Gathering opens in seven days and swordsmen from every sect are climbing the mountain. "
+              "Three days ago a guest was found dead below the Sword Cliff; Cloud Sword Pavilion says it was a fall in the dark and had them buried before noon. "
+              "The last champion, Lu Chenzhou of Cloud Sword Pavilion, has not been seen in public for a month.",
+        "zh": "绝顶剑会七日后开幕，各门各派的剑客正陆续登山。三天前，有位客人被发现死在剑崖下；云剑阁说是黑暗中失足坠崖，中午前就下了葬。"
+              "上届魁首、云剑阁的陆沉舟，已有一个月没有公开露面。",
     },
 }
 

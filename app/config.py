@@ -19,13 +19,7 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 CHAT_MODEL = os.getenv("CHAT_MODEL", "deepseek-flash")
 
-# Password for /admin.html (hide, restore, delete NPCs). Admin is switched off when empty.
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
-
-# Add (or refresh) the hand-written residents of the open places when the server starts. Set to 0 to skip.
-SEED_WORLD = os.getenv("SEED_WORLD", "1") != "0"
-
-DATABASE_PATH =Path(os.getenv("DATABASE_PATH", ROOT / "data" / "jianghu.db"))
+DATABASE_PATH = Path(os.getenv("DATABASE_PATH", ROOT / "data" / "jianghu.db"))
 
 # Abuse and spend protection. Every model request counts as one call
 # (an agent turn that uses two tools is three calls).
@@ -34,4 +28,3 @@ DAILY_CALL_CAP = _int("DAILY_CALL_CAP", 3000)
 
 MAX_MESSAGE_CHARS = 600
 MAX_HISTORY_TURNS = 20
-SECRET_TRUST_THRESHOLD = 7

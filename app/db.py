@@ -1,56 +1,37 @@
-"""SQLite storage. Public NPC cards and private secrets live in separate tables,
-so an endpoint that lists NPCs can never leak a secret by accident."""
+"""SQLite storage. One row per visitor holds their case (character, clues found, accusations left);
+one row per conversation holds the trust and the lines spoken. Nothing is shared between visitors.
+
+Databases made by the earlier shared-world version still contain its tables (npcs, drafts, players,
+sessions); they are simply no longer used."""
 import json
 import sqlite3
 import time
 import uuid
 from contextlib import contextmanager
 
-from . import config, world
+from . import config
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS npcs (
-    id           TEXT PRIMARY KEY,
-    created_at   REAL NOT NULL,
-    creator_id   TEXT NOT NULL,
-    creator_name TEXT NOT NULL DEFAULT '',
-    card         TEXT NOT NULL,          -- JSON: everything except the secret
-    svg          TEXT NOT NULL DEFAULT '',
-    hidden       INTEGER NOT NULL DEFAULT 0,
-    flag         TEXT NOT NULL DEFAULT ''  -- why it is hidden / needs review
-);
-CREATE TABLE IF NOT EXISTS npc_secrets (
-    npc_id TEXT PRIMARY KEY REFERENCES npcs(id),
-    secret TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS drafts (
-    id         TEXT PRIMARY KEY,
-    visitor_id TEXT NOT NULL,
-    sheet      TEXT NOT NULL,            -- JSON, includes the secret (the creator may see it)
-    turns      TEXT NOT NULL DEFAULT '[]',
-    released   TEXT,                     -- npc id once released
+CREATE TABLE IF NOT EXISTS games (
+    visitor_id TEXT PRIMARY KEY,
+    stage      TEXT NOT NULL,                 -- creating | playing | accused | solved | lost
+    hero       TEXT NOT NULL,                 -- JSON: the character sheet
+    turns      TEXT NOT NULL DEFAULT '[]',    -- the Storyteller conversation
+    found      TEXT NOT NULL DEFAULT '[]',    -- clue ids the hero holds
+    attempts   INTEGER NOT NULL DEFAULT 3,
+    ending     TEXT NOT NULL DEFAULT '',
     updated_at REAL NOT NULL
 );
-CREATE TABLE IF NOT EXISTS players (
-    visitor_id TEXT PRIMARY KEY,         -- the character this visitor plays as
-    draft_id   TEXT NOT NULL,
-    npc_id     TEXT NOT NULL,
-    updated_at REAL NOT NULL
-);
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE IF NOT EXISTS talks (
     id         TEXT PRIMARY KEY,
     visitor_id TEXT NOT NULL,
-    npc_id     TEXT,                     -- the character being talked to
-    draft_id   TEXT,                     -- (unused since rehearsals were replaced by playing a character)
-    hero_id    TEXT,                     -- the visitor's own character in this conversation
+    npc_key    TEXT NOT NULL,
     trust      INTEGER NOT NULL,
-    revealed   INTEGER NOT NULL DEFAULT 0,
     turns      TEXT NOT NULL DEFAULT '[]',
     updated_at REAL NOT NULL
 );
+CREATE INDEX IF NOT EXISTS talks_by_visitor ON talks (visitor_id, npc_key);
 """
-
-PUBLIC_FIELDS = ("name", "title", "sect", "location", "alignment", "art", "traits", "greeting", "goal", "bonds", "appearance")
 
 
 def new_id() -> str:
@@ -78,156 +59,62 @@ def session():
 def init() -> None:
     with session() as conn:
         conn.executescript(SCHEMA)
-        # databases created before moderation existed lack these columns
-        cols = {r["name"] for r in conn.execute("PRAGMA table_info(npcs)")}
-        if "hidden" not in cols:
-            conn.execute("ALTER TABLE npcs ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
-        if "flag" not in cols:
-            conn.execute("ALTER TABLE npcs ADD COLUMN flag TEXT NOT NULL DEFAULT ''")
-        scols = {r["name"] for r in conn.execute("PRAGMA table_info(sessions)")}
-        if "hero_id" not in scols:
-            conn.execute("ALTER TABLE sessions ADD COLUMN hero_id TEXT")
 
 
-# ---------- NPCs ----------
+# ---------- the case: one per visitor ----------
 
-def list_npcs(conn, limit: int = 200, include_hidden: bool = False) -> list[dict]:
-    where = "" if include_hidden else "WHERE hidden = 0"
-    rows = conn.execute(f"SELECT * FROM npcs {where} ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
-    return [_npc(r) for r in rows]
-
-
-def get_npc(conn, npc_id: str, include_hidden: bool = False) -> dict | None:
-    r = conn.execute("SELECT * FROM npcs WHERE id = ?", (npc_id,)).fetchone()
-    if not r or (r["hidden"] and not include_hidden):
-        return None
-    return _npc(r)
-
-
-def set_hidden(conn, npc_id: str, hidden: bool, flag: str = "") -> bool:
-    cur = conn.execute("UPDATE npcs SET hidden = ?, flag = ? WHERE id = ?", (int(hidden), flag, npc_id))
-    return cur.rowcount > 0
-
-
-def delete_npc(conn, npc_id: str) -> bool:
-    conn.execute("DELETE FROM npc_secrets WHERE npc_id = ?", (npc_id,))
-    return conn.execute("DELETE FROM npcs WHERE id = ?", (npc_id,)).rowcount > 0
-
-
-def update_npc(conn, npc_id: str, sheet: dict) -> None:
-    """Rewrite a character's card and secret in place (used to refresh the hand-written residents)."""
-    secret = sheet.get("secret", "")
-    card = {k: v for k, v in sheet.items() if k not in ("secret", "svg")}
-    card["has_secret"] = bool(secret)
-    conn.execute("UPDATE npcs SET card = ? WHERE id = ?", (json.dumps(card, ensure_ascii=False), npc_id))
-    conn.execute("DELETE FROM npc_secrets WHERE npc_id = ?", (npc_id,))
-    if secret:
-        conn.execute("INSERT INTO npc_secrets (npc_id, secret) VALUES (?,?)", (npc_id, secret))
-
-
-def set_bonds(conn, npc_id: str, bonds: list) -> None:
-    r = conn.execute("SELECT card FROM npcs WHERE id = ?", (npc_id,)).fetchone()
-    if r:
-        card = json.loads(r["card"]); card["bonds"] = bonds
-        conn.execute("UPDATE npcs SET card = ? WHERE id = ?", (json.dumps(card, ensure_ascii=False), npc_id))
-
-
-def get_secret(conn, npc_id: str) -> str:
-    r = conn.execute("SELECT secret FROM npc_secrets WHERE npc_id = ?", (npc_id,)).fetchone()
-    return r["secret"] if r else ""
-
-
-def _npc(r) -> dict:
-    return {"id": r["id"], "created_at": r["created_at"], "creator_name": r["creator_name"],
-            "svg": r["svg"], "hidden": bool(r["hidden"]), "flag": r["flag"], **json.loads(r["card"])}
-
-
-def public_card(npc: dict) -> dict:
-    """What any visitor may see."""
-    out = {k: npc.get(k) for k in PUBLIC_FIELDS}
-    out.update(id=npc["id"], svg=npc.get("svg", ""), creator_name=npc.get("creator_name", ""),
-               created_at=npc.get("created_at"), has_secret=bool(npc.get("has_secret")),
-               region=world.region_for(npc), resident=bool(npc.get("seed_key")), seed_key=npc.get("seed_key"))
-    return out
-
-
-def insert_npc(conn, sheet: dict, creator_id: str, creator_name: str, hidden: bool = False, flag: str = "") -> str:
-    npc_id = new_id()
-    secret = sheet.get("secret", "")
-    card = {k: v for k, v in sheet.items() if k not in ("secret", "svg")}
-    card["has_secret"] = bool(secret)
-    conn.execute("INSERT INTO npcs (id, created_at, creator_id, creator_name, card, svg, hidden, flag) VALUES (?,?,?,?,?,?,?,?)",
-                 (npc_id, time.time(), creator_id, creator_name, json.dumps(card, ensure_ascii=False),
-                  sheet.get("svg", ""), int(hidden), flag))
-    if secret:
-        conn.execute("INSERT INTO npc_secrets (npc_id, secret) VALUES (?,?)", (npc_id, secret))
-    return npc_id
-
-
-# ---------- drafts ----------
-
-def create_draft(conn, visitor_id: str, sheet: dict) -> str:
-    draft_id = new_id()
-    conn.execute("INSERT INTO drafts (id, visitor_id, sheet, updated_at) VALUES (?,?,?,?)",
-                 (draft_id, visitor_id, json.dumps(sheet, ensure_ascii=False), time.time()))
-    return draft_id
-
-
-def get_draft(conn, draft_id: str, visitor_id: str) -> dict | None:
-    r = conn.execute("SELECT * FROM drafts WHERE id = ? AND visitor_id = ?", (draft_id, visitor_id)).fetchone()
+def get_game(conn, visitor_id: str) -> dict | None:
+    r = conn.execute("SELECT * FROM games WHERE visitor_id = ?", (visitor_id,)).fetchone()
     if not r:
         return None
-    return {"id": r["id"], "sheet": json.loads(r["sheet"]), "turns": json.loads(r["turns"]), "released": r["released"]}
+    return {"visitor_id": r["visitor_id"], "stage": r["stage"], "hero": json.loads(r["hero"]), "turns": json.loads(r["turns"]),
+            "found": json.loads(r["found"]), "attempts": r["attempts"], "ending": r["ending"]}
 
 
-def save_draft(conn, draft: dict) -> None:
-    conn.execute("UPDATE drafts SET sheet = ?, turns = ?, released = ?, updated_at = ? WHERE id = ?",
-                 (json.dumps(draft["sheet"], ensure_ascii=False), json.dumps(draft["turns"], ensure_ascii=False),
-                  draft.get("released"), time.time(), draft["id"]))
+def new_game(conn, visitor_id: str, sheet: dict) -> dict:
+    """Start again: any earlier case and its conversations are dropped."""
+    conn.execute("DELETE FROM talks WHERE visitor_id = ?", (visitor_id,))
+    conn.execute("DELETE FROM games WHERE visitor_id = ?", (visitor_id,))
+    conn.execute("INSERT INTO games (visitor_id, stage, hero, updated_at) VALUES (?,?,?,?)",
+                 (visitor_id, "creating", json.dumps(sheet, ensure_ascii=False), time.time()))
+    return get_game(conn, visitor_id)
 
 
-# ---------- the character a visitor plays ----------
-
-def set_player(conn, visitor_id: str, draft_id: str, npc_id: str) -> None:
-    conn.execute("INSERT INTO players (visitor_id, draft_id, npc_id, updated_at) VALUES (?,?,?,?) "
-                 "ON CONFLICT(visitor_id) DO UPDATE SET draft_id = excluded.draft_id, npc_id = excluded.npc_id, updated_at = excluded.updated_at",
-                 (visitor_id, draft_id, npc_id, time.time()))
+def save_game(conn, g: dict) -> None:
+    conn.execute("UPDATE games SET stage = ?, hero = ?, turns = ?, found = ?, attempts = ?, ending = ?, updated_at = ? WHERE visitor_id = ?",
+                 (g["stage"], json.dumps(g["hero"], ensure_ascii=False), json.dumps(g["turns"], ensure_ascii=False),
+                  json.dumps(g["found"]), g["attempts"], g["ending"], time.time(), g["visitor_id"]))
 
 
-def get_player(conn, visitor_id: str) -> dict | None:
-    r = conn.execute("SELECT * FROM players WHERE visitor_id = ?", (visitor_id,)).fetchone()
-    return {"draft_id": r["draft_id"], "npc_id": r["npc_id"]} if r else None
+def delete_game(conn, visitor_id: str) -> None:
+    conn.execute("DELETE FROM talks WHERE visitor_id = ?", (visitor_id,))
+    conn.execute("DELETE FROM games WHERE visitor_id = ?", (visitor_id,))
 
 
-def clear_player(conn, visitor_id: str) -> None:
-    conn.execute("DELETE FROM players WHERE visitor_id = ?", (visitor_id,))
+# ---------- conversations: one per (visitor, person), kept between visits ----------
+
+def find_talk(conn, visitor_id: str, npc_key: str) -> dict | None:
+    r = conn.execute("SELECT * FROM talks WHERE visitor_id = ? AND npc_key = ? ORDER BY updated_at DESC LIMIT 1",
+                     (visitor_id, npc_key)).fetchone()
+    return _talk(r) if r else None
 
 
-# ---------- conversation sessions: one per (visitor, their character, the NPC), kept between visits ----------
-
-def find_session(conn, visitor_id: str, hero_id: str, npc_id: str) -> dict | None:
-    r = conn.execute("SELECT * FROM sessions WHERE visitor_id = ? AND hero_id = ? AND npc_id = ? ORDER BY updated_at DESC LIMIT 1",
-                     (visitor_id, hero_id, npc_id)).fetchone()
-    return _session(r) if r else None
-
-
-def create_session(conn, visitor_id: str, trust: int, npc_id: str, hero_id: str) -> str:
-    sid = new_id()
-    conn.execute("INSERT INTO sessions (id, visitor_id, npc_id, hero_id, trust, updated_at) VALUES (?,?,?,?,?,?)",
-                 (sid, visitor_id, npc_id, hero_id, trust, time.time()))
-    return sid
+def create_talk(conn, visitor_id: str, npc_key: str, trust: int) -> dict:
+    tid = new_id()
+    conn.execute("INSERT INTO talks (id, visitor_id, npc_key, trust, updated_at) VALUES (?,?,?,?,?)",
+                 (tid, visitor_id, npc_key, trust, time.time()))
+    return get_talk(conn, tid, visitor_id)
 
 
-def get_session(conn, sid: str, visitor_id: str) -> dict | None:
-    r = conn.execute("SELECT * FROM sessions WHERE id = ? AND visitor_id = ?", (sid, visitor_id)).fetchone()
-    return _session(r) if r else None
+def get_talk(conn, tid: str, visitor_id: str) -> dict | None:
+    r = conn.execute("SELECT * FROM talks WHERE id = ? AND visitor_id = ?", (tid, visitor_id)).fetchone()
+    return _talk(r) if r else None
 
 
-def _session(r) -> dict:
-    return {"id": r["id"], "npc_id": r["npc_id"], "hero_id": r["hero_id"], "trust": r["trust"],
-            "revealed": bool(r["revealed"]), "turns": json.loads(r["turns"])}
+def _talk(r) -> dict:
+    return {"id": r["id"], "npc_key": r["npc_key"], "trust": r["trust"], "turns": json.loads(r["turns"])}
 
 
-def save_session(conn, s: dict) -> None:
-    conn.execute("UPDATE sessions SET trust = ?, revealed = ?, turns = ?, updated_at = ? WHERE id = ?",
-                 (s["trust"], int(s["revealed"]), json.dumps(s["turns"], ensure_ascii=False), time.time(), s["id"]))
+def save_talk(conn, t: dict) -> None:
+    conn.execute("UPDATE talks SET trust = ?, turns = ?, updated_at = ? WHERE id = ?",
+                 (t["trust"], json.dumps(t["turns"], ensure_ascii=False), time.time(), t["id"]))
