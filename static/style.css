@@ -494,3 +494,50 @@ button.stand:hover .tag { border-color: var(--gold); }
   .forge-bar { position: static; margin-bottom: 18px; }
   .traits { margin-top: 14px; }
 }
+
+/* ---------- the night: the clock, and Ray the game master ---------- */
+.clock { display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--gold-text); white-space: nowrap; padding: 3px 12px; border: 1px solid var(--gold-dim); border-radius: 99px; background: rgba(255, 255, 255, .04); }
+.clock .tick { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--gold-dim); display: inline-block; }
+.clock .tick.past { background: var(--gold-dim); }
+.clock .tick.now { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.clock span { margin-left: 6px; }
+.clock.late { border-color: var(--cin); color: #f0b4a4; }
+.clock.late .tick.now { background: var(--cin); box-shadow: 0 0 8px var(--cin); }
+.gmbtn { display: inline-flex; align-items: center; gap: 7px; padding-left: 4px; }
+.avatar.mini { width: 26px; height: 26px; border-width: 1.5px; }
+.avatar.mini img { width: 235%; left: -68%; top: -6%; }
+.gm-says { padding: 8px 12px; }
+.gm-line { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.gm-line b { color: #f0b4a4; font: 400 15px var(--f-brush); letter-spacing: .06em; }
+.gm-says .bi .en { font-size: 13px; }
+.gm-says .bi .zh { font-size: 12.5px; color: var(--gold-text); margin-top: 3px; }
+.gm-toast { position: fixed; z-index: 95; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(620px, calc(100vw - 24px)); padding: 12px 36px 12px 14px; display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; align-items: start; background: rgba(24, 18, 14, .96); border-color: var(--cin); }
+.gm-toast .avatar { width: 52px; height: 52px; }
+.gm-toast b { font: 400 18px var(--f-brush); color: #f0b4a4; letter-spacing: .05em; }
+.gm-toast .bi .en { font-size: 14px; }
+.gm-toast .bi .zh { font-size: 13.5px; color: var(--gold-text); margin-top: 4px; }
+.gm-toast .x { position: absolute; right: 6px; top: 4px; }
+.pl-by { font-size: 12.5px; color: var(--dim); margin: -2px 0 8px; }
+.gm-head { display: inline-flex; align-items: center; gap: 8px; }
+.gm-drawer { z-index: 76; }
+.gm-drawer .composer { border-top: 1px solid var(--gold-dim); }
+.gm-drawer .gm-quick { padding: 6px 12px 0; flex-wrap: wrap; overflow: visible; }
+.gm-drawer .note { padding: 4px 14px 0; }
+.gm-card { display: grid; grid-template-columns: minmax(0, 220px) 1fr; gap: 16px; align-items: center; padding: 14px; }
+.gm-art { background: linear-gradient(#e6eee6, #cfdacf); border-radius: 4px; overflow: hidden; }
+.gm-art img { width: 100%; display: block; }
+.gm-name { display: grid; gap: 4px; }
+.gm-name b { font: 400 34px/1.1 var(--f-brush); letter-spacing: .05em; color: var(--gold-text); }
+.gm-name span { font-size: 13px; color: var(--dim); }
+.how-steps .art img { object-position: 50% 14%; }
+@media (max-width: 900px) {
+  .topbar { flex-wrap: wrap; height: auto; min-height: var(--bar); padding-top: 6px; padding-bottom: 6px; row-gap: 6px; }
+  .gm-card { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .gm-art { width: min(240px, 70%); }
+}
+@media (max-width: 700px) {
+  .clock span { display: none; }
+  .gmbtn { font-size: 12px; }
+  .casebtn { font-size: 12px; }
+  .gm-toast { bottom: 10px; }
+}

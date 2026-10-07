@@ -1,4 +1,4 @@
-"""The mystery's rules and the visitor's journey through the API, with the model faked."""
+"""The story's rules and the visitor's night through the API, with the model faked."""
 import json
 import os
 import tempfile
@@ -11,162 +11,133 @@ os.environ["DEEPSEEK_API_KEY"] = "test-key"
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import agent, bilingual, case, db, game, main, prompts, roll  # noqa: E402
-
-HERO = {"name": "沈青 Shen Qing", "title": "Lantern Sword ||| 灯剑", "path": "orthodox", "temperament": "wry",
-        "art": "Lantern Cut: slices the flame, not the wick ||| 灯斩：断焰不断芯", "quirk": "Talks to his lantern ||| 对灯笼说话",
-        "beloved_name": "柳如烟 Liu Ruyan", "beloved_bond": "betrothed ||| 未婚妻", "beloved_token": "a jade hairpin ||| 一支玉簪",
-        "appearance": game.merge_appearance({}, {}, "shen")}
+from app import agent, bilingual, case, db, game, main, prompts  # noqa: E402
 
 
-def hero(**over):
-    return {**HERO, **over}
+# ---------- the story itself ----------
 
-
-# ---------- the case itself ----------
-
-def test_every_clue_has_exactly_one_holder_who_lists_it_as_a_topic():
+def test_every_clue_has_one_holder_who_lists_it_and_everything_is_bilingual():
     for cid, c in case.CLUES.items():
         if c["holder"]:
             assert cid in case.BY_KEY[c["holder"]]["topics"], cid
         assert bilingual.is_pair(c["text"]) and bilingual.is_pair(c["title"]), cid
     for key, person in case.BY_KEY.items():
         assert all(t in case.CLUES and case.CLUES[t]["holder"] == key for t in person["topics"]), key
-        for f in ("title", "sect", "location", "public", "greeting", "goal", "knowledge", "stance", "speech", "art"):
+        for f in ("title", "sect", "location", "public", "earns", "greeting", "goal", "knowledge", "stance", "speech", "art"):
             assert bilingual.is_pair(person[f]), (key, f)
         assert len(person["traits"]) == 3 and all(bilingual.is_pair(t) for t in person["traits"]), key
+    for text in (case.PROLOGUE, case.TRUTH_BI, case.DAWN, case.LOSS, *case.EVENTS.values(), *case.FAILURES.values()):
+        assert bilingual.is_pair(text)
+    assert all(bilingual.is_pair(v) for v in case._ENDINGS.values())
+    assert set(case._ENDINGS) == {(f, t) for f in case.FATES for t in range(3)}
+    assert bilingual.is_pair(case.HERO["title"]) and bilingual.is_pair(case.HERO["bio"])
 
 
-def test_enough_proof_exists_to_solve_it_without_the_hidden_champion():
-    visible = set(case.starting_cast())
-    kinds = {c["category"] for c in case.CLUES.values() if c["holder"] in visible and c["category"]}
-    assert len(kinds) >= case.PROOF_NEEDED + 1
-
-
-def test_every_clue_is_reachable_by_a_hero_who_earns_trust():
+def test_the_way_out_is_reachable_by_a_hero_who_earns_trust():
     for cid, c in case.CLUES.items():
         if c["holder"]:
             assert c["min_trust"] <= 7, cid                  # trust is capped at 10 and earned slowly
             assert all(n in case.CLUES for n in c["needs"]), cid
-    assert case.CLUES["voice"]["needs"] == ["wound"]
-
-
-def test_clues_are_written_in_the_heros_own_names():
-    text = case.fill(case.CLUES["charm"]["text"], hero())
-    assert "Liu Ruyan" in text and "柳如烟" in text and "jade hairpin" in text and "玉簪" in text and "{" not in text
-    assert bilingual.is_pair(case.prologue(hero())) and "Liu Ruyan" in case.prologue(hero())
-    assert bilingual.is_pair(case.truth(hero()))
-    for fate in case.FATES:
-        assert bilingual.is_pair(case.fallback_ending(fate, hero()))
+    kinds = {c["category"] for c in case.CLUES.values() if c["holder"]}
+    assert kinds == {"route", "cover", "truth", "leverage"}
+    # more than one way out and more than one way past the guards, so there is a real choice
+    assert len([c for c in case.CLUES.values() if c["category"] == "route"]) >= 2
+    assert len([c for c in case.CLUES.values() if c["category"] == "cover"]) >= 2
+    assert case.CLUES["brother"]["needs"] == ["ledger"] and case.CLUES["ledger"]["needs"] == ["envoy"]
 
 
 def test_trust_gates_clues_and_prerequisites():
-    assert case.can_reveal("wound", "bai", [], 4)[0] is False
-    assert case.can_reveal("wound", "bai", [], 5)[0] is True
-    assert case.can_reveal("voice", "lu", [], 9)[0] is False                  # needs the wound first, however much he trusts you
-    assert case.can_reveal("voice", "lu", ["wound"], 6)[0] is True
-    assert case.can_reveal("wound", "xie", [], 10)[0] is False                # not his to tell
-    assert case.can_reveal("nonsense", "xie", [], 10)[0] is False
-    assert case.clue_state("bai", ["wound"], 5) == {"ready": [], "waiting": ["herb"], "told": ["wound"]}
+    assert case.clue_state("xiaolu", ["official"], 2) == {"ready": [], "waiting": ["cellar", "potion", "bodies"], "told": []}
+    assert case.clue_state("xiaolu", ["official"], 3)["ready"] == ["cellar"]
+    assert case.clue_state("hu", ["official"], 9)["ready"] == ["envoy"]                       # the ledger waits for the envoy clue, however much he trusts you
+    assert case.clue_state("hu", ["official", "envoy"], 6) == {"ready": ["ledger"], "waiting": [], "told": ["envoy"]}
+    assert case.clue_state("wolf", ["official", "rota"], 6)["ready"] == ["wolfwants"]
 
 
-def test_first_impressions_depend_on_who_arrives():
-    same, _ = case.start_trust("su", hero(path="orthodox", temperament="blunt"))
-    opposed, _ = case.start_trust("su", hero(path="unorthodox", temperament="wry"))
-    assert same > opposed
-    assert case.start_trust("leng", hero(path="unorthodox", temperament="cool"))[0] > case.start_trust("leng", hero(path="orthodox", temperament="wry"))[0]
+def test_the_clock_runs_from_dusk_to_dawn():
+    assert case.clock(0)["en"] == "Dusk" and case.clock(case.DAWN_BEAT)["en"] == "Dawn" and len(case.CLOCK) == case.DAWN_BEAT + 1
+    assert case.event_for(2) and case.event_for(3) == "" and case.event_for(case.DAWN_BEAT) == case.DAWN
 
 
-def test_an_accusation_needs_the_right_person_and_three_kinds_of_proof():
-    found = ["official", "wound", "charm", "lantern", "herb"]
-    wrong = case.judge("leng", ["wound"], found)
-    assert wrong["verdict"] == "wrong" and "Leng" in wrong["feedback"]
-    thin = case.judge("yun", ["wound", "herb"], found)                       # how + why
-    assert thin["verdict"] == "unproven" and "1 more" in thin["feedback"]
-    assert case.judge("yun", ["wound", "herb", "charm"], found)["verdict"] == "correct"      # how + why + where
-    assert case.judge("yun", ["wound", "herb", "lantern"], found)["verdict"] == "correct"    # how + why + who
-    # clues the hero does not hold, and repeats, count for nothing
-    assert case.judge("yun", ["wound", "wound", "wound", "hand", "voice"], found)["verdict"] == "unproven"
-    assert case.judge("yun", ["official", "official", "official"], found)["verdict"] == "unproven"
+def test_a_plan_needs_a_route_and_cover_and_better_ends_come_from_truth_and_leverage():
+    found = ["official", "backgate", "rota", "badge", "ledger", "cellar"]
+    assert case.judge(["backgate"], found)["verdict"] == "fail" and "no way past" in case.judge([], found)["feedback"]
+    assert "nowhere to go" in case.judge(["rota"], found)["feedback"] and "guards are awake" in case.judge(["backgate"], found)["feedback"]
+    assert case.judge(["backgate", "rota"], found) == {"verdict": "go", "tier": 0, "kinds": ["cover", "route"], "feedback": ""}
+    assert case.judge(["backgate", "rota", "badge"], found)["tier"] == 1
+    assert case.judge(["backgate", "rota", "badge", "ledger"], found)["tier"] == 2
+    assert case.judge(["cellar", "rota"], found)["verdict"] == "go"                          # a different route works too
+    # clues she does not hold, and repeats, count for nothing
+    assert case.judge(["backgate", "backgate", "potion", "envoy"], found)["verdict"] == "fail"
+    assert case.judge(["official"], found)["verdict"] == "fail"
 
 
-def test_a_wrong_name_never_names_the_killer():
-    for key, line in case.REBUTTALS.items():
-        assert key != case.CULPRIT and "Yun" not in line and "云无涯" not in line
+def test_a_failed_plan_never_gives_the_answer_away():
+    for text in case.FAILURES.values():
+        assert not any(w in text for w in ("cellar", "back gate", "sleeping", "Tuo", "Xiao Lu", "lamp"))
+
+
+def test_first_impressions_depend_on_who_it_is():
+    assert game.start_trust("wolf")[0] < game.start_trust("tuo")[0]
+    assert bilingual.is_pair(game.start_trust("wolf")[1])
 
 
 # ---------- tools and prompts ----------
 
-def test_npc_prompt_knows_the_hero_but_holds_back_clue_text():
-    p = prompts.npc_system("bai", hero())
-    assert "Shen Qing" in p and "Liu Ruyan" in p and "orthodox" in p and "wry" in p
-    for cid in case.BY_KEY["bai"]["topics"]:
-        assert case.CLUES[cid]["text"].split("|||")[0].strip()[:30] not in p       # clue text is only given turn by turn, when trust allows
-    assert "walked up" in prompts.npc_state("bai", 3, [], hero(), opening=True)
-    assert "walked up" not in prompts.npc_state("bai", 3, [], hero())
+def test_the_prompt_knows_the_hero_and_holds_back_what_trust_has_not_unlocked():
+    p = prompts.npc_system("xiaolu")
+    assert "Qinghe" in p and "Xiao Lu" in p and "fighter outfit" in p
+    for cid in case.BY_KEY["xiaolu"]["topics"]:
+        assert case.CLUES[cid]["text"].split("|||")[0].strip()[:30] not in p
+    assert "walked up" in prompts.npc_state("xiaolu", 3, ["official"], 0, opening=True)
+    assert "walked up" not in prompts.npc_state("xiaolu", 3, ["official"], 0)
+    assert "Dusk" in prompts.npc_state("xiaolu", 3, ["official"], 0) and "Third watch" in prompts.npc_state("xiaolu", 3, ["official"], 3)
 
 
 def test_a_person_is_only_handed_the_facts_their_trust_allows():
-    low = prompts.npc_state("bai", 3, ["official"], hero())
-    assert "Not a fall" not in low and "not ready to tell" in low
-    mid = prompts.npc_state("bai", 5, ["official"], hero())                              # wound needs 5, herb needs 6
-    assert "Not a fall" in mid and "dewgrass" not in mid and "hold back" in mid
-    high = prompts.npc_state("bai", 6, ["official", "wound"], hero())
-    assert "dewgrass" in high and "Not a fall" in high                                   # told facts stay available, so the person stays consistent
-    assert "Liu Ruyan" in prompts.npc_state("su", 5, ["official"], hero())               # facts are written in the hero's names
-    assert "heard something heavy fall" not in prompts.npc_state("lu", 9, ["official"], hero())      # "voice" waits for the wound clue
-    assert "heard something heavy fall" in prompts.npc_state("lu", 9, ["official", "wound"], hero())
+    low = prompts.npc_state("xiaolu", 2, ["official"], 0)
+    assert "cellar to the old well" not in low and "not ready to tell" in low
+    mid = prompts.npc_state("xiaolu", 4, ["official"], 0)                                  # cellar needs 3, bodies 4, potion 5
+    assert "cellar to the old well" in mid and "travellers' bodies" in mid and "sleeping powder" not in mid and "hold back" in mid
+    high = prompts.npc_state("xiaolu", 5, ["official", "cellar"], 0)
+    assert "sleeping powder" in high and "cellar to the old well" in high                  # told facts stay available, so the person stays consistent
+    assert "stole a page" not in prompts.npc_state("hu", 9, ["official"], 0)               # the ledger waits for the envoy clue
+    assert "stole a page" in prompts.npc_state("hu", 9, ["official", "envoy"], 0)
+
+
+def test_no_prompt_contains_the_facts_its_clues_are_made_of():
+    # a person's background must not carry clue content, or the model says it without it being filed in the case file
+    forbidden = ["old well", "kitchen window", "sleeping powder", "hundred breaths", "ledger", "bronze badge", "General Han", "dozen riders", "Zhao agency",
+                 "back gate", "silver and a place", "unpaid"]
+    for key in case.BY_KEY:
+        p = prompts.npc_system(key).lower()
+        hits = [w for w in forbidden if w.lower() in p]
+        assert not hits, (key, hits)
 
 
 def test_trust_moves_at_most_two_per_reply_however_many_times_the_model_asks():
     talk = {"trust": 3}
-    turn = agent.Turn()
-    tools = {t.name: t for t in game.npc_tools(talk, turn)}
-    assert "reveal_clue" not in tools
+    tools = {t.name: t for t in game.npc_tools(talk, agent.Turn())}
+    assert set(tools) == {"out_of_world", "adjust_trust"}
     for _ in range(4):
         agent._call(tools["adjust_trust"], '{"delta": 1, "reason": "x"}')
     assert talk["trust"] == 5
     agent._call(tools["adjust_trust"], '{"delta": 9, "reason": "x"}')
     assert talk["trust"] == 5
     agent._call(tools["adjust_trust"], '{"delta": -9, "reason": "x"}')
-    assert talk["trust"] == 3                                                            # a rude reply can take it back by 2 more in the other direction
+    assert talk["trust"] == 3
 
 
-def test_no_witness_prompt_contains_the_facts_their_clues_are_made_of():
-    # a person's background must not carry clue content, or the model says it without reveal_clue and the case file never records it
-    forbidden = ["dewgrass", "burnt sugar", "gardener", "side gate", "azure sash", "forgive me", "soft-soled", "treasury", "Pavilion silver", "nine thin", "seven of the nine"]
-    for key in ("xie", "su", "bai", "leng", "lu"):
-        p = prompts.npc_system(key, hero()).lower()
-        assert not [w for w in forbidden if w.lower() in p], (key, [w for w in forbidden if w.lower() in p])
+def test_the_game_master_only_knows_what_she_has_learned():
+    sys = prompts.gm_system(["official"], 0)
+    assert "barred" in sys and "Ray" in sys and "Past the guards" in sys                     # she still lacks a route and cover
+    assert "sleeping powder" not in sys and "stole a page" not in sys and "General Han" not in sys
+    sys2 = prompts.gm_system(["official", "backgate", "rota"], 3)
+    assert "lamp in the kitchen window" in sys2 and "none" in sys2.split("Kinds of help she still lacks:")[1].split(".")[0]
+    assert case.GM["appearance"]["weapon"] == "fan" and bilingual.is_pair(case.GM["title"])
 
 
-def test_the_hero_sheet_is_built_and_edited_within_the_rules():
-    s = game.blank_sheet()
-    assert set(game.missing(s)) == set(game.REQUIRED)
-    rejected = []
-    game.apply_fields(s, {"path": "evil", "temperament": "gentle", "quirk": "only English"}, rejected)
-    assert set(rejected) == {"quirk", "path"}
-    assert s["temperament"] == "gentle" and s["path"] == ""
-    assert game.edit_field(None, "m", s, "path", "neutral") == "" and s["path"] == "neutral"
-    assert game.edit_field(None, "m", s, "path", "evil") != ""
-    assert game.edit_field(None, "m", s, "title", "Lone Wolf ||| 孤狼") == "" and s["title"] == "Lone Wolf ||| 孤狼"
-    assert game.edit_field(None, "m", s, "bogus", "x") != ""
-
-    class T:
-        def __init__(self):
-            self.chat = NS(completions=NS(create=lambda **k: NS(choices=[NS(message=NS(content="夜行者"))])))
-    assert game.edit_field(T(), "m", s, "quirk", "Walks at night") == ""                      # one language is completed by translation
-    assert bilingual.is_pair(s["quirk"]) and s["quirk"].startswith("Walks at night")
-
-
-def test_dice_make_complete_varied_heroes():
-    seeds = [roll.random_seed() for _ in range(40)]
-    assert len({s["summary"] for s in seeds}) > 25
-    assert all(s["path"] in game.PATHS and s["temperament"] in game.TEMPERAMENTS and s["summary_zh"] for s in seeds)
-    assert "murdered" in seeds[0]["summary"] and "path" in roll.roll_message(seeds[0])
-
-
-# ---------- the journey through the API ----------
+# ---------- the night through the API ----------
 
 def chunk(content=None, tool=None):
     tcs = None
@@ -176,7 +147,7 @@ def chunk(content=None, tool=None):
 
 
 class FakeLLM:
-    """Streams scripted rounds, answers translation and the ending, and records what it was sent."""
+    """Streams scripted rounds, answers translation, the referee and the ending, and records what it was sent."""
     def __init__(self):
         self.rounds, self.requests, self.told = [], [], []
         self.chat = NS(completions=NS(create=self._create))
@@ -189,7 +160,7 @@ class FakeLLM:
         if system.startswith("You referee"):
             return NS(choices=[NS(message=NS(content=json.dumps(self.told)))])
         if "final scene" in kw["messages"][-1]["content"]:
-            return NS(choices=[NS(message=NS(content="He bows. 'It was I.'\n|||\n他躬身：“是我。”"))])
+            return NS(choices=[NS(message=NS(content="The gate opens. 'Go,' says Tuo.\n|||\n门开了。“走吧，”老驼说。"))])
         return NS(choices=[NS(message=NS(content="翻译后的话" if "into Chinese" in system else "Translated words"))])
 
 
@@ -207,148 +178,143 @@ def sse_events(r):
     return [json.loads(x[5:]) for x in r.text.split("\n\n") if x.startswith("data:")]
 
 
-def start(api, sheet=None):
-    api.post("/api/game/new")
-    with db.session() as conn:
-        g = db.get_game(conn, api.cookies.get("vid"))
-        g["hero"] = sheet or hero()
-        db.save_game(conn, g)
+def start(api):
     return api.post("/api/game/start")
 
 
-def give(api, *clues):
+def give(api, *clues, **fields):
     with db.session() as conn:
-        g = db.get_game(conn, api.cookies.get("vid"))
+        g = db.get_play(conn, api.cookies.get("vid"))
         g["found"] += list(clues)
-        db.save_game(conn, g)
+        g.update(fields)
+        db.save_play(conn, g)
 
 
-def test_the_landing_page_can_describe_the_case_without_spoiling_it(api):
+def talk(api, key):
+    return api.post("/api/talks", json={"npc": key}).json()
+
+
+def say(api, tid, text="hello"):
+    return sse_events(api.post(f"/api/talks/{tid}/chat", json={"message": text}))
+
+
+def test_the_landing_page_can_describe_the_story_without_spoiling_it(api):
     d = api.get("/api/case").json()
-    keys = {c["key"] for c in d["cast"]}
-    assert keys == set(case.starting_cast()) and "lu" not in keys
-    text = json.dumps(d, ensure_ascii=False)
-    for secret in ("dewgrass", "silver-vein", "nine-layer", "truth", "stance"):
-        assert secret not in text
+    assert {c["key"] for c in d["cast"]} == set(case.BY_KEY) and d["hero"]["name"].startswith("青禾") and d["gm"]["name"] == "说书人 Ray"
+    text = json.dumps(d, ensure_ascii=False).replace(d["prologue"].replace('"', '\\"'), "")
+    for secret in ("sleeping powder", "General Han", "stole a page", "stance", "trust0", "PRIVATE"):
+        assert secret not in text, secret
 
 
-def test_you_cannot_start_until_the_hero_is_complete_and_edits_are_checked(api):
+def test_starting_the_night_gives_the_barred_doors_and_the_cast(api):
     assert api.get("/api/game").json() == {"game": None}
-    assert api.post("/api/game/start").status_code == 409
-    api.post("/api/game/new")
-    assert api.post("/api/game/start").status_code == 400                       # nothing filled in yet
-    r = api.post("/api/game/edit", json={"field": "path", "value": "neutral"})
-    assert r.status_code == 200 and r.json()["hero"]["path"] == "neutral"
-    assert api.post("/api/game/edit", json={"field": "path", "value": "evil"}).status_code == 400
-    r = api.post("/api/game/edit", json={"field": "title", "value": "Lone Wolf"})
-    assert r.status_code == 200 and bilingual.is_pair(r.json()["hero"]["title"])
-    s = api.get("/api/game").json()["game"]
-    assert s["stage"] == "creating" and "path" not in s["missing"] and "title" not in s["missing"]
+    assert api.post("/api/talks", json={"npc": "tuo"}).status_code == 409
+    g = start(api).json()["game"]
+    assert g["stage"] == "playing" and [c["id"] for c in g["found"]] == ["official"] and g["clock"]["en"] == "Dusk"
+    assert {c["key"] for c in g["cast"]} == set(case.BY_KEY) and "truth" not in g and g["events"] == []
+    assert "Qinghe" in g["hero"]["name"] or "青禾" in g["hero"]["name"]
 
 
-def test_starting_the_story_gives_the_official_account_and_the_cast(api):
-    r = start(api)
-    assert r.status_code == 200
-    g = r.json()["game"]
-    assert g["stage"] == "playing" and [c["id"] for c in g["found"]] == ["official"] and g["attempts"] == 3
-    assert "Liu Ruyan" in g["found"][0]["text"] and "Liu Ruyan" in g["prologue"]
-    assert {c["key"] for c in g["cast"]} == set(case.starting_cast())
-    assert "truth" not in g
-    assert api.post("/api/game/edit", json={"field": "path", "value": "neutral"}).status_code == 409      # the hero is fixed now
-
-
-def test_a_conversation_is_tailored_and_a_told_clue_reaches_the_case_file(api):
+def test_a_told_clue_reaches_the_case_file_but_only_if_it_was_offered(api):
     start(api)
-    t = api.post("/api/talks", json={"npc": "bai"}).json()
-    assert t["npc"]["key"] == "bai" and t["fresh"] and t["total"] == 2
-    assert api.post("/api/talks", json={"npc": "lu"}).status_code == 404                    # not found yet
+    t = talk(api, "xiaolu")
+    assert t["npc"]["key"] == "xiaolu" and t["fresh"] and t["total"] == 3 and t["trust"] == 3
+    assert api.post("/api/talks", json={"npc": "nobody"}).status_code == 404
     api.post(f"/api/talks/{t['id']}/open")
-    sys_prompt = api.llm.requests[-1]["messages"][0]["content"]
-    assert "Shen Qing" in sys_prompt and "Bai Suxin" in sys_prompt
-
-    # trust 3: nothing is ready, so even a referee that says "told" cannot file a clue that was never offered
-    api.llm.told = ["wound", "herb"]
-    evs = sse_events(api.post(f"/api/talks/{t['id']}/chat", json={"message": "How did she die?"}))
-    assert not [e for e in evs if e["type"] == "clue"]
-    assert [c["id"] for c in api.get("/api/game").json()["game"]["found"]] == ["official"]
-
-    # earn trust (two points in one reply), and next turn the wound is on offer and gets filed
-    api.llm.rounds = [[chunk(tool={"id": "c2", "name": "adjust_trust", "args": '{"delta": 2, "reason": "kind"}'})],
-                      [chunk("Fine. ||| 好吧。")]]
-    sse_events(api.post(f"/api/talks/{t['id']}/chat", json={"message": "Please. She was everything to me."}))
-    api.llm.told = ["wound", "herb"]                      # herb needs trust 6: it was never offered, so it is not filed
-    api.llm.rounds = [[chunk("One narrow thrust, ringed by nine thin scores. ||| 一道窄窄的刺伤，周围九道细痕。")]]
-    evs = sse_events(api.post(f"/api/talks/{t['id']}/chat", json={"message": "What did you see?"}))
-    assert [e["clue"]["id"] for e in evs if e["type"] == "clue"] == ["wound"]
+    assert "Qinghe" in api.llm.requests[-1]["messages"][0]["content"]
+    api.llm.told = ["cellar", "potion", "bodies"]          # at trust 3 only the cellar is on offer, so only it can be filed
+    api.llm.rounds = [[chunk("There's a passage to the well. ||| 地窖里有条通到井边的暗道。")]]
+    evs = say(api, t["id"], "Please, I need a way out.")
+    assert [e["clue"]["id"] for e in evs if e["type"] == "clue"] == ["cellar"]
     s = api.get("/api/game").json()["game"]
-    assert [c["id"] for c in s["found"]] == ["official", "wound"]
-    assert next(c for c in s["cast"] if c["key"] == "bai")["clues_told"] == 1
-    # the facts were offered to the model in the system turn, not in its history
-    offered = api.llm.requests[-2]["messages"]
-    assert any("Not a fall" in m["content"] for m in offered if m["role"] == "system")
+    assert [c["id"] for c in s["found"]] == ["official", "cellar"]
+    assert next(c for c in s["cast"] if c["key"] == "xiaolu")["clues_told"] == 1
+    offered = [m["content"] for m in api.llm.requests[-2]["messages"] if m["role"] == "system"]
+    assert any("cellar to the old well" in m for m in offered) and not any("sleeping powder" in m for m in offered)
 
 
 def test_stray_markup_never_reaches_the_page_or_the_history(api):
     start(api)
-    t = api.post("/api/talks", json={"npc": "xie"}).json()
-    api.llm.rounds = [[chunk('Hm. <reveal_clue id="footsteps" /> I heard nothing. ||| 嗯。<adjust_trust delta="1"/>我什么也没听见。')]]
-    evs = sse_events(api.post(f"/api/talks/{t['id']}/chat", json={"message": "Hello"}))
-    done = [e for e in evs if e["type"] == "done"][0]["text"]
-    assert "<" not in done and "heard nothing" in done and "没听见" in done
+    t = talk(api, "tuo")
+    api.llm.rounds = [[chunk('Hm. <reveal_clue id="backgate" /> I mind camels. ||| 嗯。<adjust_trust delta="1"/>我只管骆驼。')]]
+    done = [e for e in say(api, t["id"]) if e["type"] == "done"][0]["text"]
+    assert "<" not in done and "camels" in done and "骆驼" in done
 
 
-def test_the_hidden_champion_appears_only_after_someone_points_to_him(api):
+def test_every_seventh_thing_she_says_spends_an_hour_and_the_game_master_announces_it(api):
     start(api)
-    assert "lu" not in {c["key"] for c in api.get("/api/game").json()["game"]["cast"]}
-    give(api, "lu_lead")
-    assert "lu" in {c["key"] for c in api.get("/api/game").json()["game"]["cast"]}
-    assert api.post("/api/talks", json={"npc": "lu"}).status_code == 200
+    t = talk(api, "tuo")
+    seen, gm = [], []
+    for i in range(14):
+        evs = say(api, t["id"], f"line {i}")
+        seen += [e["clock"]["en"] for e in evs if e["type"] == "clock"]
+        gm += [e for e in evs if e["type"] == "gm"]
+    assert seen == ["First watch", "Second watch"]
+    assert [e["beat"] for e in gm] == [2] and "scream" in gm[0]["text"]
+    s = api.get("/api/game").json()["game"]
+    assert s["clock"]["beat"] == 2 and [e["beat"] for e in s["events"]] == [2]
 
 
-def test_accusing_and_the_ending(api):
+def test_dawn_ends_the_story_and_tells_the_truth(api):
     start(api)
-    give(api, "wound", "herb", "charm")
-    r = api.post("/api/accuse", json={"suspect": "leng", "evidence": ["wound"]}).json()
-    assert r["verdict"] == "wrong" and r["attempts"] == 2 and r["stage"] == "playing"
-    r = api.post("/api/accuse", json={"suspect": "yun", "evidence": ["wound"]}).json()
-    assert r["verdict"] == "unproven" and r["attempts"] == 1
-    assert api.post("/api/ending", json={"fate": "mercy"}).status_code == 409           # not accused yet
-    r = api.post("/api/accuse", json={"suspect": "yun", "evidence": ["wound", "herb", "charm"]}).json()
-    assert r["verdict"] == "correct" and r["stage"] == "accused" and r["attempts"] == 1
+    t = talk(api, "tuo")
+    give(api, beat=case.DAWN_BEAT - 1, msgs=case.MSGS_PER_BEAT - 1)
+    evs = say(api, t["id"], "one last thing")
+    assert [e["stage"] for e in evs if e["type"] == "clock"] == ["lost"]
+    s = api.get("/api/game").json()["game"]
+    assert s["stage"] == "lost" and "Madam Shuang" in s["truth"] and "霜四娘" in s["truth"]
+    assert api.post("/api/talks", json={"npc": "tuo"}).status_code == 409
+    assert api.post("/api/move", json={"evidence": []}).status_code == 409
+
+
+def test_the_game_master_answers_and_costs_no_time(api):
+    start(api)
+    api.llm.rounds = [[chunk("Try Old Tuo. ||| 去找老驼吧。")]]
+    evs = sse_events(api.post("/api/gm/chat", json={"message": "What should I do?"}))
+    assert [e for e in evs if e["type"] == "done"][0]["text"].startswith("Try Old Tuo")
+    sys = [r for r in api.llm.requests if r.get("stream")][-1]["messages"][0]["content"]
+    assert "Ray" in sys and "barred" in sys and "sleeping powder" not in sys
+    s = api.get("/api/game").json()["game"]
+    assert s["clock"]["beat"] == 0 and len(s["gm_turns"]) == 2
+
+
+def test_a_failed_move_costs_two_hours_and_a_good_one_leads_to_the_ending(api):
+    start(api)
+    give(api, "backgate", "rota", "badge")
+    r = api.post("/api/move", json={"evidence": ["backgate"]}).json()
+    assert r["verdict"] == "fail" and r["clock"]["beat"] == 2 and r["stage"] == "playing" and [g["beat"] for g in r["gm"]] == [2]
+    assert api.post("/api/ending", json={"fate": "burn"}).status_code == 409                # no escape yet
+    r = api.post("/api/move", json={"evidence": ["backgate", "rota", "badge"]}).json()
+    assert r["verdict"] == "go" and r["tier"] == 1 and r["stage"] == "moving"
     assert api.post("/api/ending", json={"fate": "nonsense"}).status_code == 400
-    g = api.post("/api/ending", json={"fate": "mercy"}).json()["game"]
-    assert g["stage"] == "solved" and bilingual.is_pair(g["ending"]) and "It was I" in g["ending"]
+    g = api.post("/api/ending", json={"fate": "capital"}).json()["game"]
+    assert g["stage"] == "solved" and "Go," in g["ending"] and bilingual.is_pair(g["ending"])
+
+
+def test_the_move_can_fail_the_night(api):
+    start(api)
+    give(api, beat=5)
+    r = api.post("/api/move", json={"evidence": []}).json()
+    assert r["stage"] == "lost" and r["game"]["stage"] == "lost" and "truth" in r["game"]
 
 
 def test_the_ending_falls_back_to_written_text_when_the_ai_fails(api, monkeypatch):
     start(api)
-    with db.session() as conn:
-        g = db.get_game(conn, api.cookies.get("vid"))
-        g.update(stage="accused")
-        db.save_game(conn, g)
+    give(api, stage="moving", tier=2)
 
     def broken():
         raise main.HTTPException(503, "no ai")
     monkeypatch.setattr(main, "llm", broken)
-    g = api.post("/api/ending", json={"fate": "justice"}).json()["game"]
-    assert g["stage"] == "solved" and "Liu Ruyan" in g["ending"] and bilingual.is_pair(g["ending"])
+    g = api.post("/api/ending", json={"fate": "trade"}).json()["game"]
+    assert g["stage"] == "solved" and "ledger" in g["ending"] and bilingual.is_pair(g["ending"])
 
 
-def test_three_wrong_accusations_end_the_case_and_reveal_the_truth(api):
-    start(api)
-    for _ in range(3):
-        r = api.post("/api/accuse", json={"suspect": "su", "evidence": []}).json()
-    assert r["stage"] == "lost" and r["attempts"] == 0 and "Yun Wuya" in r["truth"]
-    assert api.post("/api/accuse", json={"suspect": "yun", "evidence": []}).status_code == 409
-    s = api.get("/api/game").json()["game"]
-    assert s["stage"] == "lost" and "Yun Wuya" in s["truth"]
-    assert api.post("/api/game/reset").status_code == 200 and api.get("/api/game").json() == {"game": None}
-
-
-def test_one_visitors_case_is_invisible_to_another(api):
+def test_one_visitors_night_is_invisible_to_another(api):
     start(api)
     other = TestClient(main.app)
     assert other.get("/api/game").json() == {"game": None}
-    assert other.post("/api/accuse", json={"suspect": "yun", "evidence": []}).status_code == 409
-    t = api.post("/api/talks", json={"npc": "xie"}).json()
+    assert other.post("/api/move", json={"evidence": []}).status_code == 409
+    t = talk(api, "tuo")
     assert other.post(f"/api/talks/{t['id']}/chat", json={"message": "hi"}).status_code == 404
+    assert other.post("/api/gm/chat", json={"message": "hi"}).status_code == 409
+    assert api.post("/api/game/reset").status_code == 200 and api.get("/api/game").json() == {"game": None}

@@ -25,6 +25,7 @@
     shaolin:  { sky: ["#f3e3c4", "#f8f0dc"], ink: "#6c5a46", sun: [.74, .26, .06, "#d9503a"], ridges: [[.62, .13, .26]], p: "autumn" },
     shu:      { sky: ["#eaf2dc", "#f4f6e6"], ink: "#55785f", sun: null, ridges: [[.62, .15, .28]], p: "leaf" },
     dali:     { sky: ["#e3eef6", "#f4f6f2"], ink: "#5f7e96", sun: [.8, .24, .05, "#f0b890"], ridges: [[.5, .22, .32], [.62, .13, .4]], water: .72, p: "petal" },
+    inn:      { sky: ["#f2d2a4", "#f8e6c6"], ink: "#8a6a45", sun: [.24, .34, .09, "#d9603a"], ridges: [[.66, .1, .22], [.76, .08, .3]], p: "dust" },
     border:   { sky: ["#ead9cb", "#f3ebe2"], ink: "#6d5f58", sun: [.7, .3, .07, "#c9553a"], ridges: [[.68, .06, .2]], p: "dust" },
   };
 
@@ -222,6 +223,19 @@
       c.strokeStyle = "rgba(90,100,110,.45)"; c.lineWidth = 1.2; for (const px of [.3, .44, .18]) { c.beginPath(); c.moveTo(W * px - 20 * k, H * .66); c.lineTo(W * px + 20 * k, H * .66); c.stroke(); }
       boat(c, W * .68, H * .84, k * 1.3, "#3e3a34", .85, true);
     },
+    inn(c, W, H, R) {
+      const k = Math.min(W, H) / 560;
+      hall(c, W * .62, H * .66, k * 2, "#4a3626", .92, "#6a4630");
+      c.fillStyle = "rgba(60,40,26,.9)"; c.fillRect(W * .62 + 78 * k, H * .66 - 150 * k, 3 * k, 120 * k);      // the flag on its pole
+      c.fillStyle = "rgba(170,50,36,.9)"; c.beginPath(); c.moveTo(W * .62 + 81 * k, H * .66 - 148 * k); c.lineTo(W * .62 + 126 * k, H * .66 - 138 * k); c.lineTo(W * .62 + 81 * k, H * .66 - 124 * k); c.fill();
+      for (const [dx, dy] of [[-52, -52], [-4, -52], [44, -52], [-28, -96], [24, -96]]) {                      // lanterns glowing in the windows
+        const x = W * .62 + dx * k * 1.8, y = H * .66 + dy * k * 1.8, g = c.createRadialGradient(x, y, 0, x, y, 24 * k);
+        g.addColorStop(0, "rgba(255,196,90,.9)"); g.addColorStop(1, "rgba(255,150,60,0)"); c.fillStyle = g; c.fillRect(x - 26 * k, y - 26 * k, 52 * k, 52 * k);
+      }
+      for (let i = 0; i < 9; i++) { c.fillStyle = "rgba(74,54,38,.7)"; c.fillRect(W * (.05 + i * .045), H * .75 - 14 * k, 3 * k, 18 * k); }   // the stable fence
+      c.strokeStyle = "rgba(74,54,38,.7)"; c.lineWidth = 2 * k; c.beginPath(); c.moveTo(W * .05, H * .75 - 8 * k); c.lineTo(W * .41, H * .75 - 8 * k); c.stroke();
+      c.fillStyle = "rgba(74,54,38,.78)"; for (const x of [.14, .24]) { c.beginPath(); c.ellipse(W * x, H * .76, 20 * k, 11 * k, 0, 0, 6.29); c.fill(); c.fillRect(W * x - 2 * k, H * .76 - 30 * k, 4 * k, 26 * k); c.beginPath(); c.arc(W * x - 1 * k, H * .76 - 32 * k, 4 * k, 0, 6.29); c.fill(); }   // camels
+    },
     border(c, W, H, R) {
       const k = Math.min(W, H) / 560;
       tower(c, W * .72, H * .72, k * 1.5, "#4a3e38", .85); tower(c, W * .2, H * .74, k, "#5a4c44", .55);
@@ -271,6 +285,7 @@
       draw(performance.now());
     }
     function draw(now) {
+      if (!L) return;                      // the first frame can arrive before the first size is known
       const t = (now - t0) / 1000;
       ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(L.far, 0, 0);

@@ -1,16 +1,17 @@
 # 江湖录 Jianghu Chronicles
 
-A Song-dynasty wuxia murder mystery where every suspect is an AI agent. **剑崖疑案 · The Sword Cliff Murder.**
+**人在江湖，身不由己.** A Song-dynasty wuxia story game where every character is an AI and a game master runs the night.
 
-**The story.** You make a hero (one sentence, or **Roll one**) and the Storyteller agent writes five things that
-matter: your **path** (正 orthodox / 邪 unorthodox / 中 neutral), your **manner**, your **signature move**, a **quirk**, and
-**the person you love**, who was found dead below the Sword Cliff of Mount Hua three days ago. Before the story
-starts you see every trait on a review screen and can change each one by hand. Then you climb the mountain and
-question six people: an innkeeper who counts footsteps, a proud young swordswoman, a healer bound by an oath,
-a hired blade from the frontier, a champion in hiding, and the Master of Cloud Sword Pavilion. Every one is an AI
-with secrets, and every one is told exactly who is in front of them, so your path and manner change the welcome you get.
-You earn trust, collect clues in a **case file**, and **name the killer** with proof. The ending is written for
-the choice you make about him. Fighting is not in this version.
+**黑沙客栈 · The Black Sand Inn.** Qinghe, a courier's daughter of seventeen, is carrying her dead father's last job: a sealed letter
+sewn into her saddle. A sandstorm drives her into a desert inn that is not what it seems, like *New Dragon Gate Inn*. The keeper smiles,
+the door is barred, and every person in the hall is trapped by something too: the keeper by a hostage brother, the camel-keeper by a
+granddaughter, the door guard by unpaid silver and shame, a sick scholar by his duty as a court inspector, a merchant by his caravan.
+You play Qinghe: talk to them, learn what each one needs, earn their trust, and find a **way out** and a **way past the guards** before dawn.
+
+**Ray is the game master.** Ray (the author) narrates in the voice of a teahouse storyteller, has a portrait, opens the story, fires the events
+of the night (a scream upstairs, the door barred, camel bells on the pass), and can be asked anything at any time: what's going on, who
+someone is, or for a nudge. He only knows what Qinghe has learned, so he can't spoil the story. Like a tabletop DM, he will also run
+combat in a later chapter: the player says what she does, he decides what happens. Fighting is not in this version.
 
 The AI runs on [DeepSeek](https://api-docs.deepseek.com/) through its OpenAI-compatible API.
 
@@ -25,93 +26,73 @@ copy .env.example .env      # then put your key in DEEPSEEK_API_KEY (or set it a
 
 Open http://localhost:8000. Run the tests (no API calls, no cost) with `.\.venv\Scripts\python.exe -m pytest -q`.
 
-## The mystery is written in code, not left to the AI
+## The story is written in code, not left to the AI
 
-The whole case lives in `app/case.py`: the truth, the cast, 14 clues (plus the official story), who holds each, and the rules for solving it.
-The AI only plays the people.
+The whole plot lives in `app/case.py`: the truth, six people, 14 clues, who holds each, the clock, the events, and the rules for escaping.
+The AI only plays the people and Ray.
 
-- **Fixed truth.** The killer, method, motive and clues are data. A wrong accusation gets a rebuttal that never names the killer.
-- **Facts are handed out, not remembered.** A character's background carries feelings and loyalties but none of the case facts
-  (a test checks this). Each turn the server tells that character only the clues their trust and the clue's prerequisites allow
-  (`case.clue_state`), written in the hero's own names. Facts above the trust line are not in the prompt at all, so they can't leak.
-- **The server, not the model, files clues.** After each reply a small referee call decides which offered clues the reply actually
-  told (`main._credit`) and adds them to the case file. Clues the character was not offered can't be filed, whatever the referee says.
+- **Facts are handed out, not remembered.** A person's background holds feelings, loyalties and a public face but none of the plot facts
+  (a test checks this). Each turn the server tells that person only the clues their trust and the clue's prerequisites allow
+  (`case.clue_state`). Facts above the trust line are not in the prompt at all, so they can't leak.
+- **The server files clues, not the model.** After each reply a small referee call decides which offered clues the reply actually told
+  (`main._credit`) and adds them to the clue list. Clues that were not offered can't be filed.
 - **Trust moves at most ±2 per reply**, however many times the model asks (`game.npc_tools`).
-- **Solving.** Accuse a suspect and lay out clues. Each clue is worth one kind of proof (how, where, who was there, why, who it
-  could not be). Naming the killer needs at least **three kinds**; three accusations, then the trail goes cold and the truth is told.
-- **Gates between people.** Lu Chenzhou, the champion, is hidden until another character tells you where he is, and his key
-  clue needs another clue first.
+- **The clock is the deadline.** Every seventh thing Qinghe says, an hour of the night passes (`MSGS_PER_BEAT`), and Ray announces the
+  night's events. At dawn the story is lost and the truth is told. Asking Ray costs no time.
+- **The move.** To escape she must hold a **way out** (route) and a **way past the guards** (cover). Knowing who is who (truth) and
+  holding something over the keeper (leverage) improve the ending. A plan that fails costs two hours. Then she chooses what to do with
+  the letter (deliver it, burn it, or trade it), and Ray tells the ending for the way she prepared. If the AI is unavailable, written
+  endings are used.
+- **Gates between people.** Some clues need another clue first (the ledger needs the envoy; the keeper's brother needs the ledger).
 
 ## How it fits together
 
 ```
-static/index.html      the screens: landing page, create your hero, map, the mountain, a conversation; case file, accusation, ending
+static/index.html      the screens: landing page, the inn, a conversation; clues, Ray's drawer, the move, the ending
 static/style.css       the game interface: lacquer panels and gold frames over painted scenes
-static/app.js          the journey: screens, Storyteller chat, trait review and editing, conversations, case file, accusation
+static/app.js          the journey: screens, clock, conversations, clues, Ray, the move, the ending
 static/portrait.js     painted character portraits (soft Jin Yong game-art style), with a cutout mode
-static/scenes.js       painted ink-wash backdrops for each of the twelve regions
-static/map.js          the ink-wash map of Song China with a seal for each region
-static/hero.js         the moonlit painting on the landing page
-app/case.py            THE MYSTERY: truth, cast, clues, proof rules, prologue and endings
-app/main.py            FastAPI routes; streams replies to the page as server-sent events; the clue referee
+static/scenes.js       painted backdrops, including the desert inn at dusk
+app/case.py            THE STORY: truth, cast, clues, clock, events, escape rules, prologue and endings
+app/main.py            FastAPI routes; streams replies as server-sent events; the clue referee; the clock; Ray
 app/agent.py           streaming tool-use loop for DeepSeek (OpenAI chat format)
-app/game.py            the hero sheet (five traits), editing rules, and the tools each agent may call
-app/prompts.py         world bible, era rules, Storyteller and per-person instructions, the ending prompt
-app/roll.py            the dice: random role, habit, path, manner and beloved for "Roll one" (English and Chinese)
-app/world.py           the twelve regions on the map; only Mount Hua is open
+app/game.py            appearance options, first impressions, what people can see of Qinghe, and the tools they may call
+app/prompts.py         world bible, era rules, per-person instructions, Ray's instructions, the ending prompt
 app/bilingual.py       the "English ||| 中文" format, tidying replies, and the fallback translation
-app/db.py              SQLite: games (one per visitor) and talks (one per visitor and person)
+app/db.py              SQLite: plays (one per visitor) and talks (one per visitor and person)
 app/ratelimit.py       per-visitor and daily caps on model calls
 ```
 
-**Prompt layout for caching.** Each request is `[system: world + era rules + this person + this hero] [history]
-[system: trust and the facts they may tell now + reply language] [user message]`. The first part is identical every turn,
+**Prompt layout for caching.** Each request is `[system: world + era rules + this person + Qinghe] [history]
+[system: time, trust and the facts they may tell now + reply language] [user message]`. The first part is identical every turn,
 so DeepSeek's automatic prefix cache bills it at the cache-hit rate.
 
-**One line in, a whole hero out.** The Storyteller fills every field in a single `set_fields` call, so a visitor never
-fills in a form. On the review screen each trait has an edit button: the path and manner are pickers, and text is
-written in either language and completed by a translation call (`game.edit_field`). The hero is fixed once the story starts.
+**Portraits in the soft painted style of Jin Yong game art.** DeepSeek's API doesn't generate images, so each character is a set of
+about 17 appearance options (hair, eyes, outfit, weapon, aura and so on) from fixed lists in `app/game.py`, and `static/portrait.js`
+draws the matching layers. Portraits appear instantly and cost nothing. Ray's look in `case.GM` is a guess; change its appearance dict
+to match. They are procedural vector art; for painted-from-scratch art, send the same `appearance` object to an image model, or have an
+artist draw the layers.
 
-**Roll one.** `app/roll.py` rolls a role, a habit, a path, a manner and who the hero loves in code, because a model
-asked for "a random character" keeps producing the same one. The Storyteller builds the hero from that seed.
-
-**Portraits in the soft painted style of Jin Yong game art, drawn from the personality.** DeepSeek's API
-doesn't generate images, so the Storyteller picks about 17 appearance options (hair, eyes, outfit,
-weapon, aura, scene and so on) from fixed lists in `app/game.py`, and `static/portrait.js` draws the
-matching layers. Portraits appear instantly, cost nothing, and cannot carry unsafe markup. They are
-procedural vector art; for painted-from-scratch art, send the same `appearance` object to an image
-model, or have an artist draw the layers.
-
-**Everything is in English and Chinese.** AI text is written `English ||| 中文`. Every sheet field
-(except the two names, which are Chinese plus pinyin) must follow that form: `set_fields` refuses a field
-written in one language and tells the model what to fix. Replies use the same form, and if the model
-forgets or repeats the separator, the server tidies it into one English half and one Chinese half
-(`bilingual.normalize`), strips any stray tag markup, and translates a missing half. The visitor's own
-lines are translated by the server and stored in both languages. Fixed messages are written in both languages in the code.
+**Everything is in English and Chinese.** AI text is written `English ||| 中文`. Replies use that form, and if the model forgets or
+repeats the separator, the server tidies it into one English half and one Chinese half (`bilingual.normalize`: it also cuts a language
+that leaks into the other half and strips stray tag markup), and translates a missing half. The visitor's own lines are translated
+by the server and stored in both languages. Fixed messages are written in both languages in the code.
 
 ## API
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/status` | whether the AI is configured |
-| GET | `/api/world` | the twelve regions and their map positions |
-| GET | `/api/case` | the people on the mountain (public cards only), proof rules and endings |
-| GET | `/api/game` | the visitor's case: hero, clues found, accusations left, who they can question |
-| POST | `/api/game/new` · `/api/game/reset` | start a hero · drop the case and start over |
-| POST | `/api/game/chat` · `/api/game/roll` | talk to the Storyteller · roll a random hero (stream) |
-| POST | `/api/game/edit` | change one trait by hand |
-| POST | `/api/game/start` | confirm the hero and begin the story |
-| POST | `/api/talks` | start (or resume) questioning someone |
-| POST | `/api/talks/{id}/open` · `/chat` | they speak first · say something (stream; includes `clue` events) |
-| POST | `/api/accuse` | name a suspect and the clues you offer as proof |
-| POST | `/api/ending` | choose what to do with the killer; returns the written final scene |
+| GET | `/api/case` | the people in the inn (public cards only), Qinghe, Ray, the opening and the endings |
+| GET | `/api/game` | the visitor's night: clues found, the clock, events, who they can talk to |
+| POST | `/api/game/start` · `/api/game/reset` | begin the night · drop it and start over |
+| POST | `/api/talks` | start (or resume) talking to someone |
+| POST | `/api/talks/{id}/open` · `/chat` | they speak first · Qinghe says something (stream; includes `clue`, `gm` and `clock` events) |
+| POST | `/api/gm/chat` | ask Ray something (stream; costs no time) |
+| POST | `/api/move` | try the escape with the chosen clues |
+| POST | `/api/ending` | choose what to do with the letter; returns the written final scene |
 
-Visitors are identified by an anonymous `vid` cookie, which owns their case and conversations. Nothing is shared between visitors.
-
-## Opening more places later
-
-Only Mount Hua is open (`OPEN_REGIONS`, default `huashan`); the other places show on the map as padlocked.
-A later chapter would add a second case file next to `app/case.py` and open its region.
+Visitors are identified by an anonymous `vid` cookie, which owns their night and conversations. Nothing is shared between visitors.
 
 ## Deploying to Railway
 
@@ -129,12 +110,12 @@ The repo includes a `Dockerfile` and `railway.json`, so Railway builds it withou
 
 Each push to GitHub redeploys. The same `Dockerfile` runs on Fly.io, Render or any server with
 Docker. DeepSeek bills from a prepaid balance, so a small top-up doubles as a hard spending cap.
-A database made by the earlier shared-world version still works: its old tables are simply unused.
+A database made by an earlier version still works: its old tables are simply unused.
 
 ## Next steps
 
-1. Playtest the case with real people and adjust clue trust levels and how freely each person talks
-2. Fighting, designed separately
-3. More cases and places, one region at a time
+1. Playtest with real people and tune trust levels, how many exchanges make an hour, and how freely each person talks
+2. Combat, run by Ray like a tabletop game master (dice, the player's declared actions, Ray's rulings)
+3. More chapters and places: the second night, the road, the capital
 4. Longer conversation memory: summarise old turns instead of dropping them
 5. Real painted art: an image model, or layered parts drawn by an artist, behind `portrait.js`

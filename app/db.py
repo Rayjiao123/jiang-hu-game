@@ -1,8 +1,8 @@
-"""SQLite storage. One row per visitor holds their case (character, clues found, accusations left);
-one row per conversation holds the trust and the lines spoken. Nothing is shared between visitors.
+"""SQLite storage. One row per visitor holds their night (clues found, the clock, how it ended); one row
+per conversation holds the trust and the lines spoken. Nothing is shared between visitors.
 
-Databases made by the earlier shared-world version still contain its tables (npcs, drafts, players,
-sessions); they are simply no longer used."""
+Databases made by earlier versions still contain their tables (npcs, drafts, players, sessions, games);
+they are simply no longer used."""
 import json
 import sqlite3
 import time
@@ -12,13 +12,14 @@ from contextlib import contextmanager
 from . import config
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS games (
+CREATE TABLE IF NOT EXISTS plays (
     visitor_id TEXT PRIMARY KEY,
-    stage      TEXT NOT NULL,                 -- creating | playing | accused | solved | lost
-    hero       TEXT NOT NULL,                 -- JSON: the character sheet
-    turns      TEXT NOT NULL DEFAULT '[]',    -- the Storyteller conversation
+    stage      TEXT NOT NULL,                 -- playing | moving | solved | lost
     found      TEXT NOT NULL DEFAULT '[]',    -- clue ids the hero holds
-    attempts   INTEGER NOT NULL DEFAULT 3,
+    beat       INTEGER NOT NULL DEFAULT 0,    -- how much of the night has gone
+    msgs       INTEGER NOT NULL DEFAULT 0,    -- how many things the hero has said
+    tier       INTEGER NOT NULL DEFAULT 0,    -- how well the escape was prepared
+    turns      TEXT NOT NULL DEFAULT '[]',    -- the conversation with the game master
     ending     TEXT NOT NULL DEFAULT '',
     updated_at REAL NOT NULL
 );
@@ -61,34 +62,33 @@ def init() -> None:
         conn.executescript(SCHEMA)
 
 
-# ---------- the case: one per visitor ----------
+# ---------- the night: one per visitor ----------
 
-def get_game(conn, visitor_id: str) -> dict | None:
-    r = conn.execute("SELECT * FROM games WHERE visitor_id = ?", (visitor_id,)).fetchone()
+def get_play(conn, visitor_id: str) -> dict | None:
+    r = conn.execute("SELECT * FROM plays WHERE visitor_id = ?", (visitor_id,)).fetchone()
     if not r:
         return None
-    return {"visitor_id": r["visitor_id"], "stage": r["stage"], "hero": json.loads(r["hero"]), "turns": json.loads(r["turns"]),
-            "found": json.loads(r["found"]), "attempts": r["attempts"], "ending": r["ending"]}
+    return {"visitor_id": r["visitor_id"], "stage": r["stage"], "found": json.loads(r["found"]), "beat": r["beat"], "msgs": r["msgs"],
+            "tier": r["tier"], "turns": json.loads(r["turns"]), "ending": r["ending"]}
 
 
-def new_game(conn, visitor_id: str, sheet: dict) -> dict:
-    """Start again: any earlier case and its conversations are dropped."""
+def new_play(conn, visitor_id: str, found: list[str]) -> dict:
+    """Start again: any earlier night and its conversations are dropped."""
+    delete_play(conn, visitor_id)
+    conn.execute("INSERT INTO plays (visitor_id, stage, found, updated_at) VALUES (?,?,?,?)",
+                 (visitor_id, "playing", json.dumps(found), time.time()))
+    return get_play(conn, visitor_id)
+
+
+def save_play(conn, g: dict) -> None:
+    conn.execute("UPDATE plays SET stage = ?, found = ?, beat = ?, msgs = ?, tier = ?, turns = ?, ending = ?, updated_at = ? WHERE visitor_id = ?",
+                 (g["stage"], json.dumps(g["found"]), g["beat"], g["msgs"], g["tier"], json.dumps(g["turns"], ensure_ascii=False),
+                  g["ending"], time.time(), g["visitor_id"]))
+
+
+def delete_play(conn, visitor_id: str) -> None:
     conn.execute("DELETE FROM talks WHERE visitor_id = ?", (visitor_id,))
-    conn.execute("DELETE FROM games WHERE visitor_id = ?", (visitor_id,))
-    conn.execute("INSERT INTO games (visitor_id, stage, hero, updated_at) VALUES (?,?,?,?)",
-                 (visitor_id, "creating", json.dumps(sheet, ensure_ascii=False), time.time()))
-    return get_game(conn, visitor_id)
-
-
-def save_game(conn, g: dict) -> None:
-    conn.execute("UPDATE games SET stage = ?, hero = ?, turns = ?, found = ?, attempts = ?, ending = ?, updated_at = ? WHERE visitor_id = ?",
-                 (g["stage"], json.dumps(g["hero"], ensure_ascii=False), json.dumps(g["turns"], ensure_ascii=False),
-                  json.dumps(g["found"]), g["attempts"], g["ending"], time.time(), g["visitor_id"]))
-
-
-def delete_game(conn, visitor_id: str) -> None:
-    conn.execute("DELETE FROM talks WHERE visitor_id = ?", (visitor_id,))
-    conn.execute("DELETE FROM games WHERE visitor_id = ?", (visitor_id,))
+    conn.execute("DELETE FROM plays WHERE visitor_id = ?", (visitor_id,))
 
 
 # ---------- conversations: one per (visitor, person), kept between visits ----------

@@ -38,13 +38,37 @@ def is_pair(text: str) -> bool:
     return bool(_LATIN_WORD.search(en)) and bool(_CJK.search(zh))
 
 
+def _tidy_halves(text: str) -> str:
+    """A correctly separated reply can still have the other language leaking into a half: an English half that
+    ends ' / 中文' (the model copied the history's 'English / 中文' form) or holds a whole Chinese paragraph."""
+    en, zh = split(text)
+    paras = [x for x in re.split(r"\n{2,}", en) if x.strip()]
+    keep = [x for x in paras if language_of(x) == "English"]
+    if keep:
+        paras = keep
+    cut = []
+    for x in paras:
+        i = x.rfind(" / ")
+        tail = x[i + 3:] if i >= 0 else ""
+        if i >= 0 and len(_CJK.findall(tail)) >= 4 and not _LATIN_WORD.search(tail):
+            x = x[:i].rstrip()
+        cut.append(x)
+    new_en = "\n\n".join(cut) if cut else en
+    zparas = [x for x in re.split(r"\n{2,}", zh) if x.strip()]
+    zkeep = [x for x in zparas if language_of(x) == "Chinese"]
+    new_zh = "\n\n".join(zkeep) if zkeep else zh
+    if new_en == en and new_zh == zh:
+        return text
+    return f"{new_en}\n{SEP}\n{new_zh}"
+
+
 def normalize(text: str) -> str:
     """Put a reply into the form 'English ||| 中文'. The model sometimes forgets the separator, or repeats it
     for every paragraph; sort the paragraphs by language and join them with a single separator. A reply
     that is in one language only is returned unchanged (the caller translates it)."""
     text = str(text or "").strip()
     if text.count(SEP) == 1 and is_pair(text):
-        return text
+        return _tidy_halves(text)
     paragraphs = [p.strip() for p in re.split(r"\n{2,}", text.replace(SEP, "\n\n")) if p.strip()]
     en = [p for p in paragraphs if language_of(p) == "English"]
     zh = [p for p in paragraphs if language_of(p) == "Chinese"]

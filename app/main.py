@@ -1,4 +1,4 @@
-"""Jianghu Chronicles web server: the page, the murder-mystery API and the DeepSeek-powered agents."""
+"""Jianghu Chronicles web server: the page, the story API and the DeepSeek-powered characters and game master."""
 import json
 import re
 import uuid
@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, bilingual, case, config, db, game, prompts, ratelimit, roll as roller, world
+from . import agent, bilingual, case, config, db, game, prompts, ratelimit
 from .bilingual import bi
 from .ratelimit import RateLimited
 
@@ -29,7 +29,7 @@ def llm() -> openai.OpenAI:
     return _client
 
 
-# ---------- visitors: an anonymous id in a cookie owns the case and the conversations ----------
+# ---------- visitors: an anonymous id in a cookie owns the night and the conversations ----------
 
 @app.middleware("http")
 async def visitor_cookie(request: Request, call_next):
@@ -51,17 +51,11 @@ class Message(BaseModel):
     message: str = Field(min_length=1, max_length=config.MAX_MESSAGE_CHARS)
 
 
-class Edit(BaseModel):
-    field: str = Field(max_length=30)
-    value: str = Field(max_length=300)
-
-
 class NewTalk(BaseModel):
     npc: str = Field(max_length=20)
 
 
-class Accusation(BaseModel):
-    suspect: str = Field(max_length=20)
+class Move(BaseModel):
     evidence: list[str] = Field(default_factory=list, max_length=30)
 
 
@@ -97,78 +91,74 @@ def status():
     return {"ai": bool(config.DEEPSEEK_API_KEY)}
 
 
-@app.get("/api/world")
-def get_world():
-    return {"regions": world.public()}
-
-
 @app.get("/api/case")
 def get_case():
-    """What the landing page shows before anyone has made a character: the case and the people on the mountain."""
-    return {"title": case.CASE_TITLE, "cast": [case.public_card(k) for k in case.starting_cast()],
-            "categories": case.CATEGORIES, "attempts": case.ATTEMPTS, "proof_needed": case.PROOF_NEEDED, "fates": case.FATES}
+    """What the landing page shows before anyone has started: the story, the people in the inn, the game master."""
+    return {"title": case.CASE_TITLE, "situation": case.SITUATION, "prologue": case.PROLOGUE, "cast": [case.public_card(k) for k in case.BY_KEY],
+            "hero": case.hero_card(), "gm": case.gm_card(), "categories": case.CATEGORIES, "fates": case.FATES, "clock": case.CLOCK}
 
 
-def _game(conn, vid: str, stage: str | tuple | None = None) -> dict:
-    g = db.get_game(conn, vid)
+def _play(conn, vid: str, stage: str | tuple | None = None) -> dict:
+    g = db.get_play(conn, vid)
     if not g:
-        raise HTTPException(409, bi("Create your character first.", "请先创建你的人物。"))
+        raise HTTPException(409, bi("Start the story first.", "请先开始故事。"))
     if stage and g["stage"] not in ((stage,) if isinstance(stage, str) else stage):
         raise HTTPException(409, bi("That isn't possible at this point in the story.", "故事此刻不能这样做。"))
     return g
 
 
-def _visible(g: dict) -> list[str]:
-    keys = case.starting_cast()
-    if any(c in g["found"] for c in ("lu_lead", "lu_seen")):
-        keys.append("lu")
-    return keys
+def _events(upto: int) -> list[dict]:
+    return [{"beat": b, "text": case.event_for(b)} for b in range(1, min(upto, case.DAWN_BEAT) + 1) if case.event_for(b)]
 
 
 def _state(conn, g: dict) -> dict:
-    """Everything the page needs to draw the game, and nothing the visitor has not earned."""
+    """Everything the page needs to draw the night, and nothing the visitor has not earned."""
     found = g["found"]
-    out = {"stage": g["stage"], "hero": g["hero"], "missing": game.missing(g["hero"]), "attempts": g["attempts"], "ending": g["ending"]}
-    if g["stage"] == "creating":
-        return out
     cast = []
-    for k in _visible(g):
+    for k in case.BY_KEY:
         card = case.public_card(k)
         talk = db.find_talk(conn, g["visitor_id"], k)
         card.update(clues_told=sum(1 for c in case.BY_KEY[k]["topics"] if c in found), met=bool(talk and talk["turns"]),
                     trust=talk["trust"] if talk else None)
         cast.append(card)
-    out.update(cast=cast, found=[case.clue_view(c, g["hero"]) for c in found if c in case.CLUES],
-               prologue=case.prologue(g["hero"]), unmet=len(case.discoverable()) - len([c for c in found if case.CLUES[c]["holder"]]))
+    out = {"stage": g["stage"], "cast": cast, "found": [case.clue_view(c) for c in found if c in case.CLUES], "clock": case.clock(g["beat"]),
+           "events": _events(g["beat"]), "ending": g["ending"], "tier": g["tier"], "prologue": case.PROLOGUE, "hero": case.hero_card(), "gm": case.gm_card(),
+           "unmet": len(case.discoverable()) - len([c for c in found if case.CLUES[c]["holder"]]), "gm_turns": g["turns"][-12:]}
     if g["stage"] == "lost":
-        out["truth"] = case.truth(g["hero"])
+        out["truth"] = f"{case.LOSS.split('|||')[0].strip()} {case.truth().split('|||')[0].strip()} {bilingual.SEP} {case.LOSS.split('|||')[1].strip()} {case.truth().split('|||')[1].strip()}"
     return out
 
 
 @app.get("/api/game")
 def get_game(request: Request):
     with db.session() as conn:
-        g = db.get_game(conn, request.state.vid)
+        g = db.get_play(conn, request.state.vid)
         return {"game": _state(conn, g) if g else None}
 
 
-# ---------- making the hero with the Storyteller ----------
-
-@app.post("/api/game/new")
-def new_game(request: Request):
+@app.post("/api/game/start")
+def start_game(request: Request):
+    """The night begins: the doors are barred, and that is the first thing she knows."""
     with db.session() as conn:
-        g = db.new_game(conn, request.state.vid, game.blank_sheet())
+        g = db.new_play(conn, request.state.vid, ["official"])
         return {"game": _state(conn, g)}
 
 
 @app.post("/api/game/reset")
 def reset_game(request: Request):
     with db.session() as conn:
-        db.delete_game(conn, request.state.vid)
+        db.delete_play(conn, request.state.vid)
     return {"ok": True}
 
 
+# ---------- language helpers ----------
+
 _MARKUP = re.compile(r"</?[A-Za-z_][\w-]*(?:\s[^<>]*)?/?>")
+
+
+def _names() -> str:
+    """People who must keep one spelling in both languages."""
+    return bilingual.glossary([c["name"] for c in case.CAST] + [case.HERO["name"]])
 
 
 def _finish(client, vid: str, ev: dict) -> Iterator[dict]:
@@ -187,13 +177,7 @@ def _finish(client, vid: str, ev: dict) -> Iterator[dict]:
     yield {"type": "done", "text": text}      # the page replaces what it streamed with this tidied version
 
 
-def _names(hero: dict | None = None) -> str:
-    """People who must keep one spelling in both languages."""
-    extra = [hero.get("name", ""), hero.get("beloved_name", "")] if hero else []
-    return bilingual.glossary([c["name"] for c in case.CAST] + extra)
-
-
-def _bilingual_line(client, vid: str, message: str, hero: dict | None = None) -> str:
+def _bilingual_line(client, vid: str, message: str) -> str:
     """The visitor's own line as 'English ||| 中文', so both languages show under it and in the history."""
     if bilingual.SEP in message or bilingual.has_both(message):
         return message
@@ -201,101 +185,30 @@ def _bilingual_line(client, vid: str, message: str, hero: dict | None = None) ->
         ratelimit.check(vid)
     except RateLimited:
         return message
-    other = bilingual.counterpart(client, config.CHAT_MODEL, message, _names(hero))
+    other = bilingual.counterpart(client, config.CHAT_MODEL, message, _names())
     if not other:
         return message
     en, zh = (other, message) if bilingual.language_of(message) == "Chinese" else (message, other)
     return f"{en} {bilingual.SEP} {zh}"
 
 
-def _storyteller_events(client, vid: str, message: str, translate: bool = True) -> Iterator[dict]:
-    """One Storyteller turn: stream its reply and tool effects, and keep the sheet in the database."""
-    line = message
-    if translate:
-        line = _bilingual_line(client, vid, message)
-        yield {"type": "user", "text": line}
-    with db.session() as conn:
-        g = _game(conn, vid, "creating")
-        turn = agent.Turn()
-        tools = game.storyteller_tools(g["hero"], turn)
-        messages = [{"role": "system", "content": prompts.STORYTELLER}, *agent.history(g["turns"]),
-                    {"role": "system", "content": prompts.storyteller_state(g["hero"], game.missing(g["hero"]))},
-                    {"role": "user", "content": bilingual.plain(line)}]
-        try:
-            # the first reply carries the whole sheet, so it needs room for the tool call
-            for raw in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=1800):
-                for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
-                    if ev["type"] == "done":
-                        g["turns"] += [{"role": "user", "content": line}, {"role": "assistant", "content": ev["text"] or "…"}]
-                    yield ev
-        finally:
-            db.save_game(conn, g)   # keep sheet changes even if the reply failed
+# ---------- the clock: the night is the deadline ----------
+
+def _advance(g: dict, beats: int) -> list[dict]:
+    """Let some of the night go by. Returns the game master's announcements for every hour that passed; at dawn the story is lost."""
+    out = []
+    for _ in range(beats):
+        if g["beat"] >= case.DAWN_BEAT:
+            break
+        g["beat"] += 1
+        if case.event_for(g["beat"]):
+            out.append({"type": "gm", "beat": g["beat"], "text": case.event_for(g["beat"]), "clock": case.clock(g["beat"])})
+    if g["beat"] >= case.DAWN_BEAT and g["stage"] in ("playing", "moving"):
+        g["stage"] = "lost"
+    return out
 
 
-@app.post("/api/game/chat")
-def storyteller_chat(body: Message, request: Request):
-    vid = request.state.vid
-    with db.session() as conn:
-        _game(conn, vid, "creating")
-    client = llm()
-    return sse(guarded(_storyteller_events(client, vid, body.message)))
-
-
-@app.post("/api/game/roll")
-def roll(request: Request):
-    """Build a random hero: the dice are rolled here, the Storyteller does the rest."""
-    vid = request.state.vid
-    with db.session() as conn:
-        g = _game(conn, vid, "creating")
-    client = llm()
-    seed = roller.random_seed()
-    with db.session() as conn:
-        g = _game(conn, vid, "creating")
-        g["hero"], g["turns"] = game.blank_sheet(), []
-        db.save_game(conn, g)
-
-    def events():
-        yield {"type": "roll", "text": seed["summary"], "text_zh": seed["summary_zh"]}
-        yield from _storyteller_events(client, vid, roller.roll_message(seed), translate=False)
-    return sse(guarded(events()))
-
-
-@app.post("/api/game/edit")
-def edit_hero(body: Edit, request: Request):
-    """The visitor rewrites one trait by hand."""
-    vid = request.state.vid
-    with db.session() as conn:
-        g = _game(conn, vid, "creating")
-    value = body.value
-    client = None
-    if body.field in game.BILINGUAL and not bilingual.is_pair(value):
-        try:
-            ratelimit.check(vid)
-            client = llm()
-        except RateLimited as e:
-            raise HTTPException(429, str(e))
-    with db.session() as conn:
-        g = _game(conn, vid, "creating")
-        err = game.edit_field(client, config.CHAT_MODEL, g["hero"], body.field, value, _names(g["hero"]))
-        if err:
-            raise HTTPException(400, err)
-        db.save_game(conn, g)
-        return {"hero": g["hero"], "missing": game.missing(g["hero"])}
-
-
-@app.post("/api/game/start")
-def start_game(request: Request):
-    """The hero is settled: the story begins at the first place, with the official story as the first clue."""
-    with db.session() as conn:
-        g = _game(conn, request.state.vid, "creating")
-        if game.missing(g["hero"]):
-            raise HTTPException(400, bi("Your hero isn't finished yet. Ask the Storyteller to fill in the rest.", "人物还没写完，请让说书人补全。"))
-        g.update(stage="playing", found=["official"], attempts=case.ATTEMPTS)
-        db.save_game(conn, g)
-        return {"game": _state(conn, g)}
-
-
-# ---------- talking to the people on the mountain ----------
+# ---------- talking to the people in the inn ----------
 
 def _card(key: str) -> dict:
     c = case.public_card(key)
@@ -308,10 +221,10 @@ def new_talk(body: NewTalk, request: Request):
     """Start talking to someone, or pick up where the hero and that person left off."""
     vid = request.state.vid
     with db.session() as conn:
-        g = _game(conn, vid, ("playing", "accused"))
-        if body.npc not in _visible(g):
+        g = _play(conn, vid, ("playing", "moving"))
+        if body.npc not in case.BY_KEY:
             raise HTTPException(404, bi("There is nobody like that here.", "这里没有这个人。"))
-        trust0, why = case.start_trust(body.npc, g["hero"])
+        trust0, why = game.start_trust(body.npc)
         talk = db.find_talk(conn, vid, body.npc) or db.create_talk(conn, vid, body.npc, trust0)
         state = case.clue_state(body.npc, g["found"], talk["trust"])
     shown = [t for t in talk["turns"] if not t.get("hidden")][-40:]
@@ -319,44 +232,7 @@ def new_talk(body: NewTalk, request: Request):
             "fresh": not talk["turns"], "told": len(state["told"]), "total": len(case.BY_KEY[body.npc]["topics"])}
 
 
-def _npc_turn(client, tid: str, vid: str, message: str | None) -> Iterator[dict]:
-    """One NPC turn. message=None means the hero has just walked up and the NPC speaks first."""
-    opening = message is None
-    with db.session() as conn:
-        g = _game(conn, vid)
-        line_hero = g["hero"]
-    line = "*approaches you* ||| *走上前来*" if opening else _bilingual_line(client, vid, message, line_hero)
-    if not opening:
-        yield {"type": "user", "text": line}
-    with db.session() as conn:
-        g = _game(conn, vid, ("playing", "accused"))
-        talk = db.get_talk(conn, tid, vid)
-        if not talk:
-            raise HTTPException(404, bi("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。"))
-        key = talk["npc_key"]
-        talk["trust_before"] = talk["trust"]       # clues are offered at the trust the hero walked in with
-        turn = agent.Turn()
-        tools = game.npc_tools(talk, turn)
-        messages = [{"role": "system", "content": prompts.npc_system(key, g["hero"])},
-                    *agent.history(talk["turns"]),
-                    {"role": "system", "content": prompts.npc_state(key, talk["trust"], g["found"], g["hero"], opening)},
-                    {"role": "user", "content": bilingual.plain(line)}]
-        try:
-            for raw in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=800):
-                for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
-                    if ev["type"] == "done":
-                        talk["turns"] += [{"role": "user", "content": line, **({"hidden": True} if opening else {})},
-                                          {"role": "assistant", "content": ev["text"] or "…"}]
-                    yield ev
-                    if ev["type"] == "done" and not opening:
-                        for clue in _credit(client, vid, key, g, ev["text"], talk["trust_before"]):
-                            yield {"type": "clue", "clue": clue}
-        finally:
-            db.save_talk(conn, talk)
-            db.save_game(conn, g)
-
-
-VERIFY = ("You referee a murder-mystery game. A character has just spoken to the hero. Below are the facts the character was willing to tell. "
+VERIFY = ("You referee a story game. A character has just spoken to the hero. Below are the facts the character was willing to tell. "
           "Answer with a JSON array of the ids of facts whose KEY information the character clearly told the hero in this reply. A fact counts when its main "
           "content was stated, even in other words. Hints, deflections, questions, or only a vague part of it do not count. Answer [] if none. Output only the JSON array.")
 
@@ -366,7 +242,7 @@ def _credit(client, vid: str, key: str, g: dict, reply: str, trust: int) -> list
     ready = case.clue_state(key, g["found"], trust)["ready"]
     if not ready or not reply.strip():
         return []
-    facts = "\n".join(f"{cid}: {case.plain_fact(cid, g['hero'])}" for cid in ready)
+    facts = "\n".join(f"{cid}: {case.plain_fact(cid)}" for cid in ready)
     try:
         ratelimit.check(vid)
         r = client.chat.completions.create(
@@ -381,8 +257,46 @@ def _credit(client, vid: str, key: str, g: dict, reply: str, trust: int) -> list
     for cid in told if isinstance(told, list) else []:
         if cid in ready and cid not in g["found"]:
             g["found"].append(cid)
-            new.append(case.clue_view(cid, g["hero"]))
+            new.append(case.clue_view(cid))
     return new
+
+
+def _npc_turn(client, tid: str, vid: str, message: str | None) -> Iterator[dict]:
+    """One turn with a person. message=None means the hero has just walked up and they speak first."""
+    opening = message is None
+    line = "*approaches you* ||| *走上前来*" if opening else _bilingual_line(client, vid, message)
+    if not opening:
+        yield {"type": "user", "text": line}
+    with db.session() as conn:
+        g = _play(conn, vid, ("playing", "moving"))
+        talk = db.get_talk(conn, tid, vid)
+        if not talk:
+            raise HTTPException(404, bi("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。"))
+        key = talk["npc_key"]
+        trust_before = talk["trust"]            # clues are offered at the trust the hero walked in with
+        turn = agent.Turn()
+        tools = game.npc_tools(talk, turn)
+        messages = [{"role": "system", "content": prompts.npc_system(key)},
+                    *agent.history(talk["turns"]),
+                    {"role": "system", "content": prompts.npc_state(key, talk["trust"], g["found"], g["beat"], opening)},
+                    {"role": "user", "content": bilingual.plain(line)}]
+        try:
+            for raw in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=800):
+                for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
+                    if ev["type"] == "done":
+                        talk["turns"] += [{"role": "user", "content": line, **({"hidden": True} if opening else {})},
+                                          {"role": "assistant", "content": ev["text"] or "…"}]
+                    yield ev
+                    if ev["type"] == "done" and not opening:
+                        for clue in _credit(client, vid, key, g, ev["text"], trust_before):
+                            yield {"type": "clue", "clue": clue}
+                        g["msgs"] += 1
+                        if g["msgs"] % case.MSGS_PER_BEAT == 0:
+                            yield from _advance(g, 1)
+                            yield {"type": "clock", "clock": case.clock(g["beat"]), "stage": g["stage"]}
+        finally:
+            db.save_talk(conn, talk)
+            db.save_play(conn, g)
 
 
 def _own_talk(tid: str, vid: str) -> dict:
@@ -411,50 +325,78 @@ def npc_chat(tid: str, body: Message, request: Request):
     return sse(guarded(_npc_turn(client, tid, vid, body.message)))
 
 
-# ---------- naming the killer ----------
+# ---------- Ray, the game master ----------
 
-@app.post("/api/accuse")
-def accuse(body: Accusation, request: Request):
-    """Name a suspect and lay out proof. The verdict is decided here, from the clues the hero actually holds."""
+def _gm_turn(client, vid: str, message: str) -> Iterator[dict]:
+    line = _bilingual_line(client, vid, message)
+    yield {"type": "user", "text": line}
     with db.session() as conn:
-        g = _game(conn, request.state.vid, "playing")
-        if body.suspect not in _visible(g):
-            raise HTTPException(404, bi("There is nobody like that here.", "这里没有这个人。"))
-        result = case.judge(body.suspect, body.evidence, g["found"])
-        if result["verdict"] == "correct":
-            g["stage"] = "accused"
+        g = _play(conn, vid)
+        turn = agent.Turn()
+        messages = [{"role": "system", "content": prompts.gm_system(g["found"], g["beat"])}, *agent.history(g["turns"]),
+                    {"role": "user", "content": bilingual.plain(line)}]
+        try:
+            for raw in agent.run(client, config.CHAT_MODEL, messages, [], turn, vid, max_tokens=600):
+                for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
+                    if ev["type"] == "done":
+                        g["turns"] += [{"role": "user", "content": line}, {"role": "assistant", "content": ev["text"] or "…"}]
+                    yield ev
+        finally:
+            db.save_play(conn, g)
+
+
+@app.post("/api/gm/chat")
+def gm_chat(body: Message, request: Request):
+    """Ask Ray what is going on, or for a nudge. This costs no time."""
+    vid = request.state.vid
+    with db.session() as conn:
+        _play(conn, vid)
+    client = llm()
+    return sse(guarded(_gm_turn(client, vid, body.message)))
+
+
+# ---------- the move ----------
+
+@app.post("/api/move")
+def make_move(body: Move, request: Request):
+    """Try the escape with the clues she chooses. The verdict is decided here, from the clues she actually holds."""
+    with db.session() as conn:
+        g = _play(conn, request.state.vid, "playing")
+        result = case.judge(body.evidence, g["found"])
+        announcements = []
+        if result["verdict"] == "go":
+            g.update(stage="moving", tier=result["tier"])
         else:
-            g["attempts"] = max(0, g["attempts"] - 1)
-            if g["attempts"] == 0:
-                g["stage"] = "lost"
-        db.save_game(conn, g)
-        result.update(attempts=g["attempts"], stage=g["stage"])
+            announcements = _advance(g, case.FAILED_MOVE_COST)
+        db.save_play(conn, g)
+        result.update(stage=g["stage"], clock=case.clock(g["beat"]), gm=announcements)
         if g["stage"] == "lost":
-            result["truth"] = case.truth(g["hero"])
+            result["game"] = _state(conn, g)
         return result
 
 
 @app.post("/api/ending")
 def ending(body: Fate, request: Request):
-    """The last scene: Yun Wuya confesses, and the hero chooses what to do with him."""
+    """The last scene, written for the way she prepared and what she chose to do with the letter."""
     vid = request.state.vid
     if body.fate not in case.FATES:
         raise HTTPException(400, bi("Choose one of the three.", "请从三者中选一。"))
     with db.session() as conn:
-        g = _game(conn, vid, "accused")
-        hero = g["hero"]
+        g = _play(conn, vid, "moving")
+        tier = g["tier"]
     text = ""
     try:
         ratelimit.check(vid)
         client = llm()
-        prompt = prompts.ENDING.format(
-            truth=case.fill(case.TRUTH_FOR_EPILOGUE, hero), hero=f"{hero['name']}, {bilingual.plain(hero['title'])}, path {hero['path']}, manner {hero['temperament']}",
-            beloved=hero["beloved_name"], token=bilingual.plain(hero["beloved_token"]), fate=case.FATES[body.fate]["en"], format=bilingual.REPLY_FORMAT)
+        how = ["barely: she slipped out with little more than her life, knowing little of what she left behind",
+               "well: she knew a good part of the truth or held some leverage, and brought a friend or two",
+               "superbly: she knew the truth, held leverage over the keeper, and could take everyone worth saving with her"][tier]
+        prompt = prompts.ENDING.format(truth=case.truth().replace(" ||| ", " / "), tier=how, fate=case.FATES[body.fate]["en"], format=bilingual.REPLY_FORMAT)
         r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=900, extra_body={"thinking": {"type": "disabled"}},
                                            messages=[{"role": "system", "content": prompt}, {"role": "user", "content": "Write the final scene."}])
-        text = bilingual.normalize((r.choices[0].message.content or "").strip())
+        text = bilingual.normalize(_MARKUP.sub("", (r.choices[0].message.content or "")).strip())
         if text and bilingual.SEP not in text:
-            other = bilingual.counterpart(client, config.CHAT_MODEL, text, _names(hero))
+            other = bilingual.counterpart(client, config.CHAT_MODEL, text, _names())
             if other:
                 en, zh = (other, text) if bilingual.language_of(text) == "Chinese" else (text, other)
                 text = f"{en}\n{bilingual.SEP}\n{zh}"
@@ -462,11 +404,11 @@ def ending(body: Fate, request: Request):
             text = ""
     except (RateLimited, HTTPException, openai.APIError) as e:
         print("Ending fell back to the written version:", repr(e))
-    text = text or case.fallback_ending(body.fate, hero)
+    text = text or case.fallback_ending(body.fate, tier)
     with db.session() as conn:
-        g = _game(conn, vid, "accused")
+        g = _play(conn, vid, "moving")
         g.update(stage="solved", ending=text)
-        db.save_game(conn, g)
+        db.save_play(conn, g)
         return {"game": _state(conn, g)}
 
 
