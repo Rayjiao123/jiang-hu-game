@@ -13,15 +13,12 @@
 
 <header class="topbar">
   <button class="brand" id="brandBtn" type="button" aria-label="人在江湖，身不由己: home">
-    <span class="logo">人在江湖，身不由己</span><span class="seal">江湖</span><span class="sub">Helpless in the Jianghu</span>
+    <span class="logo">人在江湖，身不由己</span>
   </button>
-  <nav class="crumbs" id="crumbs" aria-label="Where you are 当前位置"></nav>
   <div class="clock" id="clock" hidden role="img"></div>
-  <button class="about" id="aboutBtn" type="button">简介 About</button>
-  <button class="about casebtn" id="caseBtn" type="button" aria-haspopup="dialog" aria-expanded="false" hidden>线索 Clues</button>
-  <button class="about gmbtn" id="gmBtn" type="button" aria-haspopup="dialog" aria-expanded="false" hidden><span class="avatar mini" id="gmBtnImg"></span>问 Ray Ask Ray</button>
+  <button class="about gmbtn" id="gmBtn" type="button" aria-haspopup="dialog" aria-expanded="false" hidden><span class="avatar mini" id="gmBtnImg"></span><span class="gm-label">问 Ray <small>Ask Ray</small></span></button>
   <div class="me" id="me" hidden>
-    <button class="me-btn" id="meBtn" type="button" aria-haspopup="dialog">
+    <button class="me-btn" id="meBtn" type="button" aria-haspopup="dialog" aria-label="Qinghe 青禾">
       <span class="avatar" id="meImg"></span>
       <span class="me-text"><b id="meName"></b><small>你 You</small></span>
     </button>
@@ -40,143 +37,72 @@
     </div>
   </section>
 
-  <!-- 1. THE GATE: what this game is, how it plays, who is in the inn -->
+  <!-- 1. THE GATE: the game, the heroine and her goal, the game master, and a way in. One screen. -->
   <section class="screen gate" id="screen-gate" aria-label="Welcome 欢迎">
-    <div class="gate-hero">
-      <canvas id="gateBg" aria-label="A painting of a desert inn at dusk, lanterns lit, a sandstorm gathering over the dunes"></canvas>
-      <div class="gate-scrim"></div>
-      <div class="couplet" aria-label="A jianghu saying: when you are in the jianghu, you are not your own master"><span>人在江湖</span><span>身不由己</span><small>江湖谚语</small></div>
-      <div class="gate-content">
-        <p class="kicker"><span>黑色武侠</span> · A dark wuxia story game, run by a game master</p>
-        <h1 class="gate-line"><span>身不由己</span></h1>
-        <p class="gate-sub">You didn't choose this inn. Get out of it alive, or don't.</p>
-        <p class="pitch"><b>黑沙客栈 · The Black Sand Inn.</b> A sandstorm drives you, a courier's daughter with a secret letter, into a desert inn where three caravans stopped this season and were never seen again. The keeper smiles, the door is barred with an iron lock, and everyone in the hall is caught by something. There are only two ways out: <b>a secret tunnel, or the keeper's key</b>. Find out which you can open before dawn. <b>A wrong word to the wrong person, or a wrong move, and you die.</b> Your game master, Ray, runs the night.</p>
-        <p class="pitch zh"><b>黑沙客栈。</b>一场沙暴，把你，一个带着密信的镖师之女，赶进了大漠里一家客栈：这一季在这里歇脚的三队商旅，再没人见过。掌柜笑盈盈，大门上着铁锁，大堂里每个人都被什么拴着。出路只有两条：<b>一条暗道，或者掌柜的钥匙</b>。在天亮前，弄清你能打开哪一条。<b>对错的人说错一句话，或者走错一步，你就会死。</b>你的说书人兼主持 Ray 会主持这一夜。</p>
-        <div class="cta">
-          <button class="btn big" id="gateStart" type="button">走进客栈 · Step inside</button>
-        </div>
-        <ul class="facts">
-          <li><b>One night</b>, two ways out<i>一夜，两条出路</i></li>
-          <li><b>AI</b> people who will kill you<i>会杀了你的 AI 人物</i></li>
-          <li><b>English + 中文</b> in every line<i>每句话中英双语</i></li>
-        </ul>
+    <canvas id="gateBg" aria-label="A painting of a desert inn at dusk, lanterns lit, a sandstorm gathering over the dunes"></canvas>
+    <div class="gate-scrim"></div>
+    <div class="gate-card">
+      <p class="kicker"><span>黑色武侠</span> A dark wuxia story game</p>
+      <h1 class="gate-title">人在江湖，<br>身不由己</h1>
+      <p class="gate-en">Helpless in the Jianghu</p>
+      <div class="setting bi">
+        <div class="en">A sandstorm traps you in the Black Sand Inn, a desert inn that kills its guests. The doors are barred. Dawn is coming.</div>
+        <div class="zh">沙暴把你困在黑沙客栈，一家杀客人的沙漠客栈。大门已闩，天快亮了。</div>
       </div>
-      <div class="gate-cast" id="gateCast" aria-hidden="true"></div>
-      <a class="scroll-cue" href="#how">玩法 How it plays ↓</a>
-    </div>
-
-    <div class="gate-body">
-      <section class="how" id="how" aria-labelledby="howT">
-        <h2 id="howT">玩法 <em>How it plays</em></h2>
-        <ol class="how-steps">
-          <li class="card">
-            <span class="num">一</span>
-            <div class="art" id="howArt1"></div>
-            <h3>你是青禾 <em>You are Qinghe</em></h3>
-            <p>A seventeen-year-old courier's daughter, quick and stubborn, carrying her father's last letter. You didn't pick the story; you pick what to say and who to trust.</p>
-            <p class="zh">十七岁的镖师之女，机灵又倔强，带着父亲最后一封信。故事不是你选的，你能选的是说什么、信谁。</p>
-          </li>
-          <li class="card">
-            <span class="num">二</span>
-            <div class="art talk-mock" id="howArt2" aria-hidden="true"></div>
-            <h3>用话语闯出去 <em>Talk, carefully</em></h3>
-            <p>Everyone in the inn has a secret and a price, and some of them kill for a living. Win their trust, learn the truth of the inn, and find out how to get out. But show the wrong person your letter, or tell them your plan, or push them too far, and the story is over.</p>
-            <p class="zh">客栈里每个人都有秘密和价码，有些人是靠杀人过活的。赢得他们的信任，弄清客栈的真相，找出离开的办法。可你要是把信亮给错的人，或者说出你的打算，或者把人逼得太紧，故事就结束了。</p>
-          </li>
-          <li class="card">
-            <span class="num">三</span>
-            <div class="art" id="howArt3"></div>
-            <h3>Ray 主持这一夜 <em>Ray runs the night</em></h3>
-            <p>Your game master narrates, moves the night along, and answers when you're stuck. Every few exchanges an hour passes. If you get out, he tells you the whole story. If you die, he tells you that too.</p>
-            <p class="zh">说书人 Ray 负责叙述、推进夜色，你卡住的时候他会给你提示。每说几句，一个时辰就过去了。你要是逃出去，他会把整个故事讲给你听；你要是死了，他也会。</p>
-          </li>
-        </ol>
-      </section>
-
-      <section class="meet" aria-labelledby="meetT">
-        <h2 id="meetT">客栈里的人 <em>The people in the inn</em></h2>
-        <p class="lede-s">Six people share this roof tonight. Every one of them is trapped in a different way, and none of them is clean.
-今夜同在一个屋檐下的有六个人，每个人被困住的方式都不一样，也没有一个人是干净的。</p>
-        <div class="meet-row" id="meetRow"></div>
-      </section>
-
-      <section class="soon gm-section" aria-labelledby="gmT">
-        <h2 id="gmT">你的主持人 <em>Your game master</em></h2>
-        <div class="soon-grid">
-          <div class="gm-card panel"><div class="gm-art" id="gmArt"></div><div class="gm-name"><b>说书人 Ray</b><span>Storyteller and Game Master 说书人 · 主持</span></div></div>
-          <div class="soon-text">
-            <p><b>Ray</b> is the voice of the story. Like a tabletop game master, he describes the scene, fires the events of the night, and will talk to you at any time: ask what's going on, who someone is, or for a nudge.</p>
-            <p class="zh"><b>Ray</b> 是这个故事的声音。就像桌面游戏的主持人，他描述场景、安排夜里发生的事，随时都可以和你谈：问问眼下的情况、某人是谁，或者要一点提示。</p>
-            <p>Later chapters will add fighting, which Ray will run the way a game master runs a battle: you describe what you do, he decides what happens. There are three endings in this one: dead, out through the tunnel, or with the keeper's key.</p>
-            <p class="zh">之后的章节会加入战斗，Ray 会像桌面游戏主持人主持战斗那样：你说出你要做什么，他来决定结果。这一章有三个结局：死去、从暗道逃出，或夺下掌柜的钥匙。</p>
-            <button class="btn big" id="gateStart2" type="button">走进客栈 · Step inside</button>
+      <div class="duo">
+        <div class="who-card panel">
+          <div class="face" id="gateHero"></div>
+          <div class="who-text">
+            <b>青禾 Qinghe <i>你 you</i></b>
+            <span>A courier's daughter with a secret letter. <strong>Goal: get out alive before dawn</strong>, by the secret tunnel or by killing the keeper for her key.</span>
+            <span class="zh">带着密信的镖师之女。<strong>目标：天亮前活着出去</strong>，走暗道，或杀掉掌柜夺钥匙。</span>
           </div>
         </div>
-      </section>
-      <footer class="gate-foot">人在江湖，身不由己 · Helpless in the Jianghu · a game by Ray</footer>
+        <div class="who-card panel">
+          <div class="face" id="gateGm"></div>
+          <div class="who-text">
+            <b>说书人 Ray <i>主持 game master</i></b>
+            <span>Narrates the night and answers when you're stuck.</span>
+            <span class="zh">叙述这一夜，你卡住时给你提示。</span>
+          </div>
+        </div>
+      </div>
+      <button class="btn big" id="gateStart" type="button">走进客栈 · Enter the inn</button>
+      <p class="gate-warn">A wrong word or a wrong move, and you die. 一句错话，一步错棋，就是死。</p>
     </div>
   </section>
 
-  <!-- 2. THE INN -->
+  <!-- 2. THE INN: who is here -->
   <section class="screen scene" id="screen-scene" aria-label="The Black Sand Inn 黑沙客栈">
     <canvas class="bg" id="sceneBg" aria-hidden="true"></canvas>
-    <div class="scene-top">
-      <div class="scene-btns">
-        <button class="btn" id="sceneMove" type="button">动手 · Make your move</button>
-        <button class="btn ghost" id="sceneCase" type="button">线索 Clues</button>
-        <button class="btn ghost" id="sceneGm" type="button">问 Ray Ask Ray</button>
-      </div>
-      <div class="place panel">
-        <h2>黑沙客栈 <em>The Black Sand Inn</em></h2>
-        <div class="news gm-says" id="scNews"></div>
-      </div>
+    <div class="scene-wrap">
+      <button class="ray-strip panel" id="scNews" type="button" aria-label="Ask Ray 问 Ray"></button>
+      <h2 class="scene-title">黑沙客栈 <em>Who do you talk to? 找谁说话？</em></h2>
+      <div class="people" id="people"></div>
+      <button class="btn move-btn" id="sceneMove" type="button">动手 · Make your move</button>
     </div>
-    <div class="scene-stage" id="sceneStage"></div>
   </section>
 
-  <!-- 3. A CONVERSATION -->
+  <!-- 3. A CONVERSATION: a chat, so every reply and every clue stays on the page -->
   <section class="screen talk" id="screen-talk" aria-label="Conversation 对话">
     <canvas class="bg" id="talkBg" aria-hidden="true"></canvas>
-    <div class="talk-grid">
-      <div class="talk-top">
-        <button class="btn ghost" id="talkBack" type="button">← 离开 Leave</button>
-        <div class="trust panel">
-          <div class="trust-row"><span>信任 Trust in you</span><span id="tTrustN">3 / 10</span></div>
-          <div class="meter" id="tMeter"></div>
-          <div class="impression" id="tImpression"></div>
-          <div class="secret-state" id="tSecret"></div>
-        </div>
-        <div class="talk-btns"><button class="btn ghost" id="talkGm" type="button">问 Ray Ask Ray</button>
-        <button class="btn ghost" id="logBtn" type="button" aria-expanded="false">记录 Log</button></div>
-      </div>
-
-      <div class="talk-stage">
-        <figure class="bust left" id="bustHero"><div class="img"></div><figcaption><b id="bhName"></b><small>你 You</small></figcaption></figure>
-        <figure class="bust right" id="bustNpc"><div class="img"></div><figcaption><b id="bnName"></b><small id="bnTitle"></small></figcaption></figure>
-      </div>
-
-      <div class="talk-bottom">
-        <div class="dialog panel">
-          <div class="speaker" id="speaker"></div>
-          <div class="said" id="said"></div>
-          <div class="lines" id="talkText" aria-live="polite"></div>
-          <div class="calls" id="talkCalls"></div>
-        </div>
-        <div class="quick" id="quick"></div>
-        <p class="note" id="talkNote" hidden></p>
-        <form class="composer panel" id="talkForm">
-          <label for="talkInput">Say something as Qinghe 以青禾的身份说话</label>
-          <input id="talkInput" autocomplete="off" maxlength="500" placeholder="Speak as Qinghe… 以青禾的身份说话…">
-          <button class="btn jade" id="talkSend" type="submit">Say 说</button>
-          <button class="btn ghost" id="talkStop" type="button" hidden>Stop 停止</button>
-        </form>
-      </div>
+    <div class="chat">
+      <header class="chat-head panel">
+        <button class="btn ghost back" id="talkBack" type="button" aria-label="Back to the inn 回到大堂">←</button>
+        <span class="avatar" id="chatAvatar"></span>
+        <div class="chat-who"><b id="chatName"></b><small id="chatTitle"></small></div>
+        <div class="chat-trust" id="chatTrust" aria-live="polite"></div>
+      </header>
+      <div class="thread" id="thread" aria-live="polite"></div>
+      <div class="quick" id="quick"></div>
+      <p class="note" id="talkNote" hidden></p>
+      <form class="composer panel" id="talkForm">
+        <label for="talkInput">Say something as Qinghe 以青禾的身份说话</label>
+        <input id="talkInput" autocomplete="off" maxlength="500" placeholder="Speak as Qinghe… 以青禾的身份说话…">
+        <button class="btn jade" id="talkSend" type="submit">说</button>
+        <button class="btn ghost" id="talkStop" type="button" hidden>停</button>
+      </form>
     </div>
-
-    <aside class="log-drawer panel" id="logDrawer" hidden aria-label="Conversation log 对话记录">
-      <header><span>记录 <em>Conversation log</em></span><button class="x" id="logClose" type="button" aria-label="Close 关闭">×</button></header>
-      <div class="log-body" id="logBody"></div>
-    </aside>
   </section>
 </main>
 
@@ -201,23 +127,27 @@
   </div>
 </div>
 
-<!-- the clues she has gathered -->
-<aside class="log-drawer case-drawer panel" id="caseDrawer" hidden aria-label="Clues 线索">
-  <header><span>线索 <em>What you know</em></span><button class="x" id="caseClose" type="button" aria-label="Close 关闭">×</button></header>
-  <div class="log-body" id="caseBody"></div>
-  <footer class="case-foot"><span id="caseClock"></span><button class="btn" id="caseMove" type="button">动手 · Make your move</button></footer>
-</aside>
-
-<!-- Ray, the game master -->
-<aside class="log-drawer gm-drawer panel" id="gmDrawer" hidden aria-label="Ask Ray 问 Ray">
-  <header><span class="gm-head"><span class="avatar mini" id="gmDrawerImg"></span>说书人 Ray <em>Game master</em></span><button class="x" id="gmClose" type="button" aria-label="Close 关闭">×</button></header>
-  <div class="log-body" id="gmLog"></div>
+<!-- Ray: what you've learned, and the game master to talk to -->
+<aside class="sheet gm-drawer panel" id="gmDrawer" hidden role="dialog" aria-label="Ask Ray 问 Ray">
+  <header>
+    <span class="gm-head"><span class="avatar mini" id="gmDrawerImg"></span>说书人 Ray <em>Game master</em></span>
+    <span class="clock-line" id="gmClock"></span>
+    <button class="x" id="gmClose" type="button" aria-label="Close 关闭">×</button>
+  </header>
+  <div class="sheet-body" id="gmBody">
+    <details class="learned" id="gmLearned">
+      <summary id="gmLearnedSum"></summary>
+      <div class="clues" id="gmClues"></div>
+      <div class="ways" id="gmWays"></div>
+    </details>
+    <div class="gm-log" id="gmLog"></div>
+  </div>
   <div class="quick gm-quick" id="gmQuick"></div>
   <p class="note" id="gmNote" hidden></p>
   <form class="composer" id="gmForm">
     <label for="gmInput">Ask Ray 问 Ray</label>
     <input id="gmInput" autocomplete="off" maxlength="400" placeholder="Ask Ray anything… 问问 Ray…">
-    <button class="btn" id="gmSend" type="submit">问 Ask</button>
+    <button class="btn" id="gmSend" type="submit">问</button>
   </form>
 </aside>
 
@@ -236,13 +166,13 @@
   </div>
 </div>
 
-<!-- the move: choose what you will use -->
+<!-- the move: the last one she makes -->
 <div class="modal" id="move" hidden role="dialog" aria-modal="true" aria-labelledby="mvTitle">
   <div class="modal-card panel accuse">
     <button class="x" id="mvClose" type="button" aria-label="Close 关闭">×</button>
     <h2 id="mvTitle" class="pl-title">动手 <em>Make your move</em></h2>
-    <p class="case-lead">There are two ways out of this inn, and only two. Choose one only if you have learned what it needs. This is your last move: press the button twice to confirm. If you are not ready, you die.
-这家客栈只有两条出路。只有当你弄清了它需要的东西，才选它。这是你最后一步：连点两次确认。没准备好，你就会死。</p>
+    <p class="case-lead">There are two ways out of this inn, and only two. Choose one only if you have learned what it needs (Ray's notes show what you know). This is your last move: press the button twice to confirm. If you are not ready, you die.
+这家客栈只有两条出路。只有当你弄清了它需要的东西，才选它（Ray 的笔记里有你已知道的）。这是你最后一步：连点两次确认。没准备好，你就会死。</p>
     <div class="fate-list" id="mvPaths"></div>
     <p class="note" id="mvNote"></p>
   </div>

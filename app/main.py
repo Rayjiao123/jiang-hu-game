@@ -107,6 +107,14 @@ def _events(upto: int) -> list[dict]:
     return [{"beat": b, "text": case.event_for(b)} for b in range(1, min(upto, case.DAWN_BEAT) + 1) if case.event_for(b)]
 
 
+def _ways(found: list[str]) -> dict:
+    """How close each way out is: only counts, never what is missing."""
+    return {k: {"have": len([n for n in v["needs"] if n in found]), "need": len(v["needs"]), "en": CATEGORIES_EN[k], "zh": v["zh"]} for k, v in case.PATHS.items()}
+
+
+CATEGORIES_EN = {"tunnel": "The tunnel", "kill": "Killing the keeper"}
+
+
 def _state(conn, g: dict) -> dict:
     """Everything the page needs to draw the night, and nothing the visitor has not earned."""
     found = g["found"]
@@ -120,7 +128,7 @@ def _state(conn, g: dict) -> dict:
     out = {"stage": g["stage"], "cast": cast, "found": [case.clue_view(c) for c in found if c in case.CLUES], "clock": case.clock(g["beat"]),
            "events": _events(g["beat"]), "ending": g["ending"], "path": g["path"], "cause": g["cause"],
            "ending_key": "dead" if g["stage"] == "dead" else (g["path"] if g["stage"] == "solved" else ""), "prologue": case.PROLOGUE, "hero": case.hero_card(), "gm": case.gm_card(),
-           "unmet": len(case.discoverable()) - len([c for c in found if case.CLUES[c]["holder"]]), "gm_turns": g["turns"][-12:]}
+           "ways": _ways(found), "unmet": len(case.discoverable()) - len([c for c in found if case.CLUES[c]["holder"]]), "gm_turns": g["turns"][-12:]}
     return out
 
 
@@ -261,29 +269,36 @@ def _credit(client, vid: str, key: str, g: dict, reply: str, trust: int) -> list
     return new
 
 
-DANGER = ("You watch for danger in a dark story game. The hero, Qinghe, has just said something to a character. Answer with a JSON array containing any of: "
-          '"showed_letter" (she shows, hands over, reads out or describes the contents of her sealed letter), '
-          '"revealed_plan" (she says she plans to escape, knows a secret way out, or plans to harm the keeper), '
-          '"threatened" (she threatens to hurt or kill someone, or draws a weapon). '
-          "Only include what she PLAINLY did in this message. Questions about the letter or the inn, and anything vague, do not count. Answer [] if none. Output only the JSON array.")
+WATCH = ("You judge one message in a dark story game. The hero, Qinghe, has just said something to a character. "
+         "Answer with one JSON object: {\"did\": [...], \"trust\": n}. "
+         "\"did\" lists any of: \"showed_letter\" (she shows, hands over, reads out or describes the contents of her sealed letter), "
+         "\"revealed_plan\" (she says she plans to escape, knows a secret way out, or plans to harm the keeper), "
+         "\"threatened\" (she threatens to hurt or kill someone, or draws a weapon). Only include what she PLAINLY did; questions about the letter or the inn do not count. "
+         "\"trust\" is how the message changes this character's trust in her, from -2 to 2: +1 for sincere kindness, honesty, respect, a gift or a shared moment that fits what the character values "
+         "(it should usually move up when she is genuinely kind or fits their values), +2 only for something that truly moves them, 0 for plain questions or small talk, "
+         "-1 for rudeness, pressure or a clumsy lie, -2 for insults, threats or a lie caught. Output only the JSON object.\n"
+         "The character: {who}. What earns their trust: {earns}")
 
 
-def _danger(client, vid: str, key: str, text: str) -> list[str]:
-    """What did the hero plainly do that this person would punish? A plain check of her own words, so a fatal slip is never left to the roleplaying model."""
-    if key not in set().union(*case.LETHAL.values()):
-        return []
-    kinds = []
+def _watch(client, vid: str, key: str, text: str) -> dict:
+    """Read the hero's own words before the person answers: did she do something fatal, and how does it change their trust?
+    A plain check, so neither a fatal slip nor a kindness is left to the roleplaying model's whim."""
+    c = case.BY_KEY[key]
+    kinds, delta = [], 0
     if key in case.LETHAL["threatened"] and case.THREAT.search(text):
         kinds.append("threatened")
     try:
         ratelimit.check(vid)
-        r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=40, temperature=0, extra_body={"thinking": {"type": "disabled"}},
-                                           messages=[{"role": "system", "content": DANGER}, {"role": "user", "content": bilingual.plain(text)}])
-        found = json.loads(re.search(r"\[.*?\]", r.choices[0].message.content or "", re.S).group(0))
-        kinds += [k for k in found if isinstance(k, str) and k in case.LETHAL]
-    except (RateLimited, AttributeError, ValueError, openai.APIError) as e:
-        print("Danger check skipped:", repr(e))
-    return [k for k in dict.fromkeys(kinds) if case.lethal(k, key)]
+        system = WATCH.replace("{who}", f"{c['name']}, {bilingual.plain(c['title'])}").replace("{earns}", bilingual.plain(c["earns"]))
+        r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=60, temperature=0, extra_body={"thinking": {"type": "disabled"}},
+                                           messages=[{"role": "system", "content": system}, {"role": "user", "content": bilingual.plain(text)}])
+        raw = r.choices[0].message.content or ""
+        obj = json.loads(re.search(r"\{.*\}", raw, re.S).group(0))
+        kinds += [k for k in obj.get("did", []) if isinstance(k, str) and k in case.LETHAL]
+        delta = max(-2, min(2, round(float(obj.get("trust", 0)))))
+    except (RateLimited, AttributeError, ValueError, TypeError, openai.APIError) as e:
+        print("Message check skipped:", repr(e))
+    return {"fatal": [k for k in dict.fromkeys(kinds) if case.lethal(k, key)], "delta": delta}
 
 
 def _npc_turn(client, tid: str, vid: str, message: str | None) -> Iterator[dict]:
@@ -298,13 +313,17 @@ def _npc_turn(client, tid: str, vid: str, message: str | None) -> Iterator[dict]
         if not talk:
             raise HTTPException(404, bi("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。"))
         key = talk["npc_key"]
-        trust_before = talk["trust"]            # clues are offered at the trust the hero walked in with
         turn = agent.Turn()
         fate: dict = {}                          # set when the hero does something that is fatal here
-        tools = game.npc_tools(talk, turn, key, fate)
-        fatal = _danger(client, vid, key, message) if not opening else []
+        seen = _watch(client, vid, key, message) if not opening else {"fatal": [], "delta": 0}
+        fatal = seen["fatal"]
         if fatal:
             fate["cause"] = "sold" if key == "hu" else "caught"
+        if seen["delta"]:                        # how her words landed, applied before they answer, so it shows in the reply and in what they will tell her
+            talk["trust"] = max(0, min(10, talk["trust"] + seen["delta"]))
+            yield {"type": "trust", "trust": talk["trust"], "delta": seen["delta"]}
+        trust_before = talk["trust"]
+        tools = game.npc_tools(talk, turn, key, fate, start_delta=seen["delta"])
         messages = [{"role": "system", "content": prompts.npc_system(key)},
                     *agent.history(talk["turns"]),
                     {"role": "system", "content": prompts.npc_state(key, talk["trust"], g["found"], g["beat"], opening)},

@@ -16,6 +16,11 @@ one of the killers to zero trust, make a wrong move, or let dawn come, and it is
 the whole story of the inn, and what she could have done. There are three endings: dead, out through the tunnel, or the keeper's key.
 The ending screen tracks which ones this browser has found.
 
+**Phone first.** The landing page is one screen: the name, the setting, Qinghe and her goal, Ray, and an enter button. The inn is a
+list of six people with a status line each (not spoken to / learned 2 of 3). A conversation is a chat thread: every reply stays on the
+page, trust changes show as tags, and each clue Ray files appears in the thread as a green card. There is no separate clue screen:
+"问 Ray" opens a sheet with Ray's notes (everything she has learned, and how close each way out is) above the chat with him.
+
 **Ray is the game master.** Ray (the author) narrates in the voice of a teahouse storyteller, has a portrait, opens the story, fires the
 events of the night (a scream upstairs, the lamps snuffed, camel bells on the pass), and can be asked anything at any time: what's going
 on, who someone is, or for a nudge. He only knows what Qinghe has learned, so he can't spoil the story. Like a tabletop DM, he will also
@@ -44,11 +49,13 @@ rules for dying, and the endings. The AI only plays the people and Ray.
   (`case.clue_state`). Facts above the trust line are not in the prompt at all, so they can't leak.
 - **The server files clues, not the model.** After each reply a small referee call decides which offered clues the reply actually told
   (`main._credit`) and adds them to the clue list. Clues that were not offered can't be filed.
-- **The server decides when she dies, not the roleplaying model.** Before a dangerous person answers, a plain check reads Qinghe's own
-  words for the fatal slips (`main._danger`: showing the letter, revealing a plan, threatening), with a regex for open threats. Reaching
+- **The server reads her words, not the roleplaying model.** Before anyone answers, one plain check (`main._watch`) reads Qinghe's own
+  message and says two things: did she do something fatal (showing the letter, revealing a plan, threatening; a regex also catches open
+  threats), and how did it land with this person (-2 to +2 trust, judged against what that person values). The trust change applies
+  before they answer, so it shows in the reply, in the chat as a "信任 +1" tag, and in what they will tell her. Reaching
   zero trust with a killer is fatal too. The model that plays the person is then told to act at once, and the reply shows it. A wrong
   `move` is fatal because `case.can_move` checks the clues she actually holds.
-- **Trust moves at most ±2 per reply**, however many times the model asks (`game.npc_tools`).
+- **Trust moves at most ±2 per reply**, counting the server's judgement and anything the model's own `adjust_trust` tool adds (`game.npc_tools`).
 - **The clock is the deadline.** Every seventh thing Qinghe says, an hour of the night passes (`MSGS_PER_BEAT`), and Ray announces the
   night's events. At dawn she dies. Asking Ray costs no time.
 - **Ray's telling.** A death is explained from written text (`case.death_text`: how, the truth of the inn, what she missed). A win is
@@ -58,9 +65,9 @@ rules for dying, and the endings. The AI only plays the people and Ray.
 ## How it fits together
 
 ```
-static/index.html      the screens: landing page, the inn, a conversation; clues, Ray's drawer, the move, the ending
+static/index.html      the screens: a one-screen landing page, the inn (a list of people), a chat; Ray's sheet, the move, the ending
 static/style.css       the game interface: lacquer panels and gold frames over painted scenes
-static/app.js          the journey: screens, clock, conversations, clues, Ray, the move, the ending
+static/app.js          the journey: screens, clock, the chat thread, Ray's notes and questions, the move, the ending
 static/portrait.js     painted character portraits (soft Jin Yong game-art style), with a cutout mode
 static/scenes.js       painted backdrops, including the desert inn at dusk
 app/case.py            THE STORY: truth, cast, clues, clock, events, escape rules, prologue and endings

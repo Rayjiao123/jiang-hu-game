@@ -171,7 +171,7 @@ def chunk(content=None, tool=None):
 class FakeLLM:
     """Streams scripted rounds, answers translation, the referee and the ending, and records what it was sent."""
     def __init__(self):
-        self.rounds, self.requests, self.told, self.danger = [], [], [], []
+        self.rounds, self.requests, self.told, self.danger, self.trust = [], [], [], [], 0
         self.chat = NS(completions=NS(create=self._create))
 
     def _create(self, **kw):
@@ -179,8 +179,8 @@ class FakeLLM:
         if kw.get("stream"):
             return iter(self.rounds.pop(0) if self.rounds else [chunk("A quiet nod. ||| 默默点头。")])
         system = kw["messages"][0]["content"]
-        if system.startswith("You watch for danger"):
-            return NS(choices=[NS(message=NS(content=json.dumps(self.danger)))])
+        if system.startswith("You judge one message"):
+            return NS(choices=[NS(message=NS(content=json.dumps({"did": self.danger, "trust": self.trust})))])
         if system.startswith("You referee"):
             return NS(choices=[NS(message=NS(content=json.dumps(self.told)))])
         if "Tell the ending" in kw["messages"][-1]["content"]:
@@ -424,5 +424,26 @@ def test_the_danger_check_only_runs_for_people_who_could_kill_her(api):
     t = talk(api, "tuo")
     api.llm.danger = ["showed_letter", "threatened"]
     assert not [e for e in say(api, t["id"], "Here. Read this.") if e["type"] == "death"]
-    assert not any(r["messages"][0]["content"].startswith("You watch for danger") for r in api.llm.requests)
     assert case.THREAT.search("Stand aside, or I will cut you down.") and case.THREAT.search("我砍了你")
+
+
+def test_her_words_move_trust_before_they_answer_and_unlock_what_they_will_say(api):
+    start(api)
+    t = talk(api, "xiaolu")                                  # starts at 3; the bodies need 4
+    api.llm.trust = 1                                         # the plain check judges her message kind
+    api.llm.told = ["bodies"]
+    api.llm.rounds = [[chunk("Miss... the floor. ||| 姑娘……那地板。")]]
+    evs = say(api, t["id"], "Here, I saved you a sweet. You look like you haven't sat down all day.")
+    trust = [e for e in evs if e["type"] == "trust"]
+    assert trust and trust[0]["delta"] == 1 and trust[0]["trust"] == 4
+    assert [e["clue"]["id"] for e in evs if e["type"] == "clue"] == ["bodies"]        # offered at the new trust, so filed in the same turn
+    assert api.post("/api/talks", json={"npc": "xiaolu"}).json()["trust"] == 4
+
+
+def test_rudeness_costs_trust_and_the_model_cannot_move_it_further_in_the_same_reply(api):
+    start(api)
+    t = talk(api, "tuo")
+    api.llm.trust = -2
+    api.llm.rounds = [[chunk(tool={"id": "c1", "name": "adjust_trust", "args": '{"delta": -2, "reason": "x"}'})], [chunk("Hm. ||| 嗯。")]]
+    say(api, t["id"], "You useless old fool.")
+    assert api.post("/api/talks", json={"npc": "tuo"}).json()["trust"] == 1             # 3 - 2, and the tool adds nothing more this reply

@@ -74,8 +74,8 @@ def fatal_instruction(key: str) -> str:
     return f"This is fatal for the hero. {how} Write two or three short sentences in your own voice, ending at the moment it happens. Do not describe her dying in detail."
 
 
-def npc_tools(talk: dict, turn: Turn, key: str = "", fate: dict | None = None) -> list[Tool]:
-    net = {"d": 0}                    # how far trust has moved during this one turn
+def npc_tools(talk: dict, turn: Turn, key: str = "", fate: dict | None = None, start_delta: int = 0) -> list[Tool]:
+    net = {"d": start_delta}                    # how far trust has moved during this one turn
     fate = fate if fate is not None else {}
 
     def hero_did(args):
