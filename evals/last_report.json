@@ -1,0 +1,473 @@
+{
+ "model": "deepseek-flash",
+ "ts": "2026-10-07 23:04:22",
+ "judge": {
+  "voice": 5.0,
+  "era": 4.83,
+  "drama": 4.17
+ },
+ "results": [
+  {
+   "group": "secrets",
+   "name": "Siniang: pressed for everything, gives away none of the gated facts",
+   "ok": true,
+   "detail": "said: ",
+   "hard": true
+  },
+  {
+   "group": "secrets",
+   "name": "Tuo: pressed for everything, gives away none of the gated facts",
+   "ok": true,
+   "detail": "said: ",
+   "hard": true
+  },
+  {
+   "group": "secrets",
+   "name": "Liu: pressed for everything, gives away none of the gated facts",
+   "ok": true,
+   "detail": "said: ",
+   "hard": true
+  },
+  {
+   "group": "secrets",
+   "name": "Wolf: pressed for everything, gives away none of the gated facts",
+   "ok": true,
+   "detail": "said: ",
+   "hard": true
+  },
+  {
+   "group": "secrets",
+   "name": "Lu: pressed for everything, gives away none of the gated facts",
+   "ok": true,
+   "detail": "said: ",
+   "hard": true
+  },
+  {
+   "group": "secrets",
+   "name": "Ashina: pressed for everything, gives away none of the gated facts",
+   "ok": true,
+   "detail": "said: ",
+   "hard": true
+  },
+  {
+   "group": "era",
+   "name": "Tuo: reacts as someone of the year 1200 would",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "group": "era",
+   "name": "Tuo: recognises it as out of the world (calls the tool)",
+   "ok": true,
+   "detail": "",
+   "hard": false
+  },
+  {
+   "group": "era",
+   "name": "Lu: reacts as someone of the year 1200 would",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "group": "era",
+   "name": "Lu: recognises it as out of the world (calls the tool)",
+   "ok": false,
+   "detail": "",
+   "hard": false
+  },
+  {
+   "group": "era",
+   "name": "Liu: reacts as someone of the year 1200 would",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "group": "era",
+   "name": "Liu: recognises it as out of the world (calls the tool)",
+   "ok": false,
+   "detail": "",
+   "hard": false
+  },
+  {
+   "group": "era",
+   "name": "Ashina: reacts as someone of the year 1200 would",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "group": "era",
+   "name": "Ashina: recognises it as out of the world (calls the tool)",
+   "ok": true,
+   "detail": "",
+   "hard": false
+  },
+  {
+   "group": "format",
+   "name": "Siniang: every reply is English then Chinese",
+   "ok": true,
+   "detail": "0 of 2 not in both languages",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Siniang: replies stay short (<=110 English words)",
+   "ok": true,
+   "detail": "0 too long",
+   "hard": false
+  },
+  {
+   "group": "format",
+   "name": "Siniang: no Chinese paragraph inside the English half",
+   "ok": true,
+   "detail": "0 leaked",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Siniang: never breaks the fourth wall or shows markup",
+   "ok": true,
+   "detail": "0 did",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Tuo: every reply is English then Chinese",
+   "ok": true,
+   "detail": "0 of 2 not in both languages",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Tuo: replies stay short (<=110 English words)",
+   "ok": true,
+   "detail": "0 too long",
+   "hard": false
+  },
+  {
+   "group": "format",
+   "name": "Tuo: no Chinese paragraph inside the English half",
+   "ok": true,
+   "detail": "0 leaked",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Tuo: never breaks the fourth wall or shows markup",
+   "ok": true,
+   "detail": "0 did",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Liu: every reply is English then Chinese",
+   "ok": true,
+   "detail": "0 of 2 not in both languages",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Liu: replies stay short (<=110 English words)",
+   "ok": true,
+   "detail": "0 too long",
+   "hard": false
+  },
+  {
+   "group": "format",
+   "name": "Liu: no Chinese paragraph inside the English half",
+   "ok": true,
+   "detail": "0 leaked",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Liu: never breaks the fourth wall or shows markup",
+   "ok": true,
+   "detail": "0 did",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Wolf: every reply is English then Chinese",
+   "ok": true,
+   "detail": "0 of 2 not in both languages",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Wolf: replies stay short (<=110 English words)",
+   "ok": true,
+   "detail": "0 too long",
+   "hard": false
+  },
+  {
+   "group": "format",
+   "name": "Wolf: no Chinese paragraph inside the English half",
+   "ok": true,
+   "detail": "0 leaked",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Wolf: never breaks the fourth wall or shows markup",
+   "ok": true,
+   "detail": "0 did",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Lu: every reply is English then Chinese",
+   "ok": true,
+   "detail": "0 of 2 not in both languages",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Lu: replies stay short (<=110 English words)",
+   "ok": true,
+   "detail": "0 too long",
+   "hard": false
+  },
+  {
+   "group": "format",
+   "name": "Lu: no Chinese paragraph inside the English half",
+   "ok": true,
+   "detail": "0 leaked",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Lu: never breaks the fourth wall or shows markup",
+   "ok": true,
+   "detail": "0 did",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Ashina: every reply is English then Chinese",
+   "ok": true,
+   "detail": "0 of 2 not in both languages",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Ashina: replies stay short (<=110 English words)",
+   "ok": true,
+   "detail": "0 too long",
+   "hard": false
+  },
+  {
+   "group": "format",
+   "name": "Ashina: no Chinese paragraph inside the English half",
+   "ok": true,
+   "detail": "0 leaked",
+   "hard": true
+  },
+  {
+   "group": "format",
+   "name": "Ashina: never breaks the fourth wall or shows markup",
+   "ok": true,
+   "detail": "0 did",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "shuang: catches ['showed_letter'] in “Here. This is the letter my father died carryi…”",
+   "ok": true,
+   "detail": "got ['showed_letter']",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "hu: catches ['showed_letter'] in “Look, I'll show you what is in my saddle: a se…”",
+   "ok": true,
+   "detail": "got ['showed_letter']",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "shuang: catches ['revealed_plan'] in “I know a way out of here and I'm leaving tonig…”",
+   "ok": true,
+   "detail": "got ['revealed_plan']",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "wolf: catches ['revealed_plan'] in “I'm going to find the secret tunnel and slip o…”",
+   "ok": true,
+   "detail": "got ['revealed_plan']",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "wolf: catches ['threatened'] in “Stand aside, or I will cut you down.…”",
+   "ok": true,
+   "detail": "got ['threatened']",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "shuang: catches ['threatened'] in “I'll kill you if you don't open that door.…”",
+   "ok": true,
+   "detail": "got ['threatened']",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "shuang: does NOT flag “What a lovely inn. Is the soup always this good?…”",
+   "ok": true,
+   "detail": "flagged []",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "shuang: trust change +0 fits “What a lovely inn. Is the soup always th…”",
+   "ok": true,
+   "detail": "expected about zero",
+   "hard": false
+  },
+  {
+   "group": "watch",
+   "name": "wolf: does NOT flag “That's a heavy saber. You must have walked a long …”",
+   "ok": true,
+   "detail": "flagged []",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "wolf: trust change +1 fits “That's a heavy saber. You must have walk…”",
+   "ok": true,
+   "detail": "expected about zero",
+   "hard": false
+  },
+  {
+   "group": "watch",
+   "name": "hu: does NOT flag “What do you know about this letter business? Peopl…”",
+   "ok": true,
+   "detail": "flagged []",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "hu: trust change +0 fits “What do you know about this letter busin…”",
+   "ok": true,
+   "detail": "expected about zero",
+   "hard": false
+  },
+  {
+   "group": "watch",
+   "name": "shuang: does NOT flag “Why is the door barred? Is something wrong?…”",
+   "ok": true,
+   "detail": "flagged []",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "shuang: trust change +0 fits “Why is the door barred? Is something wro…”",
+   "ok": true,
+   "detail": "expected about zero",
+   "hard": false
+  },
+  {
+   "group": "watch",
+   "name": "wolf: does NOT flag “My father was a courier too. I know what it is to …”",
+   "ok": true,
+   "detail": "flagged []",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "wolf: trust change +1 fits “My father was a courier too. I know what…”",
+   "ok": true,
+   "detail": "expected up",
+   "hard": false
+  },
+  {
+   "group": "watch",
+   "name": "hu: does NOT flag “Fair price, my friend. I appreciate an honest barg…”",
+   "ok": true,
+   "detail": "flagged []",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "hu: trust change +1 fits “Fair price, my friend. I appreciate an h…”",
+   "ok": true,
+   "detail": "expected up",
+   "hard": false
+  },
+  {
+   "group": "watch",
+   "name": "shuang: does NOT flag “You are a vile witch and everyone here hates you.…”",
+   "ok": true,
+   "detail": "flagged []",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "shuang: trust change -2 fits “You are a vile witch and everyone here h…”",
+   "ok": true,
+   "detail": "expected down",
+   "hard": false
+  },
+  {
+   "group": "watch",
+   "name": "wolf: does NOT flag “You're a coward and a hired dog.…”",
+   "ok": true,
+   "detail": "flagged []",
+   "hard": true
+  },
+  {
+   "group": "watch",
+   "name": "wolf: trust change -2 fits “You're a coward and a hired dog.…”",
+   "ok": true,
+   "detail": "expected down",
+   "hard": false
+  },
+  {
+   "group": "referee",
+   "name": "xiaolu/bodies: told → filed",
+   "ok": true,
+   "detail": "filed=True",
+   "hard": true
+  },
+  {
+   "group": "referee",
+   "name": "xiaolu/bodies: deflected → not filed",
+   "ok": true,
+   "detail": "filed=False",
+   "hard": true
+  },
+  {
+   "group": "referee",
+   "name": "tuo/debt: told → filed",
+   "ok": true,
+   "detail": "filed=True",
+   "hard": true
+  },
+  {
+   "group": "referee",
+   "name": "tuo/debt: deflected → not filed",
+   "ok": true,
+   "detail": "filed=False",
+   "hard": true
+  },
+  {
+   "group": "referee",
+   "name": "liu/badge: told → filed",
+   "ok": true,
+   "detail": "filed=True",
+   "hard": true
+  },
+  {
+   "group": "referee",
+   "name": "liu/badge: deflected → not filed",
+   "ok": true,
+   "detail": "filed=False",
+   "hard": true
+  }
+ ]
+}

@@ -34,6 +34,24 @@ CREATE TABLE IF NOT EXISTS talks (
     updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS talks_by_visitor ON talks (visitor_id, npc_key);
+CREATE TABLE IF NOT EXISTS talk_archive (               -- conversations from nights that were ended or restarted, kept to review the AI
+    id          TEXT PRIMARY KEY,
+    visitor_id  TEXT NOT NULL,
+    npc_key     TEXT NOT NULL,
+    trust       INTEGER NOT NULL,
+    turns       TEXT NOT NULL DEFAULT '[]',
+    updated_at  REAL NOT NULL,
+    archived_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS events (                     -- what visitors did: one row per thing, no message text
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts         REAL NOT NULL,
+    visitor_id TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    data       TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS events_by_kind ON events (kind, ts);
+CREATE INDEX IF NOT EXISTS events_by_visitor ON events (visitor_id, ts);
 """
 
 
@@ -78,21 +96,37 @@ def get_play(conn, visitor_id: str) -> dict | None:
             "tier": r["tier"], "path": r["path"], "cause": r["cause"], "turns": json.loads(r["turns"]), "ending": r["ending"]}
 
 
+def log(conn, visitor_id: str, event: str, **data) -> None:
+    """Record one thing a visitor did. Never message text: the numbers are for counting, the transcripts for reading."""
+    conn.execute("INSERT INTO events (ts, visitor_id, kind, data) VALUES (?,?,?,?)", (time.time(), visitor_id, event, json.dumps(data, ensure_ascii=False)))
+
+
 def new_play(conn, visitor_id: str, found: list[str]) -> dict:
-    """Start again: any earlier night and its conversations are dropped."""
+    """Start again: any earlier night is closed (its conversations are archived) and a new one begins."""
     delete_play(conn, visitor_id)
     conn.execute("INSERT INTO plays (visitor_id, stage, found, updated_at) VALUES (?,?,?,?)",
                  (visitor_id, "playing", json.dumps(found), time.time()))
+    log(conn, visitor_id, "start")
     return get_play(conn, visitor_id)
 
 
 def save_play(conn, g: dict) -> None:
+    before = conn.execute("SELECT stage FROM plays WHERE visitor_id = ?", (g["visitor_id"],)).fetchone()
+    if before and before["stage"] not in ("dead", "solved") and g["stage"] in ("dead", "solved"):
+        log(conn, g["visitor_id"], "end", stage=g["stage"], ending=("dead" if g["stage"] == "dead" else g["path"]), cause=g["cause"], beat=g["beat"],
+            msgs=g["msgs"], clues=len([c for c in g["found"] if c != "official"]), path=g["path"])
     conn.execute("UPDATE plays SET stage = ?, found = ?, beat = ?, msgs = ?, tier = ?, path = ?, cause = ?, turns = ?, ending = ?, updated_at = ? WHERE visitor_id = ?",
                  (g["stage"], json.dumps(g["found"]), g["beat"], g["msgs"], g["tier"], g["path"], g["cause"], json.dumps(g["turns"], ensure_ascii=False),
                   g["ending"], time.time(), g["visitor_id"]))
 
 
 def delete_play(conn, visitor_id: str) -> None:
+    """Close a night. Conversations are moved to the archive, not thrown away, so the AI's replies can still be reviewed."""
+    play = conn.execute("SELECT stage, msgs, beat FROM plays WHERE visitor_id = ?", (visitor_id,)).fetchone()
+    if play and play["stage"] not in ("dead", "solved"):
+        log(conn, visitor_id, "abandoned", msgs=play["msgs"], beat=play["beat"])          # left, or started over, without finishing
+    conn.execute("INSERT OR IGNORE INTO talk_archive (id, visitor_id, npc_key, trust, turns, updated_at, archived_at) "
+                 "SELECT id, visitor_id, npc_key, trust, turns, updated_at, ? FROM talks WHERE visitor_id = ?", (time.time(), visitor_id))
     conn.execute("DELETE FROM talks WHERE visitor_id = ?", (visitor_id,))
     conn.execute("DELETE FROM plays WHERE visitor_id = ?", (visitor_id,))
 

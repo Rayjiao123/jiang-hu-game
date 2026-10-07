@@ -23,7 +23,9 @@
       <span class="me-text"><b id="meName"></b><small>你 You</small></span>
     </button>
   </div>
+  <button class="menu-btn" id="menuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Menu 菜单">☰</button>
 </header>
+<nav class="menu panel" id="menu" role="menu" hidden aria-label="Menu 菜单"></nav>
 
 <main id="app">
 
@@ -69,6 +71,7 @@
       </div>
       <button class="btn big" id="gateStart" type="button">走进客栈 · Enter the inn</button>
       <p class="gate-warn">A wrong word or a wrong move, and you die. 一句错话，一步错棋，就是死。</p>
+      <p class="gate-privacy">Chats are saved to run and improve the game. 对话会被保存，用于运行并改进游戏。</p>
     </div>
   </section>
 
@@ -76,6 +79,7 @@
   <section class="screen scene" id="screen-scene" aria-label="The Black Sand Inn 黑沙客栈">
     <canvas class="bg" id="sceneBg" aria-hidden="true"></canvas>
     <div class="scene-wrap">
+      <button class="home-link" id="homeLink" type="button">← 首页 Home</button>
       <button class="ray-strip panel" id="scNews" type="button" aria-label="Ask Ray 问 Ray"></button>
       <h2 class="scene-title">黑沙客栈 <em>Who do you talk to? 找谁说话？</em></h2>
       <div class="people" id="people"></div>
@@ -181,9 +185,10 @@
 <div class="modal" id="endModal" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
   <div class="modal-card panel ending">
     <h2 id="endTitle" class="pl-title"></h2>
+    <div class="lang-toggle" id="endLang" role="group" aria-label="Language 语言"><button type="button" data-l="" aria-pressed="true">中英 Both</button><button type="button" data-l="only-en" aria-pressed="false">English</button><button type="button" data-l="only-zh" aria-pressed="false">中文</button></div>
     <div class="end-text" id="endText"></div>
     <div class="end-track" id="endTrack"></div>
-    <div class="md-actions"><button class="btn big" id="endAgain" type="button">再来一夜 · Play again</button> <button class="btn ghost" id="endStay" type="button">留在这里 · Stay</button></div>
+    <div class="md-actions"><button class="btn big" id="endAgain" type="button">再来一夜 · Play again</button> <button class="btn ghost" id="endStay" type="button">留在这里 · Stay</button> <button class="btn ghost" id="endHome" type="button">首页 · Home</button></div>
   </div>
 </div>
 

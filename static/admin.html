@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Admin · 人在江湖，身不由己</title>
+<style>
+  :root { color-scheme: dark; --bg: #14110e; --card: #1f1a15; --line: #3a3126; --text: #f1eadb; --dim: #a79c86; --gold: #d8b45a; --jade: #6fae93; --red: #e0705a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, sans-serif; padding: 16px; max-width: 1100px; margin-inline: auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 22px 0 8px; color: var(--gold); }
+  .dim { color: var(--dim); }
+  form, .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+  input, select, button { font: inherit; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  button { cursor: pointer; border-color: var(--gold); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .card b { display: block; font-size: 24px; } .card span { color: var(--dim); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 13px; vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; } .scroll { overflow-x: auto; }
+  .bar { height: 8px; background: var(--gold); border-radius: 4px; min-width: 2px; }
+  .talk { background: var(--card); border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; }
+  .talk summary { cursor: pointer; padding: 8px 12px; } .talk .turns { padding: 4px 12px 12px; display: grid; gap: 8px; }
+  .msg { padding: 6px 10px; border-radius: 6px; white-space: pre-wrap; } .msg.user { background: #2c2418; } .msg.assistant { background: #1a2320; }
+  .up { color: var(--jade); } .down { color: var(--red); }
+  #err { color: var(--red); }
+</style>
+</head>
+<body>
+<h1>人在江湖，身不由己 · Admin</h1>
+<p class="dim">Who came, what they did, and what the characters said. Counts only; message text is in the transcripts below.</p>
+<form id="login"><input id="pw" type="password" placeholder="Admin password" autocomplete="current-password"><button>Open</button> <span id="err"></span></form>
+<div id="app" hidden>
+  <div class="row"><label>Last <select id="days"><option>1</option><option>7</option><option selected>14</option><option>90</option></select> days</label><button id="reload" type="button">Refresh</button></div>
+  <div class="cards" id="cards"></div>
+  <h2>Funnel (distinct visitors)</h2><div class="scroll"><table id="funnel"></table></div>
+  <h2>Endings and deaths</h2><div class="scroll"><table id="endings"></table></div>
+  <h2>People: how each character performs</h2><div class="scroll"><table id="people"></table></div>
+  <h2>Clues found</h2><div class="scroll"><table id="clues"></table></div>
+  <h2>By day (UTC)</h2><div class="scroll"><table id="daily"></table></div>
+  <h2>Conversations</h2>
+  <div class="row"><label><input id="onlyDown" type="checkbox"> only replies that got 👎</label><button id="loadTalks" type="button">Load</button></div>
+  <div id="talks"></div>
+</div>
+<script>
+  const $ = s => document.querySelector(s);
+  const esc = t => String(t ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  let pw = "";
+  try { pw = sessionStorage.getItem("pw") || ""; } catch { /* private window */ }
+  async function get(path) {
+    const r = await fetch(path, { headers: { authorization: "Bearer " + pw } });
+    if (!r.ok) throw new Error(r.status === 401 ? "Wrong password." : r.status === 404 ? "Admin is switched off: set ADMIN_PASSWORD on the server." : "Error " + r.status);
+    return r.json();
+  }
+  const table = (el, head, rows) => { el.innerHTML = "<tr>" + head.map(h => `<th>${h}</th>`).join("") + "</tr>" + rows.map(r => "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join(""); };
+  async function load() {
+    const s = await get("/api/admin/stats?days=" + $("#days").value);
+    $("#cards").innerHTML = [["Visitors", s.visitors], ["Page loads", s.page_loads], ["Nights started", s.nights_started], ["Finished", s.nights_finished], ["Left unfinished", s.nights_abandoned],
+      ["Minutes to finish (avg)", s.avg_minutes_to_finish ?? "–"], ["Player messages", s.ai.player_messages], ["Asked Ray", s.ai.ray_questions], ["AI errors", s.ai.errors],
+      ["👍 / 👎", `${s.feedback.up} / ${s.feedback.down}`]].map(([k, v]) => `<div class="card"><b>${v}</b><span>${k}</span></div>`).join("");
+    const top = Math.max(1, ...s.funnel.map(f => f.visitors));
+    table($("#funnel"), ["Step", "Visitors", ""], s.funnel.map(f => [f.step, f.visitors, `<div class="bar" style="width:${Math.round(f.visitors / top * 100)}%"></div>`]));
+    const names = { dead: "Died", tunnel: "Escaped by the tunnel", kill: "Killed the keeper" };
+    table($("#endings"), ["Ending", "Count"], [...Object.entries(s.endings).map(([k, v]) => [names[k] || k, v]), ...Object.entries(s.death_causes).map(([k, v]) => ["&nbsp;&nbsp;died: " + k, v])]);
+    table($("#people"), ["Person", "Talks started", "Messages", "Clues told", "Avg trust change", "Fatal to her", "👍", "👎"],
+      Object.values(s.people).map(p => [esc(p.name), p.talks, p.messages, p.clues_told, p.avg_trust_change, p.killed_her, `<span class="up">${p.up}</span>`, `<span class="down">${p.down}</span>`]));
+    table($("#clues"), ["Clue", "Times told"], Object.entries(s.clues).sort((a, b) => b[1] - a[1]).map(([k, v]) => [esc(k), v]));
+    table($("#daily"), ["Date", "Page loads", "Nights started", "Endings", "Messages"], s.daily.map(d => [d.date, d.visits, d.starts, d.endings, d.messages]));
+  }
+  async function loadTalks() {
+    const d = await get("/api/admin/transcripts?limit=60&only_down=" + $("#onlyDown").checked);
+    $("#talks").innerHTML = d.talks.map(t => `<details class="talk"><summary><b>${esc(t.npc)}</b> · visitor ${t.visitor} · trust ${t.trust} · ${t.updated}${t.archived ? " · finished/left" : " · live"} · ${t.turns.length} lines</summary><div class="turns">` +
+      t.turns.map(m => `<div class="msg ${m.role}">${esc(m.content)}${m.rating ? ` <span class="${m.rating}">${m.rating === "up" ? "👍" : "👎"}</span>` : ""}</div>`).join("") + "</div></details>").join("") || '<p class="dim">Nothing yet.</p>';
+  }
+  async function open() {
+    $("#err").textContent = "";
+    try { await load(); await loadTalks(); $("#login").hidden = true; $("#app").hidden = false; try { sessionStorage.setItem("pw", pw); } catch { /* private window */ } }
+    catch (e) { $("#err").textContent = e.message; }
+  }
+  $("#login").addEventListener("submit", e => { e.preventDefault(); pw = $("#pw").value; open(); });
+  $("#reload").addEventListener("click", () => load().catch(e => alert(e.message)));
+  $("#loadTalks").addEventListener("click", () => loadTalks().catch(e => alert(e.message)));
+  $("#days").addEventListener("change", () => load().catch(e => alert(e.message)));
+  if (pw) open();
+</script>
+</body>
+</html>

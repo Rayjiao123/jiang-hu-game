@@ -78,6 +78,9 @@ app/prompts.py         world bible, era rules, per-person instructions, Ray's in
 app/bilingual.py       the "English ||| 中文" format, tidying replies, and the fallback translation
 app/db.py              SQLite: plays (one per visitor) and talks (one per visitor and person)
 app/ratelimit.py       per-visitor and daily caps on model calls
+app/stats.py           the admin's numbers and transcripts, built from the events table
+static/admin.html      the admin page: funnel, endings, per-character numbers, conversations
+evals/run.py           the live evaluation of the characters
 ```
 
 **Prompt layout for caching.** Each request is `[system: world + era rules + this person + Qinghe] [history]
@@ -106,10 +109,50 @@ by the server and stored in both languages. Fixed messages are written in both l
 | POST | `/api/talks` | start (or resume) talking to someone |
 | POST | `/api/talks/{id}/open` · `/chat` | they speak first · Qinghe says something (stream; includes `clue`, `gm`, `clock` and `death` events) |
 | POST | `/api/gm/chat` | ask Ray something (stream; costs no time) |
+| POST | `/api/feedback` | a 👍 or 👎 on one of a character's replies |
+| GET | `/api/admin/stats` · `/api/admin/transcripts` | visitor numbers and conversations (needs `ADMIN_PASSWORD`) |
 | POST | `/api/move` | try one of the two ways out (`tunnel` or `kill`); fatal if the clues she holds don't open it |
 | POST | `/api/ending` | after a successful move: Ray's telling of the whole story and what became of everyone |
 
 Visitors are identified by an anonymous `vid` cookie, which owns their night and conversations. Nothing is shared between visitors.
+
+## Knowing your visitors
+
+Set `ADMIN_PASSWORD` and open `/admin.html`. The page needs the password (sent as a bearer token to `/api/admin/*`), is marked `noindex`,
+and is switched off entirely when the variable is empty.
+
+- **Counts, never text.** `events` records one row per thing a visitor did: `visit`, `start`, `talk` (who), `msg` (who, trust change, fatal or not),
+  `clue`, `gm`, `move`, `end` (ending, cause of death, messages, minutes), `abandoned`, `error`, `feedback`. A visitor is the anonymous `vid` cookie; the
+  admin shows a short hash of it. The test suite checks that what a player typed never reaches `events`.
+- **What the page shows:** visitors and page loads, nights started / finished / left unfinished, a funnel (opened the page, started, talked,
+  asked Ray, made the final move, reached an ending), how many reached each ending and how they died, minutes to finish, per-character
+  numbers (talks, messages, clues told, average trust change, how often they killed her, thumbs), which clues get found, AI errors by kind, and a per-day table.
+- **Conversations are kept** so the AI's replies can be read. A night that ends or is restarted moves its conversations to `talk_archive` instead of deleting them.
+  The landing page says chats are saved to run and improve the game; if you keep them for long, add a retention rule and a privacy page.
+- **Thumbs.** Every reply has 👍 / 👎. The admin transcript view can show only the conversations with a 👎.
+- **Spend.** `CALLS_PER_VISITOR_PER_10_MIN` (default 150) and `DAILY_CALL_CAP` (default 8000) cap model calls. One player message costs about four or five calls
+  (translation, the message check, the reply, the clue referee), and a whole night is a few hundred. The counters live in memory, so a restart resets them.
+
+## Evaluating the characters
+
+Three layers, from cheap to real:
+
+1. **`pytest` (offline, free, 51 tests)**: the rules that must never break, with a fake model. Facts above the trust line are not in a person's prompt;
+   clues are filed only when offered; a wrong move or a fatal slip kills her; trust moves at most ±2; endings fall back to written text; the admin is locked.
+2. **`python -m evals.run` (live model, about 60 calls, a minute and a half)**: what a player would notice if it went wrong, run on all six characters.
+   It checks that every reply is English then Chinese with no leaks or markup; that a nosy, polite question gets no gated fact out of anyone and never gets her killed;
+   that modern things are met with confusion; that the check on her words catches fatal slips (showing the letter, revealing a plan, threatening) and,
+   most importantly, never flags innocent messages; that kindness and rudeness move trust the right way; and that the clue referee files only what was really told.
+   `--judge` adds a model that scores voice, period feel and drama from 1 to 5. Hard checks make the exit code 1; the report goes to `evals/last_report.json`.
+   Run it whenever a prompt or the model changes and compare with the last report.
+3. **Real players**: 👍/👎 on every reply, the transcripts page, the death-cause and per-person numbers. The eval set is small by design; the way it grows
+   is to copy a 👎 reply from the admin into `evals/run.py` as a new case.
+
+## Getting around
+
+The ☰ menu is on every screen once a night has started: Home (the title page), the inn, Ray, Qinghe, and Start the night over. The logo goes home,
+the inn has a ← Home link, a conversation has ←, and the ending screen offers Play again, Stay and Home. Leaving a conversation keeps it; the night is only
+lost if you start over.
 
 ## Deploying to Railway
 
@@ -120,7 +163,7 @@ The repo includes a `Dockerfile` and `railway.json`, so Railway builds it withou
 3. **Add a volume** to the service, mounted at `/data`. The SQLite database lives there
    (`DATABASE_PATH=/data/jianghu.db` is already set in the Dockerfile). Without a volume, every
    deploy wipes the players' progress.
-4. **Variables:** `DEEPSEEK_API_KEY`.
+4. **Variables:** `DEEPSEEK_API_KEY`, and a long random `ADMIN_PASSWORD` to switch on `/admin.html`.
 5. **Settings → Networking → Generate Domain** for a free `*.up.railway.app` address, or add your
    own domain there and create the DNS record it shows.
 6. Keep the service at **one replica**: the rate limiter lives in memory.
@@ -134,5 +177,6 @@ A database made by an earlier version still works: its old tables are simply unu
 1. Playtest with real people and tune trust levels, how many exchanges make an hour, and how freely each person talks
 2. Combat, run by Ray like a tabletop game master (dice, the player's declared actions, Ray's rulings): the fight with the keeper is the obvious first one
 3. More chapters and places: the second night, the road, the capital
-4. Longer conversation memory: summarise old turns instead of dropping them
-5. Real painted art: an image model, or layered parts drawn by an artist, behind `portrait.js`
+4. Grow the eval set from 👎 replies, and move the rate limiter to Redis if you run more than one replica
+5. Longer conversation memory: summarise old turns instead of dropping them
+6. Real painted art: an image model, or layered parts drawn by an artist, behind `portrait.js`

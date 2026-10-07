@@ -11,7 +11,7 @@ os.environ["DEEPSEEK_API_KEY"] = "test-key"
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import agent, bilingual, case, db, game, main, prompts  # noqa: E402
+from app import agent, bilingual, case, db, game, main, prompts, stats  # noqa: E402
 
 
 # ---------- the story itself ----------
@@ -193,6 +193,9 @@ def api(monkeypatch):
     llm = FakeLLM()
     monkeypatch.setattr(main, "llm", lambda: llm)
     monkeypatch.setattr(main.ratelimit, "check", lambda *_a, **_k: None)
+    with db.session() as conn:                          # every test starts with no history, so the counts mean something
+        conn.execute("DELETE FROM events")
+        conn.execute("DELETE FROM talk_archive")
     c = TestClient(main.app)
     c.llm = llm
     return c
@@ -447,3 +450,93 @@ def test_rudeness_costs_trust_and_the_model_cannot_move_it_further_in_the_same_r
     api.llm.rounds = [[chunk(tool={"id": "c1", "name": "adjust_trust", "args": '{"delta": -2, "reason": "x"}'})], [chunk("Hm. ||| 嗯。")]]
     say(api, t["id"], "You useless old fool.")
     assert api.post("/api/talks", json={"npc": "tuo"}).json()["trust"] == 1             # 3 - 2, and the tool adds nothing more this reply
+
+
+# ---------- knowing who came and what they did ----------
+
+def admin_get(api, path, password="s3cret", **params):
+    return api.get(path, params=params, headers={"authorization": f"Bearer {password}"})
+
+
+def test_the_admin_area_is_off_without_a_password_and_locked_with_one(api, monkeypatch):
+    monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "")
+    assert api.get("/api/admin/stats").status_code == 404
+    monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "s3cret")
+    assert api.get("/api/admin/stats").status_code == 401
+    assert admin_get(api, "/api/admin/stats", "wrong").status_code == 401
+    assert admin_get(api, "/api/admin/transcripts", "wrong").status_code == 401
+    assert admin_get(api, "/api/admin/stats").status_code == 200
+
+
+def test_the_funnel_counts_what_a_visitor_did_without_storing_what_they_said(api, monkeypatch):
+    monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "s3cret")
+    api.get("/api/case")
+    start(api)
+    t = talk(api, "xiaolu")
+    api.llm.trust = 1
+    api.llm.told = ["bodies"]
+    api.llm.rounds = [[chunk("Miss... ||| 姑娘……")]]
+    say(api, t["id"], "My secret words about a tunnel xyzzy")
+    api.llm.rounds = [[chunk("Try the old man. ||| 找老人吧。")]]
+    api.post("/api/gm/chat", json={"message": "hint?"})
+    give(api, "debt", "hatch", "bodies", "tunnel")
+    assert api.post("/api/move", json={"path": "tunnel"}).json()["verdict"] == "go"
+    api.post("/api/ending")
+    s = admin_get(api, "/api/admin/stats").json()
+    steps = {f["step"]: f["visitors"] for f in s["funnel"]}
+    assert steps == {"Opened the page": 1, "Started a night": 1, "Talked to someone": 1, "Asked Ray": 1, "Made the final move": 1, "Reached an ending": 1}
+    assert s["endings"] == {"tunnel": 1} and s["nights_finished"] == 1 and s["avg_messages_at_end"] == 1
+    assert s["people"]["xiaolu"]["talks"] == 1 and s["people"]["xiaolu"]["messages"] == 1 and s["people"]["xiaolu"]["clues_told"] == 1
+    assert s["people"]["xiaolu"]["avg_trust_change"] == 1 and s["clues"] == {"bodies": 1}
+    assert s["ai"]["ray_questions"] == 1 and s["ai"]["player_messages"] == 1
+    with db.session() as conn:
+        stored = " ".join(r["data"] for r in conn.execute("SELECT data FROM events"))
+    assert "xyzzy" not in stored                                                       # events are counts, never what the player typed
+
+
+def test_deaths_and_abandoned_nights_are_counted_and_conversations_are_kept_for_review(api, monkeypatch):
+    monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "s3cret")
+    start(api)
+    t = talk(api, "wolf")
+    say(api, t["id"], "Move aside or I will kill you.")                               # a fatal threat
+    api.post("/api/game/start")                                                         # begins again after dying
+    t2 = talk(api, "tuo")
+    say(api, t2["id"], "Old man, hello.")
+    api.post("/api/game/reset")                                                         # leaves without finishing
+    s = admin_get(api, "/api/admin/stats").json()
+    assert s["endings"] == {"dead": 1} and s["death_causes"] == {"caught": 1} and s["nights_abandoned"] == 1 and s["nights_started"] == 2
+    talks = [x for x in admin_get(api, "/api/admin/transcripts").json()["talks"] if x["visitor"] == stats._who(api.cookies.get("vid"))]
+    assert {x["npc"].split()[-1] for x in talks} == {"Wolf", "Tuo"} and all(x["archived"] for x in talks)
+    assert any("will kill you" in turn["content"] for x in talks for turn in x["turns"] if turn["role"] == "user")
+
+
+def test_a_thumb_on_a_reply_is_recorded_and_surfaces_in_the_transcripts(api, monkeypatch):
+    monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "s3cret")
+    start(api)
+    t = talk(api, "tuo")
+    api.llm.rounds = [[chunk("Mind the camels. ||| 当心骆驼。")]]
+    evs = say(api, t["id"], "Hello")
+    i = [e for e in evs if e["type"] == "turn"][0]["i"]
+    assert api.post("/api/feedback", json={"talk": t["id"], "turn": i, "rating": "down"}).status_code == 200
+    assert api.post("/api/feedback", json={"talk": t["id"], "turn": i - 1, "rating": "up"}).status_code == 404         # a thumb only goes on a character's reply
+    assert api.post("/api/feedback", json={"talk": t["id"], "turn": i, "rating": "meh"}).status_code == 422
+    assert TestClient(main.app).post("/api/feedback", json={"talk": t["id"], "turn": i, "rating": "up"}).status_code == 404   # not someone else's conversation
+    bad = admin_get(api, "/api/admin/transcripts", only_down="true").json()["talks"]
+    assert len(bad) == 1 and [m["rating"] for m in bad[0]["turns"] if m["role"] == "assistant"] == ["down"]
+    s = admin_get(api, "/api/admin/stats").json()
+    assert s["feedback"] == {"up": 0, "down": 1} and s["people"]["tuo"]["down"] == 1
+    shown = api.post("/api/talks", json={"npc": "tuo"}).json()["turns"]
+    assert [x["i"] for x in shown if x["role"] == "assistant"] == [i]
+
+
+def test_errors_are_counted(api, monkeypatch):
+    monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "s3cret")
+    start(api)
+    t = talk(api, "tuo")
+
+    def limited(*_a, **_k):
+        raise main.RateLimited("slow down")
+    monkeypatch.setattr(main.ratelimit, "check", limited)
+    evs = say(api, t["id"], "Hello")
+    assert [e["code"] for e in evs if e["type"] == "error"] == ["rate_limited"]
+    assert admin_get(api, "/api/admin/stats").json()["ai"]["errors_by_kind"] == {"rate_limited": 1}

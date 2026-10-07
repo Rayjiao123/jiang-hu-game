@@ -1,16 +1,17 @@
 """人在江湖，身不由己 web server: the page, the story API and the DeepSeek-powered characters and game master."""
 import json
 import re
+import secrets
 import uuid
 from typing import Iterator
 
 import openai
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, bilingual, case, config, db, game, prompts, ratelimit
+from . import agent, bilingual, case, config, db, game, prompts, ratelimit, stats
 from .bilingual import bi
 from .ratelimit import RateLimited
 
@@ -38,6 +39,7 @@ async def visitor_cookie(request: Request, call_next):
     if fresh:
         vid = uuid.uuid4().hex
     request.state.vid = vid
+    request.state.fresh = fresh
     response = await call_next(request)
     if not request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-cache"      # re-check pages and scripts each visit, so updates show up at once
@@ -67,15 +69,25 @@ def sse(events: Iterator[dict]) -> StreamingResponse:
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-def guarded(events: Iterator[dict]) -> Iterator[dict]:
+def _count_error(vid: str, kind: str) -> None:
+    try:
+        with db.session() as conn:
+            db.log(conn, vid, "error", kind=kind)
+    except Exception as e:  # counting must never break a reply
+        print("Could not record an error:", repr(e))
+
+
+def guarded(events: Iterator[dict], vid: str = "") -> Iterator[dict]:
     """Turn failures inside a stream into a final error event the page can show."""
     try:
         yield from events
     except RateLimited as e:
+        _count_error(vid, "rate_limited")
         yield {"type": "error", "code": "rate_limited", "message": str(e)}
     except HTTPException as e:
         yield {"type": "error", "code": "bad_request", "message": str(e.detail)}
     except openai.APIError as e:
+        _count_error(vid, "upstream")
         yield {"type": "error", "code": "upstream", "message": bi("The AI service didn't answer. Try again in a moment.", "AI 服务没有响应，请稍后再试。")}
         print("DeepSeek error:", repr(e))
 
@@ -88,8 +100,10 @@ def status():
 
 
 @app.get("/api/case")
-def get_case():
+def get_case(request: Request):
     """What the landing page shows before anyone has started: the story, the people in the inn, the game master."""
+    with db.session() as conn:
+        db.log(conn, request.state.vid, "visit", returning=not request.state.fresh)
     return {"title": case.CASE_TITLE, "situation": case.SITUATION, "prologue": case.PROLOGUE, "cast": [case.public_card(k) for k in case.BY_KEY],
             "hero": case.hero_card(), "gm": case.gm_card(), "categories": case.CATEGORIES, "fates": case.FATES, "clock": case.CLOCK}
 
@@ -233,9 +247,12 @@ def new_talk(body: NewTalk, request: Request):
         if body.npc not in case.BY_KEY:
             raise HTTPException(404, bi("There is nobody like that here.", "这里没有这个人。"))
         trust0, why = game.start_trust(body.npc)
-        talk = db.find_talk(conn, vid, body.npc) or db.create_talk(conn, vid, body.npc, trust0)
+        talk = db.find_talk(conn, vid, body.npc)
+        if not talk:
+            talk = db.create_talk(conn, vid, body.npc, trust0)
+            db.log(conn, vid, "talk", npc=body.npc)
         state = case.clue_state(body.npc, g["found"], talk["trust"])
-    shown = [t for t in talk["turns"] if not t.get("hidden")][-40:]
+    shown = [{**t, "i": i} for i, t in enumerate(talk["turns"]) if not t.get("hidden")][-40:]       # i: the reply's place in the conversation, for feedback
     return {"id": talk["id"], "npc": _card(body.npc), "trust": talk["trust"], "impression": why, "turns": shown,
             "fresh": not talk["turns"], "told": len(state["told"]), "total": len(case.BY_KEY[body.npc]["topics"])}
 
@@ -323,6 +340,8 @@ def _npc_turn(client, tid: str, vid: str, message: str | None) -> Iterator[dict]
             talk["trust"] = max(0, min(10, talk["trust"] + seen["delta"]))
             yield {"type": "trust", "trust": talk["trust"], "delta": seen["delta"]}
         trust_before = talk["trust"]
+        if not opening:
+            db.log(conn, vid, "msg", npc=key, delta=seen["delta"], fatal=bool(fatal), trust=talk["trust"])
         tools = game.npc_tools(talk, turn, key, fate, start_delta=seen["delta"])
         messages = [{"role": "system", "content": prompts.npc_system(key)},
                     *agent.history(talk["turns"]),
@@ -337,8 +356,11 @@ def _npc_turn(client, tid: str, vid: str, message: str | None) -> Iterator[dict]
                         talk["turns"] += [{"role": "user", "content": line, **({"hidden": True} if opening else {})},
                                           {"role": "assistant", "content": ev["text"] or "…"}]
                     yield ev
+                    if ev["type"] == "done":
+                        yield {"type": "turn", "i": len(talk["turns"]) - 1}                      # which reply this was, so the page can ask what the player thought of it
                     if ev["type"] == "done" and not opening:
                         for clue in _credit(client, vid, key, g, ev["text"], trust_before):
+                            db.log(conn, vid, "clue", id=clue["id"], npc=key)
                             yield {"type": "clue", "clue": clue}
                         g["msgs"] += 1
                         if not fate and key in case.LETHAL_AT_ZERO and talk["trust"] <= 0:
@@ -371,7 +393,7 @@ def npc_open(tid: str, request: Request):
     if _own_talk(tid, vid)["turns"]:
         raise HTTPException(409, bi("This conversation has already begun.", "这段对话已经开始。"))
     client = llm()
-    return sse(guarded(_npc_turn(client, tid, vid, None)))
+    return sse(guarded(_npc_turn(client, tid, vid, None), vid))
 
 
 @app.post("/api/talks/{tid}/chat")
@@ -379,7 +401,7 @@ def npc_chat(tid: str, body: Message, request: Request):
     vid = request.state.vid
     _own_talk(tid, vid)
     client = llm()
-    return sse(guarded(_npc_turn(client, tid, vid, body.message)))
+    return sse(guarded(_npc_turn(client, tid, vid, body.message), vid))
 
 
 # ---------- Ray, the game master ----------
@@ -389,6 +411,7 @@ def _gm_turn(client, vid: str, message: str) -> Iterator[dict]:
     yield {"type": "user", "text": line}
     with db.session() as conn:
         g = _play(conn, vid)
+        db.log(conn, vid, "gm")
         turn = agent.Turn()
         messages = [{"role": "system", "content": prompts.gm_system(g["found"], g["beat"])}, *agent.history(g["turns"]),
                     {"role": "user", "content": bilingual.plain(line)}]
@@ -409,7 +432,7 @@ def gm_chat(body: Message, request: Request):
     with db.session() as conn:
         _play(conn, vid)
     client = llm()
-    return sse(guarded(_gm_turn(client, vid, body.message)))
+    return sse(guarded(_gm_turn(client, vid, body.message), vid))
 
 
 # ---------- the move ----------
@@ -425,6 +448,7 @@ def make_move(body: Move, request: Request):
             g.update(stage="moving", path=body.path)
         else:
             _die(g, "move")
+        db.log(conn, request.state.vid, "move", path=body.path, verdict="go" if g["stage"] == "moving" else "dead")
         db.save_play(conn, g)
         return {"verdict": "go" if g["stage"] == "moving" else "dead", "game": _state(conn, g)}
 
@@ -465,6 +489,46 @@ def ending(request: Request):
         g.update(stage="solved", ending=text)
         db.save_play(conn, g)
         return {"game": _state(conn, g)}
+
+
+class Feedback(BaseModel):
+    talk: str = Field(max_length=40)
+    turn: int = Field(ge=0, le=1000)
+    rating: str = Field(pattern="^(up|down)$")
+
+
+@app.post("/api/feedback")
+def feedback(body: Feedback, request: Request):
+    """A thumb on one of a character's replies, so bad answers can be found later."""
+    vid = request.state.vid
+    with db.session() as conn:
+        talk = db.get_talk(conn, body.talk, vid)
+        if not talk or body.turn >= len(talk["turns"]) or talk["turns"][body.turn]["role"] != "assistant":
+            raise HTTPException(404, bi("That reply isn't here any more.", "找不到这句回复。"))
+        db.log(conn, vid, "feedback", talk=body.talk, turn=body.turn, rating=body.rating, npc=talk["npc_key"])
+    return {"ok": True}
+
+
+# ---------- the admin: who came, what they did, what the characters said ----------
+
+def require_admin(request: Request) -> None:
+    if not config.ADMIN_PASSWORD:
+        raise HTTPException(404, "Admin is switched off. Set ADMIN_PASSWORD to enable it.")
+    given = request.headers.get("authorization", "").removeprefix("Bearer ")
+    if not secrets.compare_digest(given.encode(), config.ADMIN_PASSWORD.encode()):
+        raise HTTPException(401, "Wrong password.")
+
+
+@app.get("/api/admin/stats", dependencies=[Depends(require_admin)])
+def admin_stats(days: int = 14):
+    with db.session() as conn:
+        return stats.summary(conn, max(1, min(days, 365)))
+
+
+@app.get("/api/admin/transcripts", dependencies=[Depends(require_admin)])
+def admin_transcripts(limit: int = 40, only_down: bool = False):
+    with db.session() as conn:
+        return {"talks": stats.transcripts(conn, max(1, min(limit, 200)), only_down)}
 
 
 @app.get("/", include_in_schema=False)

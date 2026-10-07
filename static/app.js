@@ -99,6 +99,8 @@
   function renderTop() {
     const on = live();
     $("#gmBtn").hidden = !on; $("#me").hidden = !on; $("#clock").hidden = !on;
+    $("#menuBtn").hidden = !S.game;
+    if (!S.game) closeMenu();
     if (!on) return;
     const gi = $("#gmBtnImg"); if (!gi.firstChild) setPortrait(gi, gm(), true, false);
     const av = $("#meImg"); if (!av.firstChild) av.append(portraitImg(hero(), true, ""));
@@ -141,13 +143,37 @@
     showPrologue();
   }
   $("#gateStart").addEventListener("click", begin);
-  $("#brandBtn").addEventListener("click", () => go(live() ? "scene" : "gate"));
+  $("#brandBtn").addEventListener("click", () => go("gate"));
+  $("#homeLink").addEventListener("click", () => go("gate"));
+
+  /* ---------- the menu: a way to get anywhere from anywhere ---------- */
+  function menuItems() {
+    const items = [];
+    if (S.screen !== "gate") items.push(["home", "首页 Home", "The title page"]);
+    if (live() && S.screen !== "scene") items.push(["inn", "回到大堂 The inn", "Who is here"]);
+    if (live()) items.push(["ray", "问 Ray Ask Ray", "Notes and hints"], ["me", "青禾 Qinghe", "Who you are"]);
+    if (S.game) items.push(["restart", "重新开始 Start the night over", ""]);
+    return items;
+  }
+  function openMenu() {
+    const box = $("#menu"); box.textContent = "";
+    menuItems().forEach(([act, zh, sub]) => { const b = el("button", "menu-item" + (act === "restart" ? " danger" : "")); b.type = "button"; b.setAttribute("role", "menuitem"); b.dataset.act = act; b.append(el("b", "", zh)); if (sub) b.append(el("small", "", sub)); box.append(b); });
+    box.hidden = false; $("#menuBtn").setAttribute("aria-expanded", "true"); box.querySelector("button")?.focus();
+  }
+  function closeMenu() { $("#menu").hidden = true; $("#menuBtn").setAttribute("aria-expanded", "false"); }
+  $("#menuBtn").addEventListener("click", e => { e.stopPropagation(); $("#menu").hidden ? openMenu() : closeMenu(); });
+  $("#menu").addEventListener("click", e => {
+    const b = e.target.closest(".menu-item"); if (!b) return;
+    closeMenu(); S.talkCtl?.abort();
+    ({ home: () => go("gate"), inn: () => go("scene"), ray: openGm, me: openMe, restart: () => { openMe(); $("#mdConfirm").hidden = false; } })[b.dataset.act]?.();
+  });
+  document.addEventListener("click", e => { if (!$("#menu").hidden && !e.target.closest("#menu")) closeMenu(); });
 
   /* ---------- Ray tells the opening ---------- */
   function showPrologue() {
     setPortrait($("#plPortrait"), gm(), true);
     fillBi($("#plText"), S.game.prologue);
-    $("#prologue").hidden = false; $("#plGo").focus();
+    $("#prologue").hidden = false; $("#plGo").focus({ preventScroll: true });
   }
   $("#plGo").addEventListener("click", () => { $("#prologue").hidden = true; go("scene"); });
 
@@ -161,7 +187,7 @@
     const row = (label, text) => { if (!text) return; const dd = el("dd", "bi"); fillBi(dd, text); dl.append(el("dt", "", label), dd); };
     row("身世 WHO SHE IS", h.bio); row("绝技 SIGNATURE MOVE", h.art); row("习癖 QUIRK", h.quirk);
     body.append(dl);
-    $("#mdConfirm").hidden = true; $("#modal").hidden = false; $("#mdClose").focus();
+    $("#mdConfirm").hidden = true; $("#modal").hidden = false; $("#mdClose").focus({ preventScroll: true });
   }
   const closeMe = () => { $("#modal").hidden = true; $("#meBtn").focus(); };
   $("#meBtn").addEventListener("click", openMe);
@@ -220,8 +246,20 @@
     if (who === "npc") { const av = el("span", "avatar"); setPortrait(av, S.npc, true, false); row.append(av); }
     const bubble = el("div", "bubble");
     if (text) fillBi(bubble, text);
-    row.append(bubble); thread.append(row); scrollThread();
+    const wrap = el("div", "bwrap"); wrap.append(bubble); row.append(wrap); thread.append(row); scrollThread();
     return bubble;
+  }
+  // 👍 / 👎 under a character's reply, so weak answers can be found later
+  function addFeedback(bubble, turnIndex) {
+    if (bubble.parentElement.querySelector(".fb") || turnIndex == null) return;
+    const fb = el("span", "fb"); const talkId = S.session.id;
+    const send = async rating => {
+      fb.querySelectorAll("button").forEach(b => b.disabled = true);
+      try { await api("/api/feedback", { talk: talkId, turn: turnIndex, rating }); fb.textContent = rating === "up" ? "谢谢 Thanks 👍" : "收到 Noted 👎"; }
+      catch { fb.textContent = ""; }
+    };
+    for (const [r, icon, label] of [["up", "👍", "Good reply 好"], ["down", "👎", "Bad reply 不好"]]) { const b = el("button", "", icon); b.type = "button"; b.title = label; b.setAttribute("aria-label", label); b.addEventListener("click", () => send(r)); fb.append(b); }
+    bubble.parentElement.append(fb);
   }
   const scrollThread = () => { const t = $("#thread"); t.scrollTop = t.scrollHeight; };
   function clueCard(c, fresh) {
@@ -239,7 +277,7 @@
     const thread = $("#thread"); thread.textContent = "";
     // what this person has already told you stays at the top of the page
     found().filter(c => c.source === npc.key).forEach(c => clueCard(c, false));
-    s.turns.forEach(t => msgRow(t.role === "user" ? "hero" : "npc", t.content));
+    s.turns.forEach(t => { const b = msgRow(t.role === "user" ? "hero" : "npc", t.content); if (t.role !== "user" && !t.hidden) addFeedback(b, t.i); });
     renderTrust(); renderQuick(); note("#talkNote", "");
     S.talkBusy = false; S.dying = false; setTalkBusy(false);
     if (s.fresh && !s.turns.length) converse(null);
@@ -295,6 +333,7 @@
         else if (ev.type === "retract") { said = ""; out.classList.add("thinking"); out.textContent = "…"; }
         else if (ev.type === "text") { said += ev.delta; out.classList.remove("thinking"); fillBi(out, said); }
         else if (ev.type === "done" && ev.text) { said = ev.text; out.classList.remove("thinking"); fillBi(out, said); }
+        else if (ev.type === "turn") addFeedback(out, ev.i);
         else if (ev.type === "tool" && ev.name === "adjust_trust" && /^[+-]\d/.test(ev.detail || "")) {
           const d = parseInt(ev.detail, 10); if (d) out.parentElement.append(el("span", "trust-tag " + (d > 0 ? "up" : "down"), `信任 Trust ${d > 0 ? "+" : ""}${d}`));
         }
@@ -392,7 +431,7 @@
       });
       list.append(b);
     });
-    $("#move").hidden = false; $("#mvClose").focus();
+    $("#move").hidden = false; $("#mvClose").focus({ preventScroll: true });
   }
   async function attempt(path, list) {
     list.querySelectorAll("button").forEach(x => x.disabled = true); $("#mvNote").textContent = bi1("You move…", "你动手了…");
@@ -434,10 +473,16 @@
     const e = el("div", "bi"); fillBi(e, S.game.ending); t.append(e);
     const have = endingsFound(key), track = $("#endTrack"); track.textContent = ""; track.append(el("span", "", `结局 Endings ${have.length} / 3`));
     Object.entries(ENDINGS).forEach(([k, [z, n]]) => track.append(el("span", "end-chip" + (have.includes(k) ? " on" : ""), have.includes(k) ? `${z} ${n}` : "？")));
-    closeGm(); $("#endModal").hidden = false; $("#endAgain").focus();
+    closeGm(); $("#endModal").hidden = false; $("#endAgain").focus({ preventScroll: true }); $("#endModal").scrollTop = 0;
   }
+  $("#endLang").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    $("#endText").classList.remove("only-en", "only-zh"); if (b.dataset.l) $("#endText").classList.add(b.dataset.l);
+    $("#endLang").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  });
   $("#endAgain").addEventListener("click", async () => { $("#endModal").hidden = true; await newNight(); });
   $("#endStay").addEventListener("click", () => { $("#endModal").hidden = true; });
+  $("#endHome").addEventListener("click", () => { $("#endModal").hidden = true; go("gate"); });
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
@@ -445,6 +490,7 @@
     else if (!$("#move").hidden) closeMove();
     else if (!$("#modal").hidden) closeMe();
     else if (!$("#gmDrawer").hidden) closeGm();
+    else if (!$("#menu").hidden) closeMenu();
   });
 
   /* ---------- boot ---------- */
