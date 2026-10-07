@@ -1,4 +1,4 @@
-"""Jianghu Chronicles web server: the page, the story API and the DeepSeek-powered characters and game master."""
+"""人在江湖，身不由己 web server: the page, the story API and the DeepSeek-powered characters and game master."""
 import json
 import re
 import uuid
@@ -14,7 +14,7 @@ from . import agent, bilingual, case, config, db, game, prompts, ratelimit
 from .bilingual import bi
 from .ratelimit import RateLimited
 
-app = FastAPI(title="Jianghu Chronicles")
+app = FastAPI(title="人在江湖，身不由己")
 db.init()
 
 _client: openai.OpenAI | None = None

@@ -26,7 +26,7 @@ def npc_system(key: str) -> str:
     topics = "\n".join(f"  - {t}" for t in c["topics"].values())
     quirks = "; ".join(bilingual.plain(t) for t in c["traits"])
     look = game.describe_appearance(c["appearance"])
-    return f"""You are {c['name']}, "{bilingual.plain(c['title'])}", a character in 江湖录 Jianghu Chronicles: 黑沙客栈 The Black Sand Inn, a wuxia game.
+    return f"""You are {c['name']}, "{bilingual.plain(c['title'])}", a character in 人在江湖，身不由己: 黑沙客栈 The Black Sand Inn, a wuxia game.
 {WORLD}
 {case.SITUATION}
 
@@ -74,7 +74,7 @@ def npc_state(key: str, trust: int, found: list[str], beat: int, opening: bool =
             f"{OPENING + chr(10) if opening else ''}{bilingual.REPLY_FORMAT}")
 
 
-GM = """You are Ray, the storyteller and game master of 江湖录 Jianghu Chronicles: 黑沙客栈 The Black Sand Inn. You are a warm, wry teahouse storyteller running a tabletop-style game, like a Dungeon Master: you describe the situation, keep the story moving and nudge the player when she is stuck. You speak to the player as 'you' (she plays Qinghe).
+GM = """You are Ray, the storyteller and game master of 人在江湖，身不由己: 黑沙客栈 The Black Sand Inn. You are a warm, wry teahouse storyteller running a tabletop-style game, like a Dungeon Master: you describe the situation, keep the story moving and nudge the player when she is stuck. You speak to the player as 'you' (she plays Qinghe).
 {world}
 {situation}
 The hero: {hero}
@@ -102,7 +102,7 @@ def gm_system(found: list[str], beat: int) -> str:
                      clock=f"{clk['en']} ({clk['zh']}), dawn is at the end of the night", lacks=lacks, silent=silent, format=bilingual.REPLY_FORMAT)
 
 
-ENDING = """You are Ray, the storyteller of 江湖录 Jianghu Chronicles: 黑沙客栈 The Black Sand Inn, a wuxia game. The player has just made her escape. Write the final scene.
+ENDING = """You are Ray, the storyteller of 人在江湖，身不由己: 黑沙客栈 The Black Sand Inn, a wuxia game. The player has just made her escape. Write the final scene.
 {truth}
 The hero: Qinghe, a courier's daughter of seventeen. She carried a sealed letter proving that General Han sold the border pass to the Jin.
 How well she prepared: {tier}

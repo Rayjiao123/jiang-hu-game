@@ -1,4 +1,4 @@
-# 江湖录 Jianghu Chronicles
+# 人在江湖，身不由己
 
 **人在江湖，身不由己.** A Song-dynasty wuxia story game where every character is an AI and a game master runs the night.
 

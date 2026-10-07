@@ -1,4 +1,4 @@
-/* Jianghu Chronicles: a wuxia game interface.
+/* 人在江湖，身不由己: a wuxia game interface.
    Painted ink-wash scenes behind dark lacquer panels with thin gold frames and cinnabar seals. */
 :root {
   color-scheme: dark;
@@ -34,7 +34,7 @@ em { font-family: var(--f-title); font-style: italic; font-weight: 600; color: v
 /* ---------- top bar ---------- */
 .topbar { position: sticky; top: 0; z-index: 60; height: var(--bar); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 clamp(12px, 3vw, 28px); background: linear-gradient(#0c0d10, rgba(12, 13, 16, .82)); border-bottom: 1px solid var(--gold-dim); backdrop-filter: blur(6px); }
 .brand { display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 0; }
-.brand .logo { font: 400 28px/1 var(--f-brush); letter-spacing: .06em; white-space: nowrap; }
+.brand .logo { font: 400 24px/1 var(--f-brush); letter-spacing: .06em; white-space: nowrap; }
 .brand .seal { display: inline-grid; place-items: center; width: 24px; height: 24px; background: var(--cin); color: var(--paper); font: 400 11px/1 var(--f-brush); border-radius: 3px; transform: rotate(-5deg); box-shadow: inset 0 0 0 2px rgba(244, 237, 218, .35); }
 .brand .sub { font: 600 italic 15px var(--f-title); color: var(--dim); }
 .crumbs { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); min-width: 0; overflow: hidden; white-space: nowrap; }
