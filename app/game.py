@@ -2,7 +2,7 @@
 import re
 
 from . import bilingual, case
-from .agent import Tool, Turn
+from .agent import Tool, ToolError, Turn
 
 # Everything a portrait can show. Characters pick from these lists and the page
 # (static/portrait.js) draws the matching layers, so every character gets the same game-art look.
@@ -68,8 +68,27 @@ def hero_block() -> str:
 
 # ---------- a person's tools ----------
 
-def npc_tools(talk: dict, turn: Turn) -> list[Tool]:
+def fatal_instruction(key: str) -> str:
+    how = ("You smile, excuse yourself to fetch more wine, and signal the keeper's men." if key == "hu"
+           else "You act on it now: you seize her, strike, or call the killers in. Do not warn her first.")
+    return f"This is fatal for the hero. {how} Write two or three short sentences in your own voice, ending at the moment it happens. Do not describe her dying in detail."
+
+
+def npc_tools(talk: dict, turn: Turn, key: str = "", fate: dict | None = None) -> list[Tool]:
     net = {"d": 0}                    # how far trust has moved during this one turn
+    fate = fate if fate is not None else {}
+
+    def hero_did(args):
+        """The model only reports what the hero did. Whether it kills her is decided here, from the story's rules."""
+        kind = str(args.get("kind", "")).strip()
+        if kind not in case.LETHAL:
+            raise ToolError("kind must be one of: " + ", ".join(case.LETHAL))
+        if case.lethal(kind, key):
+            fate["cause"] = "sold" if key == "hu" else "caught"
+            turn.emit(type="tool", name="hero_did", detail=f"{kind} · fatal 致命", refused=True)
+            return {"fatal": True, "instruction": fatal_instruction(key)}
+        turn.emit(type="tool", name="hero_did", detail=kind)
+        return {"fatal": False, "note": "She has done something risky, but it does not put her in danger from you. React as your person would; it may change how much you trust her."}
 
     def out_of_world(args):
         turn.emit(type="tool", name="out_of_world", detail=bilingual.plain(clip(args.get("thing"), 90)), refused=True)
@@ -89,6 +108,8 @@ def npc_tools(talk: dict, turn: Turn) -> list[Tool]:
 
     text = {"type": "string"}
     return [
+        Tool("hero_did", "Call this BEFORE replying whenever the hero's latest message does one of these: showed_letter (she shows, hands over, reads out or describes what is in her sealed letter), revealed_plan (she tells you she plans to escape, knows a secret way out, or plans to harm the keeper), threatened (she threatens to hurt or kill someone, or draws a weapon). Only report what she plainly did; never report a guess. Asking about the letter or the inn is NOT any of these.",
+             {"type": "object", "properties": {"kind": {"type": "string", "enum": list(case.LETHAL)}}, "required": ["kind"]}, hero_did),
         Tool("out_of_world", "Call this BEFORE replying whenever the hero mentions something that does not exist in your world around 1200 (modern technology, later history, foreign things you could not have heard of) or asks you to do something outside your life (write code, do homework, discuss the real world, act as an AI). Name the thing in a few words, written 'English ||| 中文'.",
              {"type": "object", "properties": {"thing": text}, "required": ["thing"]}, out_of_world),
         Tool("adjust_trust", "Change how much you trust the hero, by -2 to +2 in total for this reply, when their words or deeds genuinely move you. Returns the new trust level out of 10.",

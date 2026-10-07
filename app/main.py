@@ -56,11 +56,7 @@ class NewTalk(BaseModel):
 
 
 class Move(BaseModel):
-    evidence: list[str] = Field(default_factory=list, max_length=30)
-
-
-class Fate(BaseModel):
-    fate: str = Field(max_length=20)
+    path: str = Field(max_length=20)
 
 
 def sse(events: Iterator[dict]) -> StreamingResponse:
@@ -122,10 +118,9 @@ def _state(conn, g: dict) -> dict:
                     trust=talk["trust"] if talk else None)
         cast.append(card)
     out = {"stage": g["stage"], "cast": cast, "found": [case.clue_view(c) for c in found if c in case.CLUES], "clock": case.clock(g["beat"]),
-           "events": _events(g["beat"]), "ending": g["ending"], "tier": g["tier"], "prologue": case.PROLOGUE, "hero": case.hero_card(), "gm": case.gm_card(),
+           "events": _events(g["beat"]), "ending": g["ending"], "path": g["path"], "cause": g["cause"],
+           "ending_key": "dead" if g["stage"] == "dead" else (g["path"] if g["stage"] == "solved" else ""), "prologue": case.PROLOGUE, "hero": case.hero_card(), "gm": case.gm_card(),
            "unmet": len(case.discoverable()) - len([c for c in found if case.CLUES[c]["holder"]]), "gm_turns": g["turns"][-12:]}
-    if g["stage"] == "lost":
-        out["truth"] = f"{case.LOSS.split('|||')[0].strip()} {case.truth().split('|||')[0].strip()} {bilingual.SEP} {case.LOSS.split('|||')[1].strip()} {case.truth().split('|||')[1].strip()}"
     return out
 
 
@@ -195,7 +190,7 @@ def _bilingual_line(client, vid: str, message: str) -> str:
 # ---------- the clock: the night is the deadline ----------
 
 def _advance(g: dict, beats: int) -> list[dict]:
-    """Let some of the night go by. Returns the game master's announcements for every hour that passed; at dawn the story is lost."""
+    """Let some of the night go by. Returns the game master's announcements for every hour that passed; at dawn she dies."""
     out = []
     for _ in range(beats):
         if g["beat"] >= case.DAWN_BEAT:
@@ -204,8 +199,13 @@ def _advance(g: dict, beats: int) -> list[dict]:
         if case.event_for(g["beat"]):
             out.append({"type": "gm", "beat": g["beat"], "text": case.event_for(g["beat"]), "clock": case.clock(g["beat"])})
     if g["beat"] >= case.DAWN_BEAT and g["stage"] in ("playing", "moving"):
-        g["stage"] = "lost"
+        _die(g, "dawn")
     return out
+
+
+def _die(g: dict, cause: str) -> None:
+    """She is dead. Ray explains how, what really happened in the inn, and what she could have done."""
+    g.update(stage="dead", cause=cause, ending=case.death_text(cause))
 
 
 # ---------- talking to the people in the inn ----------
@@ -261,6 +261,31 @@ def _credit(client, vid: str, key: str, g: dict, reply: str, trust: int) -> list
     return new
 
 
+DANGER = ("You watch for danger in a dark story game. The hero, Qinghe, has just said something to a character. Answer with a JSON array containing any of: "
+          '"showed_letter" (she shows, hands over, reads out or describes the contents of her sealed letter), '
+          '"revealed_plan" (she says she plans to escape, knows a secret way out, or plans to harm the keeper), '
+          '"threatened" (she threatens to hurt or kill someone, or draws a weapon). '
+          "Only include what she PLAINLY did in this message. Questions about the letter or the inn, and anything vague, do not count. Answer [] if none. Output only the JSON array.")
+
+
+def _danger(client, vid: str, key: str, text: str) -> list[str]:
+    """What did the hero plainly do that this person would punish? A plain check of her own words, so a fatal slip is never left to the roleplaying model."""
+    if key not in set().union(*case.LETHAL.values()):
+        return []
+    kinds = []
+    if key in case.LETHAL["threatened"] and case.THREAT.search(text):
+        kinds.append("threatened")
+    try:
+        ratelimit.check(vid)
+        r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=40, temperature=0, extra_body={"thinking": {"type": "disabled"}},
+                                           messages=[{"role": "system", "content": DANGER}, {"role": "user", "content": bilingual.plain(text)}])
+        found = json.loads(re.search(r"\[.*?\]", r.choices[0].message.content or "", re.S).group(0))
+        kinds += [k for k in found if isinstance(k, str) and k in case.LETHAL]
+    except (RateLimited, AttributeError, ValueError, openai.APIError) as e:
+        print("Danger check skipped:", repr(e))
+    return [k for k in dict.fromkeys(kinds) if case.lethal(k, key)]
+
+
 def _npc_turn(client, tid: str, vid: str, message: str | None) -> Iterator[dict]:
     """One turn with a person. message=None means the hero has just walked up and they speak first."""
     opening = message is None
@@ -275,11 +300,17 @@ def _npc_turn(client, tid: str, vid: str, message: str | None) -> Iterator[dict]
         key = talk["npc_key"]
         trust_before = talk["trust"]            # clues are offered at the trust the hero walked in with
         turn = agent.Turn()
-        tools = game.npc_tools(talk, turn)
+        fate: dict = {}                          # set when the hero does something that is fatal here
+        tools = game.npc_tools(talk, turn, key, fate)
+        fatal = _danger(client, vid, key, message) if not opening else []
+        if fatal:
+            fate["cause"] = "sold" if key == "hu" else "caught"
         messages = [{"role": "system", "content": prompts.npc_system(key)},
                     *agent.history(talk["turns"]),
                     {"role": "system", "content": prompts.npc_state(key, talk["trust"], g["found"], g["beat"], opening)},
                     {"role": "user", "content": bilingual.plain(line)}]
+        if fatal:
+            messages.insert(-1, {"role": "system", "content": f"The hero just plainly did this: {', '.join(fatal)}. {game.fatal_instruction(key)}"})
         try:
             for raw in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=800):
                 for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
@@ -291,9 +322,16 @@ def _npc_turn(client, tid: str, vid: str, message: str | None) -> Iterator[dict]
                         for clue in _credit(client, vid, key, g, ev["text"], trust_before):
                             yield {"type": "clue", "clue": clue}
                         g["msgs"] += 1
-                        if g["msgs"] % case.MSGS_PER_BEAT == 0:
+                        if not fate and key in case.LETHAL_AT_ZERO and talk["trust"] <= 0:
+                            fate["cause"] = "betrayed"
+                        if fate.get("cause"):
+                            _die(g, fate["cause"])
+                            yield {"type": "death", "cause": g["cause"]}
+                        elif g["msgs"] % case.MSGS_PER_BEAT == 0:
                             yield from _advance(g, 1)
                             yield {"type": "clock", "clock": case.clock(g["beat"]), "stage": g["stage"]}
+                            if g["stage"] == "dead":
+                                yield {"type": "death", "cause": g["cause"]}
         finally:
             db.save_talk(conn, talk)
             db.save_play(conn, g)
@@ -359,41 +397,39 @@ def gm_chat(body: Message, request: Request):
 
 @app.post("/api/move")
 def make_move(body: Move, request: Request):
-    """Try the escape with the clues she chooses. The verdict is decided here, from the clues she actually holds."""
+    """Try one of the two ways out. This is the last move: if the clues she holds don't open it, she dies."""
+    if body.path not in case.PATHS:
+        raise HTTPException(400, bi("Choose one of the two.", "请从两条路里选一条。"))
     with db.session() as conn:
         g = _play(conn, request.state.vid, "playing")
-        result = case.judge(body.evidence, g["found"])
-        announcements = []
-        if result["verdict"] == "go":
-            g.update(stage="moving", tier=result["tier"])
+        if case.can_move(body.path, g["found"]):
+            g.update(stage="moving", path=body.path)
         else:
-            announcements = _advance(g, case.FAILED_MOVE_COST)
+            _die(g, "move")
         db.save_play(conn, g)
-        result.update(stage=g["stage"], clock=case.clock(g["beat"]), gm=announcements)
-        if g["stage"] == "lost":
-            result["game"] = _state(conn, g)
-        return result
+        return {"verdict": "go" if g["stage"] == "moving" else "dead", "game": _state(conn, g)}
+
+
+HOW = {"tunnel": "through the secret tunnel under the cellar, with Old Tuo staying behind to cover her tracks",
+       "kill": "by drugging the keeper's night tea, climbing the stairs while the guard changed, killing her in her bed and taking the key to the front door"}
 
 
 @app.post("/api/ending")
-def ending(body: Fate, request: Request):
-    """The last scene, written for the way she prepared and what she chose to do with the letter."""
+def ending(request: Request):
+    """Ray's telling after she gets out: how she did it, what really happened in the inn, and what became of everyone."""
     vid = request.state.vid
-    if body.fate not in case.FATES:
-        raise HTTPException(400, bi("Choose one of the three.", "请从三者中选一。"))
     with db.session() as conn:
         g = _play(conn, vid, "moving")
-        tier = g["tier"]
+        path, found = g["path"], list(g["found"])
     text = ""
     try:
         ratelimit.check(vid)
         client = llm()
-        how = ["barely: she slipped out with little more than her life, knowing little of what she left behind",
-               "well: she knew a good part of the truth or held some leverage, and brought a friend or two",
-               "superbly: she knew the truth, held leverage over the keeper, and could take everyone worth saving with her"][tier]
-        prompt = prompts.ENDING.format(truth=case.truth().replace(" ||| ", " / "), tier=how, fate=case.FATES[body.fate]["en"], format=bilingual.REPLY_FORMAT)
-        r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=900, extra_body={"thinking": {"type": "disabled"}},
-                                           messages=[{"role": "system", "content": prompt}, {"role": "user", "content": "Write the final scene."}])
+        learned = "; ".join(bilingual.plain(case.CLUES[c]["title"]) for c in found if c in case.CLUES and c != "official")
+        prompt = prompts.ENDING.format(truth=case.truth().replace(" ||| ", " / "), how=HOW[path], learned=learned or "very little",
+                                       format=bilingual.REPLY_FORMAT)
+        r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=1200, extra_body={"thinking": {"type": "disabled"}},
+                                           messages=[{"role": "system", "content": prompt}, {"role": "user", "content": "Tell the ending."}])
         text = bilingual.normalize(_MARKUP.sub("", (r.choices[0].message.content or "")).strip())
         if text and bilingual.SEP not in text:
             other = bilingual.counterpart(client, config.CHAT_MODEL, text, _names())
@@ -404,7 +440,7 @@ def ending(body: Fate, request: Request):
             text = ""
     except (RateLimited, HTTPException, openai.APIError) as e:
         print("Ending fell back to the written version:", repr(e))
-    text = text or case.fallback_ending(body.fate, tier)
+    text = text or case.fallback_ending(path)
     with db.session() as conn:
         g = _play(conn, vid, "moving")
         g.update(stage="solved", ending=text)

@@ -541,3 +541,17 @@ button.stand:hover .tag { border-color: var(--gold); }
   .casebtn { font-size: 12px; }
   .gm-toast { bottom: 10px; }
 }
+
+/* ---------- stakes: the move, the game over, the endings found ---------- */
+.path-btn { text-align: left; }
+.path-btn.armed { background: linear-gradient(#7a1c14, #3d0c08); border-color: #ff6f58; animation: casepulse 1.2s ease-out infinite; }
+.ending.dead { border-color: var(--cin); box-shadow: 0 0 60px rgba(200, 40, 30, .35), 0 12px 40px rgba(0, 0, 0, .6); background: rgba(20, 8, 8, .98); }
+.ending.dead .pl-title { color: #f0705a; font-size: clamp(40px, 6vw, 64px); letter-spacing: .12em; }
+.ending .cause { padding: 8px 14px; border-left: 3px solid var(--cin); background: rgba(200, 64, 47, .12); font-weight: 600; }
+.end-text .bi + .bi { margin-top: 4px; }
+.end-track { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 14px; font-size: 13px; color: var(--dim); }
+.end-chip { padding: 2px 12px; border-radius: 99px; border: 1px dashed rgba(216, 180, 90, .35); }
+.end-chip.on { border: 1px solid var(--jade); color: var(--text); background: rgba(111, 174, 147, .12); }
+@media (max-width: 1200px) { .brand .sub { display: none; } }
+@media (max-width: 1000px) { .crumbs { display: none; } .clock span { display: none; } .about { padding: 3px 10px; } .me-text small { display: none; } }
+@media (max-width: 760px) { .brand .logo { font-size: 19px; } .brand .seal { display: none; } .gmbtn, .casebtn, .about { font-size: 12px; } }

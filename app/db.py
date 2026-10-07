@@ -14,11 +14,13 @@ from . import config
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS plays (
     visitor_id TEXT PRIMARY KEY,
-    stage      TEXT NOT NULL,                 -- playing | moving | solved | lost
+    stage      TEXT NOT NULL,                 -- playing | moving | solved | dead
     found      TEXT NOT NULL DEFAULT '[]',    -- clue ids the hero holds
     beat       INTEGER NOT NULL DEFAULT 0,    -- how much of the night has gone
     msgs       INTEGER NOT NULL DEFAULT 0,    -- how many things the hero has said
-    tier       INTEGER NOT NULL DEFAULT 0,    -- how well the escape was prepared
+    tier       INTEGER NOT NULL DEFAULT 0,    -- (unused)
+    path       TEXT NOT NULL DEFAULT '',      -- the way out she chose: tunnel | kill
+    cause      TEXT NOT NULL DEFAULT '',      -- how she died, when she did
     turns      TEXT NOT NULL DEFAULT '[]',    -- the conversation with the game master
     ending     TEXT NOT NULL DEFAULT '',
     updated_at REAL NOT NULL
@@ -60,6 +62,10 @@ def session():
 def init() -> None:
     with session() as conn:
         conn.executescript(SCHEMA)
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(plays)")}      # a night saved by the earlier version lacks these
+        for name in ("path", "cause"):
+            if name not in cols:
+                conn.execute(f"ALTER TABLE plays ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
 
 
 # ---------- the night: one per visitor ----------
@@ -69,7 +75,7 @@ def get_play(conn, visitor_id: str) -> dict | None:
     if not r:
         return None
     return {"visitor_id": r["visitor_id"], "stage": r["stage"], "found": json.loads(r["found"]), "beat": r["beat"], "msgs": r["msgs"],
-            "tier": r["tier"], "turns": json.loads(r["turns"]), "ending": r["ending"]}
+            "tier": r["tier"], "path": r["path"], "cause": r["cause"], "turns": json.loads(r["turns"]), "ending": r["ending"]}
 
 
 def new_play(conn, visitor_id: str, found: list[str]) -> dict:
@@ -81,8 +87,8 @@ def new_play(conn, visitor_id: str, found: list[str]) -> dict:
 
 
 def save_play(conn, g: dict) -> None:
-    conn.execute("UPDATE plays SET stage = ?, found = ?, beat = ?, msgs = ?, tier = ?, turns = ?, ending = ?, updated_at = ? WHERE visitor_id = ?",
-                 (g["stage"], json.dumps(g["found"]), g["beat"], g["msgs"], g["tier"], json.dumps(g["turns"], ensure_ascii=False),
+    conn.execute("UPDATE plays SET stage = ?, found = ?, beat = ?, msgs = ?, tier = ?, path = ?, cause = ?, turns = ?, ending = ?, updated_at = ? WHERE visitor_id = ?",
+                 (g["stage"], json.dumps(g["found"]), g["beat"], g["msgs"], g["tier"], g["path"], g["cause"], json.dumps(g["turns"], ensure_ascii=False),
                   g["ending"], time.time(), g["visitor_id"]))
 
 

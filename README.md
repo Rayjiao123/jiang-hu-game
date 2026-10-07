@@ -1,17 +1,25 @@
 # 人在江湖，身不由己
 
-**人在江湖，身不由己.** A Song-dynasty wuxia story game where every character is an AI and a game master runs the night.
+**人在江湖，身不由己.** A dark Song-dynasty wuxia story game where every character is an AI and a game master runs the night.
 
 **黑沙客栈 · The Black Sand Inn.** Qinghe, a courier's daughter of seventeen, is carrying her dead father's last job: a sealed letter
-sewn into her saddle. A sandstorm drives her into a desert inn that is not what it seems, like *New Dragon Gate Inn*. The keeper smiles,
-the door is barred, and every person in the hall is trapped by something too: the keeper by a hostage brother, the camel-keeper by a
-granddaughter, the door guard by unpaid silver and shame, a sick scholar by his duty as a court inspector, a merchant by his caravan.
-You play Qinghe: talk to them, learn what each one needs, earn their trust, and find a **way out** and a **way past the guards** before dawn.
+sewn into her saddle. A sandstorm drives her into a desert inn that is a slaughterhouse, like *New Dragon Gate Inn* with the lights off.
+The keeper drugs, robs and kills the caravans that shelter there, and tonight every guest is meant to die at the third watch. Everyone
+in the hall is trapped by something too, and nobody is clean: the keeper by a hostage brother, the camel-keeper by a granddaughter, the
+door guard by unpaid silver and a dozen throats, a sick scholar by his duty as a court inspector, a merchant by the people he sold.
 
-**Ray is the game master.** Ray (the author) narrates in the voice of a teahouse storyteller, has a portrait, opens the story, fires the events
-of the night (a scream upstairs, the door barred, camel bells on the pass), and can be asked anything at any time: what's going on, who
-someone is, or for a nudge. He only knows what Qinghe has learned, so he can't spoil the story. Like a tabletop DM, he will also run
-combat in a later chapter: the player says what she does, he decides what happens. Fighting is not in this version.
+**Two ways out, and only two.** The secret **tunnel** (she must learn where it is and how to open it) or **killing the keeper and taking
+the key** (she must learn where the key is and drug the keeper first). Pressing the "move" button without what a way out needs kills her.
+
+**She can die.** Show the letter or reveal her plan to the keeper, the door guard or the merchant, threaten the keeper or the guard, push
+one of the killers to zero trust, make a wrong move, or let dawn come, and it is a game-over screen where Ray tells her what happened,
+the whole story of the inn, and what she could have done. There are three endings: dead, out through the tunnel, or the keeper's key.
+The ending screen tracks which ones this browser has found.
+
+**Ray is the game master.** Ray (the author) narrates in the voice of a teahouse storyteller, has a portrait, opens the story, fires the
+events of the night (a scream upstairs, the lamps snuffed, camel bells on the pass), and can be asked anything at any time: what's going
+on, who someone is, or for a nudge. He only knows what Qinghe has learned, so he can't spoil the story. Like a tabletop DM, he will also
+run combat in a later chapter: the player says what she does, he decides what happens. Fighting is not in this version.
 
 The AI runs on [DeepSeek](https://api-docs.deepseek.com/) through its OpenAI-compatible API.
 
@@ -28,22 +36,24 @@ Open http://localhost:8000. Run the tests (no API calls, no cost) with `.\.venv\
 
 ## The story is written in code, not left to the AI
 
-The whole plot lives in `app/case.py`: the truth, six people, 14 clues, who holds each, the clock, the events, and the rules for escaping.
-The AI only plays the people and Ray.
+The whole plot lives in `app/case.py`: the truth, six people, 14 clues, who holds each, the clock, the events, the two ways out, the
+rules for dying, and the endings. The AI only plays the people and Ray.
 
 - **Facts are handed out, not remembered.** A person's background holds feelings, loyalties and a public face but none of the plot facts
   (a test checks this). Each turn the server tells that person only the clues their trust and the clue's prerequisites allow
   (`case.clue_state`). Facts above the trust line are not in the prompt at all, so they can't leak.
 - **The server files clues, not the model.** After each reply a small referee call decides which offered clues the reply actually told
   (`main._credit`) and adds them to the clue list. Clues that were not offered can't be filed.
+- **The server decides when she dies, not the roleplaying model.** Before a dangerous person answers, a plain check reads Qinghe's own
+  words for the fatal slips (`main._danger`: showing the letter, revealing a plan, threatening), with a regex for open threats. Reaching
+  zero trust with a killer is fatal too. The model that plays the person is then told to act at once, and the reply shows it. A wrong
+  `move` is fatal because `case.can_move` checks the clues she actually holds.
 - **Trust moves at most ±2 per reply**, however many times the model asks (`game.npc_tools`).
 - **The clock is the deadline.** Every seventh thing Qinghe says, an hour of the night passes (`MSGS_PER_BEAT`), and Ray announces the
-  night's events. At dawn the story is lost and the truth is told. Asking Ray costs no time.
-- **The move.** To escape she must hold a **way out** (route) and a **way past the guards** (cover). Knowing who is who (truth) and
-  holding something over the keeper (leverage) improve the ending. A plan that fails costs two hours. Then she chooses what to do with
-  the letter (deliver it, burn it, or trade it), and Ray tells the ending for the way she prepared. If the AI is unavailable, written
-  endings are used.
-- **Gates between people.** Some clues need another clue first (the ledger needs the envoy; the keeper's brother needs the ledger).
+  night's events. At dawn she dies. Asking Ray costs no time.
+- **Ray's telling.** A death is explained from written text (`case.death_text`: how, the truth of the inn, what she missed). A win is
+  told by the AI from the truth and what she learned, with written endings as the fallback.
+- **Gates between people.** Some clues need another clue first (the hatch needs Old Tuo's debt; the key needs the stair guard's rota).
 
 ## How it fits together
 
@@ -56,7 +66,7 @@ static/scenes.js       painted backdrops, including the desert inn at dusk
 app/case.py            THE STORY: truth, cast, clues, clock, events, escape rules, prologue and endings
 app/main.py            FastAPI routes; streams replies as server-sent events; the clue referee; the clock; Ray
 app/agent.py           streaming tool-use loop for DeepSeek (OpenAI chat format)
-app/game.py            appearance options, first impressions, what people can see of Qinghe, and the tools they may call
+app/game.py            appearance options, first impressions, what people can see of Qinghe, and the tools they may call (including hero_did)
 app/prompts.py         world bible, era rules, per-person instructions, Ray's instructions, the ending prompt
 app/bilingual.py       the "English ||| 中文" format, tidying replies, and the fallback translation
 app/db.py              SQLite: plays (one per visitor) and talks (one per visitor and person)
@@ -87,10 +97,10 @@ by the server and stored in both languages. Fixed messages are written in both l
 | GET | `/api/game` | the visitor's night: clues found, the clock, events, who they can talk to |
 | POST | `/api/game/start` · `/api/game/reset` | begin the night · drop it and start over |
 | POST | `/api/talks` | start (or resume) talking to someone |
-| POST | `/api/talks/{id}/open` · `/chat` | they speak first · Qinghe says something (stream; includes `clue`, `gm` and `clock` events) |
+| POST | `/api/talks/{id}/open` · `/chat` | they speak first · Qinghe says something (stream; includes `clue`, `gm`, `clock` and `death` events) |
 | POST | `/api/gm/chat` | ask Ray something (stream; costs no time) |
-| POST | `/api/move` | try the escape with the chosen clues |
-| POST | `/api/ending` | choose what to do with the letter; returns the written final scene |
+| POST | `/api/move` | try one of the two ways out (`tunnel` or `kill`); fatal if the clues she holds don't open it |
+| POST | `/api/ending` | after a successful move: Ray's telling of the whole story and what became of everyone |
 
 Visitors are identified by an anonymous `vid` cookie, which owns their night and conversations. Nothing is shared between visitors.
 
@@ -115,7 +125,7 @@ A database made by an earlier version still works: its old tables are simply unu
 ## Next steps
 
 1. Playtest with real people and tune trust levels, how many exchanges make an hour, and how freely each person talks
-2. Combat, run by Ray like a tabletop game master (dice, the player's declared actions, Ray's rulings)
+2. Combat, run by Ray like a tabletop game master (dice, the player's declared actions, Ray's rulings): the fight with the keeper is the obvious first one
 3. More chapters and places: the second night, the road, the capital
 4. Longer conversation memory: summarise old turns instead of dropping them
 5. Real painted art: an image model, or layered parts drawn by an artist, behind `portrait.js`

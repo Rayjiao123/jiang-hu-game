@@ -92,7 +92,7 @@
   const live = () => ["playing", "moving"].includes(stage());
   const cast = () => S.game?.cast || S.info?.cast || [];
   const found = () => S.game?.found || [];
-  const CATS = { route: ["出路", "A way out"], cover: ["避开守卫", "Past the guards"], truth: ["真相", "Who is who"], leverage: ["把柄", "Leverage on the keeper"] };
+  const CATS = { tunnel: ["暗道", "The tunnel"], kill: ["杀掉掌柜", "Killing the keeper"], truth: ["客栈的真相", "The truth of the inn"] };
   function setGame(g) { S.game = g; renderTop(); }
   async function refreshGame() { setGame((await api("/api/game")).game); }
 
@@ -163,7 +163,7 @@
   }
   async function begin() {
     if (live()) { go("scene"); if (stage() === "moving") openMove(); return; }
-    if (stage() === "solved" || stage() === "lost") { go("scene"); showEnding(); return; }
+    if (stage() === "solved" || stage() === "dead") { go("scene"); showEnding(); return; }
     try { setGame((await api("/api/game/start", {})).game); }
     catch (e) { toast(errText(e)); return; }
     showPrologue();
@@ -207,7 +207,7 @@
   async function newNight() {
     try { await api("/api/game/reset", {}); } catch (e) { toast(errText(e)); return; }
     closeCase(); closeMove(); closeGm(); $("#endModal").hidden = true; $("#gmToast").hidden = true;
-    setGame(null); S.npc = null; S.session = null;
+    setGame(null); S.npc = null; S.session = null; S.dying = false;
     go("gate");
   }
 
@@ -303,6 +303,9 @@
       { label: "问对方的难处 Ask what they need", say: `You look like someone carrying a weight. What do you need? ${SEP} 你看起来心事很重。你需要什么？` },
       { label: "我想离开 I want to leave", say: `I want to leave before dawn. Is there any way out of here? ${SEP} 我想在天亮前离开。这里有没有出路？` },
       { label: "示以善意 Offer a kindness", say: `Here, share my water. Nobody should go thirsty on a night like this. ${SEP} 来，分你一口水。这样的夜里，谁都不该渴着。` },
+      { label: "亮出那封信 Show the letter", say: `Here. This is what my father died carrying. Read it. ${SEP} 看。这是我父亲临死还带着的东西。你读读。` },
+      { label: "说出你的打算 Tell them your plan", say: `I'm getting out of here tonight, and I think I know how. ${SEP} 我今晚就要离开这里，而且我想我知道怎么走。` },
+      { label: "威胁他 Threaten them", say: `Stand aside, or I will cut you down. ${SEP} 让开，不然我砍了你。` },
       { label: "试探：现代之物 Test: something modern", say: `Have you ever seen an iPhone? Can you look something up on Google for me? ${SEP} 你见过 iPhone 吗？能帮我在谷歌上查点东西吗？` },
       { label: "逼问 Press them hard", say: `Stop dancing around it. Tell me what is really going on in this inn. ${SEP} 别绕圈子了。告诉我这家客栈到底是怎么回事。` }];
     const box = $("#quick"); box.textContent = "";
@@ -349,7 +352,8 @@
         else if (ev.type === "trust") { mine.trust = ev.trust; renderTrust(); }
         else if (ev.type === "clue") gotClue(ev.clue);
         else if (ev.type === "gm") { S.game.events.push({ beat: ev.beat, text: ev.text }); showGm(ev.text); }
-        else if (ev.type === "clock") { S.game.clock = ev.clock; S.game.stage = ev.stage; renderTop(); if (ev.stage === "lost") timeUp(); }
+        else if (ev.type === "clock") { S.game.clock = ev.clock; renderTop(); }
+        else if (ev.type === "death") dies(ev.cause);
       }, S.talkCtl.signal);
     } catch (e) {
       out.classList.remove("thinking");
@@ -357,7 +361,7 @@
       if (errText(e)) note("#talkNote", errText(e), true);
     } finally {
       if (said && S.session === mine) S.log.push({ who: "npc", text: said });
-      if (S.session === mine) setTalkBusy(false);
+      if (S.session === mine && !S.dying) setTalkBusy(false);
       if (!$("#logDrawer").hidden) renderLog();
     }
   }
@@ -421,7 +425,7 @@
     const kinds = new Set(found().map(c => c.category).filter(Boolean));
     const strip = el("div", "kinds");
     Object.entries(CATS).forEach(([k, [zh, en]]) => { const s = el("span", "kind" + (kinds.has(k) ? " on" : "")); s.append(el("b", "", kinds.has(k) ? "✓" : "○"), ` ${zh} ${en}`); strip.append(s); });
-    body.append(el("p", "case-lead", bi("To escape you need a way out and a way past the guards. The rest changes how it ends.", "要逃出去，需要一条出路和一个避开守卫的办法。其余的会改变结局。")), strip);
+    body.append(el("p", "case-lead", bi("There are two ways out of this inn, and only two. Each needs two things you must learn first. If you try one without them, you die.", "这家客栈只有两条出路。每一条都需要你先弄清两件事。没准备好就动手，你会死。")), strip);
     const list = el("div", "clues");
     found().forEach(c => {
       const card = el("article", "clue"); const h = el("header"); const t = el("b", "bi"); t.textContent = biText(c.title); h.append(t);
@@ -438,68 +442,60 @@
   $("#caseClose").addEventListener("click", closeCase);
   $("#caseMove").addEventListener("click", () => { closeCase(); openMove(); });
 
-  /* ---------- the move ---------- */
+  /* ---------- the move: the last one she makes ---------- */
   function openMove() {
     if (!live()) return;
-    $("#mvResult").hidden = true; $("#mvResult").textContent = "";
-    const ev = $("#mvEvidence"); ev.textContent = "";
-    found().filter(c => c.category).forEach(c => {
-      const l = el("label", "ev"); const cb = el("input"); cb.type = "checkbox"; cb.value = c.id; cb.addEventListener("change", updateMove);
-      const tx = el("span"); tx.append(el("b", "", biText(c.title)), el("small", "", `${CATS[c.category][0]} ${CATS[c.category][1]}`));
-      l.append(cb, tx); ev.append(l);
+    const list = $("#mvPaths"); list.textContent = ""; $("#mvNote").textContent = "";
+    Object.entries(S.info?.fates || {}).forEach(([k, f]) => {
+      const b = el("button", "btn big path-btn", `${f.zh} · ${f.en}`); b.type = "button"; b.dataset.path = k;
+      b.addEventListener("click", () => {
+        if (b.dataset.armed !== "1") { list.querySelectorAll("button").forEach(x => { x.dataset.armed = ""; x.classList.remove("armed"); }); b.dataset.armed = "1"; b.classList.add("armed"); b.textContent = `确定？没准备好就是死 · Sure? If you're not ready, you die.`; return; }
+        attempt(k, list);
+      });
+      list.append(b);
     });
-    if (!ev.children.length) ev.append(el("p", "case-lead dim", bi("You have nothing to build a plan from yet. Talk to the people in the inn first.", "你手里还没有可用的线索。先去和客栈里的人交谈。")));
-    $("#mvFates").hidden = stage() !== "moving"; $("#mvMain").hidden = stage() === "moving";
-    if (stage() === "moving") showFates();
-    updateMove(); $("#move").hidden = false; $("#mvClose").focus();
+    $("#move").hidden = false; $("#mvClose").focus();
   }
-  function updateMove() {
-    const n = document.querySelectorAll("#mvEvidence input:checked").length;
-    $("#mvGo").disabled = !n; $("#mvCount").textContent = n ? bi1(`${n} chosen`, `已选 ${n}`) : "";
+  async function attempt(path, list) {
+    list.querySelectorAll("button").forEach(x => x.disabled = true); $("#mvNote").textContent = bi1("You move…", "你动手了…");
+    try {
+      const r = await api("/api/move", { path });
+      setGame(r.game);
+      if (r.verdict === "dead") { closeMove(); showEnding(); return; }
+      $("#mvNote").textContent = bi1("You are out. Ray is telling it…", "你出去了。Ray 正在讲述…");
+      setGame((await api("/api/ending", {})).game); closeMove(); showEnding();
+    } catch (e) { $("#mvNote").textContent = errText(e); list.querySelectorAll("button").forEach(x => x.disabled = false); }
   }
   function closeMove() { $("#move").hidden = true; }
   $("#mvClose").addEventListener("click", closeMove);
   $("#move").addEventListener("click", e => { if (e.target.id === "move") closeMove(); });
-  $("#mvGo").addEventListener("click", async () => {
-    const evidence = [...document.querySelectorAll("#mvEvidence input:checked")].map(i => i.value);
-    $("#mvGo").disabled = true;
-    try {
-      const r = await api("/api/move", { evidence });
-      S.game.stage = r.stage; S.game.clock = r.clock; renderTop();
-      r.gm.forEach(g => { S.game.events.push({ beat: g.beat, text: g.text }); });
-      if (r.stage === "lost") { setGame(r.game); closeMove(); showEnding(); return; }
-      if (r.verdict === "go") { S.game.tier = r.tier; showFates(); return; }
-      const out = $("#mvResult"); out.hidden = false; out.className = "ac-result bad"; fillBi(out, r.feedback);
-      out.append(el("div", "zh", bi("Two hours slip away.", "两个时辰悄悄溜走了。")));
-      if (r.gm.length) showGm(r.gm[r.gm.length - 1].text);
-    } catch (e) { toast(errText(e)); }
-    finally { updateMove(); }
-  });
-  function showFates() {
-    $("#mvMain").hidden = true;
-    const box = $("#mvFates"); box.hidden = false; const list = box.querySelector(".fate-list"); list.textContent = "";
-    Object.entries(S.info?.fates || {}).forEach(([k, f]) => {
-      const b = el("button", "btn big", `${f.zh} · ${f.en}`); b.type = "button";
-      b.addEventListener("click", async () => {
-        list.querySelectorAll("button").forEach(x => x.disabled = true); $("#fateNote").textContent = bi1("Ray is telling the ending…", "Ray 正在讲述结局…");
-        try { setGame((await api("/api/ending", { fate: k })).game); closeMove(); showEnding(); }
-        catch (e) { $("#fateNote").textContent = errText(e); list.querySelectorAll("button").forEach(x => x.disabled = false); }
-      });
-      list.append(b);
-    });
-  }
-  $("#sceneMove").title = "";
 
   /* ---------- how it ends ---------- */
-  async function timeUp() {
+  // She has been killed in a conversation: let the last line sink in, then Ray explains.
+  async function dies() {
+    S.dying = true;                       // the page stays still while Ray gets ready
+    setTalkBusy(true);
+    await new Promise(r => setTimeout(r, 3200));
     try { await refreshGame(); } catch { /* keep what we have */ }
-    S.talkCtl?.abort(); closeMove(); showEnding();
+    closeMove(); showEnding();
+  }
+  const ENDINGS = { dead: ["游戏结束", "Game over"], tunnel: ["暗道", "Out through the tunnel"], kill: ["夺钥", "The keeper's key"] };
+  function endingsFound(add) {
+    let have = [];
+    try { have = JSON.parse(localStorage.getItem("endings") || "[]"); } catch { /* private window */ }
+    if (add && !have.includes(add)) { have.push(add); try { localStorage.setItem("endings", JSON.stringify(have)); } catch { /* private window */ } }
+    return have;
   }
   function showEnding() {
-    const lost = stage() === "lost";
-    $("#endTitle").textContent = lost ? "天明 · Dawn" : "出了客栈 · Out of the inn";
+    const key = S.game.ending_key || "dead", dead = key === "dead";
+    const [zh, en] = ENDINGS[key];
+    $("#endTitle").textContent = `${zh} · ${en}`;
+    $("#endModal .modal-card").classList.toggle("dead", dead);
     const t = $("#endText"); t.textContent = "";
-    const e = el("div", "bi" + (lost ? " truth" : "")); fillBi(e, lost ? S.game.truth : S.game.ending); t.append(e);
+    if (dead) { const c = el("div", "bi cause"); fillBi(c, "You are dead. Ray tells you what happened. ||| 你死了。Ray 告诉你发生了什么。"); t.append(c); }
+    const e = el("div", "bi"); fillBi(e, S.game.ending); t.append(e);
+    const have = endingsFound(key), track = $("#endTrack"); track.textContent = ""; track.append(el("span", "", `结局 Endings ${have.length} / 3`));
+    Object.entries(ENDINGS).forEach(([k, [z, n]]) => track.append(el("span", "end-chip" + (have.includes(k) ? " on" : ""), have.includes(k) ? `${z} ${n}` : "？")));
     closeCase(); closeGm(); $("#endModal").hidden = false; $("#endAgain").focus();
   }
   $("#endAgain").addEventListener("click", async () => { $("#endModal").hidden = true; await newNight(); });
@@ -528,7 +524,7 @@
     const st = stage();
     if (st === "playing") go("scene");
     else if (st === "moving") { go("scene"); openMove(); }
-    else if (st === "solved" || st === "lost") { go("scene"); showEnding(); }
+    else if (st === "solved" || st === "dead") { go("scene"); showEnding(); }
     else go("gate");
     window.__booted = true;
   }
