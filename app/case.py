@@ -66,7 +66,7 @@ HERO = {
            "Caught by a sandstorm, she walks into the Black Sand Inn. ||| 十七岁，机灵又倔强。她的父亲曾在大漠上走镖，死在风沙里，她要替他把最后一桩差事送到京城：一封缝在马鞍夹层里的密信，她从没拆开过。"
            "沙暴困住了她，她走进了黑沙客栈。",
     "appearance": dict(build="feminine", age="young", skin="warm", hair_style="ponytail", hair_color="black", eyes="wide", eye_color="brown",
-                       expression="calm", outfit="fighter", outfit_color="ash", accent_color="crimson", headwear="bamboo_hat", mark="none",
+                       expression="calm", outfit="fighter", outfit_color="ash", accent_color="crimson", headwear="headband", mark="none",
                        weapon="saber", aura="wind", scene="lanterns"),
 }
 

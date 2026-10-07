@@ -53,12 +53,14 @@
   /* ---------- portraits ---------- */
   const hasLook = c => !!(c?.appearance && Object.keys(c.appearance).length);
   const svgUrl = svg => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-  function portraitImg(c, bg, alt, aura = true) {
-    const i = new Image(); i.alt = alt || ""; i.src = svgUrl(window.renderPortrait(c.appearance, c.key || c.name || "", { bg, aura })); return i;
+  function portraitImg(c, bg, alt, aura = true, face = false) {
+    const i = new Image(); i.alt = alt || ""; i.src = svgUrl(window.renderPortrait(c.appearance, c.key || c.name || "", { bg, aura, face })); return i;
   }
+  // Round avatars and faces get the head-and-shoulders crop; anything else gets the whole figure.
   function setPortrait(box, c, bg = false, aura = true) {
     box.textContent = "";
-    if (hasLook(c)) box.append(portraitImg(c, bg, c.name, aura)); else box.innerHTML = SIL;
+    const face = box.classList.contains("avatar") || box.classList.contains("face");
+    if (hasLook(c)) box.append(portraitImg(c, bg, c.name, aura, face)); else box.innerHTML = SIL;
   }
   const alignEl = a => { const d = ALIGN[a] || ALIGN.neutral; const s = el("span", "align " + d[1], lang() === "zh" ? d[0] : "●"); s.title = { orthodox: tr("Righteous", "正派", "ฝ่ายธรรมะ"), unorthodox: tr("Outlaw", "邪派", "ฝ่ายอธรรม"), neutral: tr("Neutral", "中立", "เป็นกลาง") }[a] || ""; return s; };
   const hero = () => S.info?.hero;
@@ -80,7 +82,7 @@
     if (!S.game) closeMenu();
     if (!on) return;
     const gi = $("#gmBtnImg"); if (!gi.firstChild) setPortrait(gi, gm(), true, false);
-    const av = $("#meImg"); if (!av.firstChild) av.append(portraitImg(hero(), true, ""));
+    const av = $("#meImg"); if (!av.firstChild) setPortrait(av, hero(), true, false);
     $("#meName").textContent = hero().name;
     renderClock();
   }
@@ -111,6 +113,7 @@
   async function setLang(next) {
     if (next === lang()) return;
     I18N.set(next);
+    $("#gateLang").classList.remove("nudge");
     S.talkCtl?.abort();
     try {
       S.info = await api("/api/case");
@@ -128,9 +131,9 @@
   /* ---------- 1. gate: one screen ---------- */
   function enterGate() {
     paintBg("#gateBg", "inn");
+    $("#gateLang").classList.toggle("nudge", !I18N.chosen());
     $("#gateStart").textContent = t(live() ? "enter_back" : "enter");
-    const h = $("#gateHero"); h.textContent = ""; h.append(portraitImg(hero(), true, ""));
-    const g = $("#gateGm"); g.textContent = ""; g.append(portraitImg(gm(), true, ""));
+    setPortrait($("#gateHero"), hero(), true, false); setPortrait($("#gateGm"), gm(), true, false);
     $("#gateHeroName").textContent = hero().name; $("#gateGmName").textContent = gm().name;
   }
   async function begin() {

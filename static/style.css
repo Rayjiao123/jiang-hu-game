@@ -749,3 +749,27 @@ html[lang="zh-Hans"] .gate-en { display: none; }
 
 .gmbtn .gm-label { white-space: nowrap; }
 .align { font-size: 12px; }
+
+/* ---------- portraits: the renderer draws the face crop, so the image simply fills its circle ---------- */
+.avatar img, .avatar.mini img, .who-card .face img { position: absolute; inset: 0; left: 0; top: 0; width: 100%; height: 100%; max-width: none; object-fit: cover; display: block; }
+.who-card .face { width: 72px; height: 72px; }
+.who-card { grid-template-columns: 72px minmax(0, 1fr); }
+
+/* ---------- the language picker: the first thing a visitor sees, big and labelled in every language ---------- */
+.lang-block { display: grid; gap: 6px; }
+.lang-label { font-size: 13px; letter-spacing: .06em; color: var(--gold-text); text-align: center; }
+.lang-pick.big { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; border: 0; background: none; border-radius: 0; overflow: visible; justify-self: stretch; }
+.lang-pick.big button { display: grid; gap: 1px; justify-items: center; padding: 10px 6px 9px; border: 1.5px solid var(--gold-dim); border-radius: 12px; background: rgba(0, 0, 0, .42); color: var(--text); transition: transform .12s, border-color .12s, background .12s; }
+.lang-pick.big button b { font: 700 21px/1.25 var(--f-body); }
+.lang-pick.big button small { font-size: 11.5px; color: var(--dim); font-weight: 400; }
+.lang-pick.big button:hover { border-color: var(--gold); transform: translateY(-1px); }
+.lang-pick.big button[aria-pressed="true"] { background: linear-gradient(#e2bd62, #b8902f); border-color: #f6dc8c; color: #231a0d; box-shadow: 0 0 0 3px rgba(216, 180, 90, .28); }
+.lang-pick.big button[aria-pressed="true"] small { color: #3d2e12; }
+.lang-pick.big button[aria-pressed="true"] b::after { content: " ✓"; }
+.lang-pick.big.nudge button:not([aria-pressed="true"]) { animation: langnudge 1.8s ease-in-out infinite; }
+@keyframes langnudge { 0%, 100% { border-color: var(--gold-dim); } 50% { border-color: var(--gold); box-shadow: 0 0 12px rgba(216, 180, 90, .45); } }
+.lang-pick.in-menu { margin: 8px 6px 4px; }
+.lang-pick.in-menu::before { content: none; }
+.lang-pick.big button b { white-space: nowrap; font-size: 19px; }
+.lang-pick.big button { padding: 8px 4px 7px; }
+@media (max-width: 760px) { .gate-card { gap: 8px; padding-top: 12px; padding-bottom: 14px; } .gate-title { font-size: clamp(32px, 10vw, 48px); } .setting { font-size: 14px; line-height: 1.5; } }

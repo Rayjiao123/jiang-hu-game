@@ -68,7 +68,7 @@ rules for dying, and the endings. The AI only plays the people and Ray.
 static/index.html      the screens: a one-screen landing page, the inn (a list of people), a chat; Ray's sheet, the move, the ending
 static/style.css       the game interface: lacquer panels and gold frames over painted scenes
 static/app.js          the journey: screens, clock, the chat thread, Ray's notes and questions, the move, the ending
-static/portrait.js     painted character portraits (soft Jin Yong game-art style), with a cutout mode
+static/portrait.js     painted character portraits (soft Jin Yong game-art style), with a cutout mode and a head-and-shoulders face crop for round avatars
 static/scenes.js       painted backdrops, including the desert inn at dusk
 app/case.py            THE STORY: truth, cast, clues, clock, events, escape rules, prologue and endings
 app/main.py            FastAPI routes; streams replies as server-sent events; the clue referee; the clock; Ray

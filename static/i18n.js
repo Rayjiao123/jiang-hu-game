@@ -82,6 +82,7 @@
     return n.startsWith("zh") ? "zh" : n.startsWith("th") ? "th" : "en";
   };
   let lang = guess();
+  const chosen = () => { try { return LANGS.includes(localStorage.getItem(KEY)); } catch { return false; } };
 
   const pick = o => (o && (o[lang] ?? o.en)) ?? "";
   const tr = (en, zh, th) => ({ en, zh, th })[lang] ?? en;
@@ -103,5 +104,5 @@
     apply();
   }
 
-  window.I18N = { LANGS, NAMES, T, get lang() { return lang; }, set, apply, t, tr, pick };
+  window.I18N = { LANGS, NAMES, T, get lang() { return lang; }, set, apply, t, tr, pick, chosen };
 })();

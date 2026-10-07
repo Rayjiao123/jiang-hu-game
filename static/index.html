@@ -44,10 +44,13 @@
     <canvas id="gateBg" aria-hidden="true"></canvas>
     <div class="gate-scrim"></div>
     <div class="gate-card">
-      <div class="lang-pick" role="group" data-t-aria="language">
-        <button type="button" data-lang="en" aria-pressed="false">English</button>
-        <button type="button" data-lang="zh" aria-pressed="false">中文</button>
-        <button type="button" data-lang="th" aria-pressed="false">ไทย</button>
+      <div class="lang-block">
+        <div class="lang-label">🌐 Language · 语言 · ภาษา</div>
+        <div class="lang-pick big" id="gateLang" role="group" data-t-aria="language">
+          <button type="button" data-lang="en" aria-pressed="false"><b>English</b><small>Play in English</small></button>
+          <button type="button" data-lang="zh" aria-pressed="false"><b>中文</b><small>用中文游玩</small></button>
+          <button type="button" data-lang="th" aria-pressed="false"><b>ไทย</b><small>เล่นเป็นภาษาไทย</small></button>
+        </div>
       </div>
       <p class="kicker"><span data-t="kicker_tag">Dark wuxia</span> <span class="kicker-text" data-t="kicker">a story game</span></p>
       <h1 class="gate-title">人在江湖，<br>身不由己</h1>

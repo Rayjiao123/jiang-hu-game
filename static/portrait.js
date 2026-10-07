@@ -3,6 +3,7 @@
  * ink-wash landscape that fades into paper.
  *
  *   renderPortrait(appearance, seed, { bg: true })  ->  SVG markup (viewBox 0 0 240 300)
+ *   renderPortrait(appearance, seed, { face: true }) ->  the same, framed on the head and shoulders for small round avatars
  *
  * With bg:false only the figure and its aura are drawn on a transparent ground, so busts can stand
  * over a scene. Each layer is chosen by one field of `appearance` (APPEARANCE in app/game.py);
@@ -421,7 +422,9 @@
     const T = 'transform="rotate(-2.5 120 190)"';
     const sk = P.skin[1];
 
-    let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 300">` + defs(P);
+    // the head sits at about x 120, y 15 to 185 once the figure is scaled; a square frame on it keeps the face whole in a circle
+    const box = opts.face ? FACE_BOX : "0 0 240 300";
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}">` + defs(P);
     if (opts.bg !== false) s += background(a.scene, R);
     if (opts.aura !== false) s += aura(a.aura, R);
     s += `<g transform="translate(120 218) scale(1.14) translate(-120 -218)">`;
@@ -456,4 +459,5 @@
   }
 
   window.renderPortrait = render;
+  const FACE_BOX = "48 22 144 144";
 })();
