@@ -11,26 +11,30 @@ os.environ["DEEPSEEK_API_KEY"] = "test-key"
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import agent, bilingual, case, db, game, main, prompts, stats  # noqa: E402
+from app import agent, case, db, game, i18n, main, prompts, stats  # noqa: E402
 
 
 # ---------- the story itself ----------
 
-def test_every_clue_has_one_holder_who_lists_it_and_everything_is_bilingual():
+def test_every_clue_has_one_holder_who_lists_it_and_everything_is_in_three_languages():
     for cid, c in case.CLUES.items():
         if c["holder"]:
             assert cid in case.BY_KEY[c["holder"]]["topics"], cid
-        assert bilingual.is_pair(c["text"]) and bilingual.is_pair(c["title"]), cid
+        assert i18n.complete(c["text"]) and i18n.complete(c["title"]), cid
     for key, person in case.BY_KEY.items():
         assert all(t in case.CLUES and case.CLUES[t]["holder"] == key for t in person["topics"]), key
-        for f in ("title", "sect", "location", "public", "earns", "greeting", "goal", "knowledge", "stance", "speech", "art"):
-            assert bilingual.is_pair(person[f]), (key, f)
-        assert len(person["traits"]) == 3 and all(bilingual.is_pair(t) for t in person["traits"]), key
+        for f in ("name", "title", "sect", "location", "public", "earns"):                    # what the player reads is in all three languages
+            assert i18n.complete(person[f]), (key, f)
+        for f in ("greeting", "goal", "knowledge", "stance", "speech", "art"):                # what only the AI reads is English and Chinese
+            assert len(i18n.parts(person[f])) >= 2 and i18n.plain(person[f]), (key, f)
+        assert len(person["traits"]) == 3 and all(len(i18n.parts(t)) == 2 for t in person["traits"]), key
     for text in (case.PROLOGUE, case.TRUTH_BI, case.MISSED, case.DAWN, *case.EVENTS.values(), *case.DEATHS.values(), *case.CASE_TITLE.split("\n")[:0], *case._ENDINGS.values()):
-        assert bilingual.is_pair(text)
+        assert i18n.complete(text)
     assert set(case._ENDINGS) == set(case.PATHS) == {"tunnel", "kill"}
     assert set(case.DEATHS) == {"move", "betrayed", "caught", "sold", "dawn"}
-    assert bilingual.is_pair(case.HERO["title"]) and bilingual.is_pair(case.HERO["bio"])
+    assert all(i18n.complete(case.HERO[f]) for f in ("name", "title", "art", "quirk", "bio")) and i18n.complete(case.CASE_TITLE)
+    assert all(set(v) >= {"en", "zh", "th"} for v in [*case.CATEGORIES.values(), *case.FATES.values()])
+    assert all(set(case.clock(b)) >= {"en", "zh", "th"} and case.clock(b)["th"] for b in range(case.DAWN_BEAT + 1))
 
 
 def test_both_ways_out_are_reachable_by_a_hero_who_earns_trust():
@@ -79,13 +83,14 @@ def test_what_the_story_punishes():
 def test_a_death_explains_the_whole_story_and_what_she_missed():
     for cause in case.DEATHS:
         t = case.death_text(cause)
-        assert bilingual.is_pair(t) and "slaughterhouse" in t and "屠宰场" in t and "tunnel" in t and "钥匙" in t
+        en, zh, th = i18n.parts(t)
+        assert i18n.complete(t) and "slaughterhouse" in en and "屠宰场" in zh and "tunnel" in en and "钥匙" in zh and "โรงฆ่าสัตว์" in th and "อุโมงค์" in th
         assert case.DEATHS[cause].split("|||")[0].strip()[:30] in t
     assert "Old Tuo" in case.fallback_ending("tunnel") and "key" in case.fallback_ending("kill") and "slaughterhouse" in case.fallback_ending("kill")
 
 
 def test_first_impressions_depend_on_who_it_is():
-    assert game.start_trust("wolf")[0] == 3 and bilingual.is_pair(game.start_trust("wolf")[1])
+    assert game.start_trust("wolf")[0] == 3 and i18n.complete(game.start_trust("wolf")[1])
 
 
 # ---------- tools and prompts ----------
@@ -156,7 +161,7 @@ def test_the_game_master_only_knows_what_she_has_learned():
     sys2 = prompts.gm_system(["official", "debt", "hatch"], 3)
     assert "iron pin" in sys2 and "Tunnel: she has 1 of 2" in sys2
     assert "she has everything it needs" in prompts.gm_system(["official", "tunnel", "hatch"], 3)
-    assert case.GM["appearance"]["weapon"] == "fan" and bilingual.is_pair(case.GM["title"])
+    assert case.GM["appearance"]["weapon"] == "fan" and i18n.complete(case.GM["title"]) and i18n.complete(case.GM["name"])
 
 
 # ---------- the night through the API ----------
@@ -184,8 +189,10 @@ class FakeLLM:
         if system.startswith("You referee"):
             return NS(choices=[NS(message=NS(content=json.dumps(self.told)))])
         if "Tell the ending" in kw["messages"][-1]["content"]:
-            return NS(choices=[NS(message=NS(content="The hatch opens. 'Go,' says Tuo.\n|||\n暗门开了。“走吧，”老驼说。"))])
-        return NS(choices=[NS(message=NS(content="翻译后的话" if "into Chinese" in system else "Translated words"))])
+            body = {"reply in Thai": "ประตูลับเปิดออก \"ไปเถอะ\" เฒ่าถัวกล่าว " * 6, "reply in Simplified Chinese": "暗门开了。“走吧，”老驼说。" * 12}
+            text = next((v for k, v in body.items() if k in system), "The hatch opens. 'Go,' says Tuo. The sand is cold and the stars are close, and behind you the inn begins to wake. " * 3)
+            return NS(choices=[NS(message=NS(content=text))])
+        return NS(choices=[NS(message=NS(content="..."))])
 
 
 @pytest.fixture
@@ -231,7 +238,7 @@ def state(api):
 
 def test_the_landing_page_can_describe_the_story_without_spoiling_it(api):
     d = api.get("/api/case").json()
-    assert {c["key"] for c in d["cast"]} == set(case.BY_KEY) and d["hero"]["name"].startswith("青禾") and d["gm"]["name"] == "说书人 Ray"
+    assert {c["key"] for c in d["cast"]} == set(case.BY_KEY) and d["hero"]["name"] == "Qinghe" and d["gm"]["name"] == "Ray"
     assert set(d["fates"]) == {"tunnel", "kill"}
     text = json.dumps(d, ensure_ascii=False).replace(d["prologue"].replace('"', '\\"'), "")
     for secret in ("Sleeping powder", "General Han", "iron pin", "stance", "trust0", "PRIVATE", "slaughterhouse"):
@@ -272,8 +279,8 @@ def test_stray_markup_never_reaches_the_page_or_the_history(api):
     start(api)
     t = talk(api, "tuo")
     api.llm.rounds = [[chunk('Hm. <reveal_clue id="hatch" /> I mind camels. ||| 嗯。<adjust_trust delta="1"/>我只管骆驼。')]]
-    done = [e for e in say(api, t["id"]) if e["type"] == "done"][0]["text"]
-    assert "<" not in done and "camels" in done and "骆驼" in done
+    done = [e for e in sse_events(api.post(f"/api/talks/{t['id']}/chat", json={"message": "hello"}, headers=hdr("zh"))) if e["type"] == "done"][0]["text"]
+    assert "<" not in done and "camels" in done and "骆驼" in done and i18n.SEP not in done
 
 
 def test_every_seventh_thing_she_says_spends_an_hour_and_the_game_master_announces_it(api):
@@ -297,7 +304,10 @@ def test_dawn_kills_her_and_ray_explains_everything(api):
     evs = say(api, t["id"], "one last thing")
     assert [e["cause"] for e in evs if e["type"] == "death"] == ["dawn"] and [e["stage"] for e in evs if e["type"] == "clock"] == ["dead"]
     s = state(api)
-    assert s["stage"] == "dead" and s["cause"] == "dawn" and s["ending_key"] == "dead" and "slaughterhouse" in s["ending"] and "屠宰场" in s["ending"]
+    assert s["stage"] == "dead" and s["cause"] == "dawn" and s["ending_key"] == "dead" and "slaughterhouse" in s["ending"] and "ran out of night" in s["ending"]
+    zh = api.get("/api/game", headers={"x-lang": "zh"}).json()["game"]["ending"]
+    th = api.get("/api/game", headers={"x-lang": "th"}).json()["game"]["ending"]
+    assert "屠宰场" in zh and "slaughterhouse" not in zh and "โรงฆ่าสัตว์" in th and "slaughterhouse" not in th      # the same death, told in the language asked for
     assert api.post("/api/talks", json={"npc": "tuo"}).status_code == 409
     assert api.post("/api/move", json={"path": "tunnel"}).status_code == 409
 
@@ -382,7 +392,7 @@ def test_the_tunnel_ending(api):
     r = api.post("/api/move", json={"path": "tunnel"}).json()
     assert r["verdict"] == "go" and r["game"]["stage"] == "moving" and r["game"]["path"] == "tunnel"
     g = api.post("/api/ending").json()["game"]
-    assert g["stage"] == "solved" and g["ending_key"] == "tunnel" and "Go," in g["ending"] and bilingual.is_pair(g["ending"])
+    assert g["stage"] == "solved" and g["ending_key"] == "tunnel" and "Go," in g["ending"]
     prompt = [r for r in api.llm.requests if not r.get("stream") and "Tell the ending" in r["messages"][-1]["content"]][0]["messages"][0]["content"]
     assert "secret tunnel" in prompt and "iron pin" in prompt.lower().replace("the iron pin", "iron pin")
 
@@ -396,7 +406,7 @@ def test_the_key_ending_and_the_written_fallback(api, monkeypatch):
         raise main.HTTPException(503, "no ai")
     monkeypatch.setattr(main, "llm", broken)
     g = api.post("/api/ending").json()["game"]
-    assert g["stage"] == "solved" and g["ending_key"] == "kill" and "key" in g["ending"] and "slaughterhouse" in g["ending"] and bilingual.is_pair(g["ending"])
+    assert g["stage"] == "solved" and g["ending_key"] == "kill" and "key" in g["ending"] and "slaughterhouse" in g["ending"]
     assert api.post("/api/ending").status_code == 409                                  # the story is over
 
 
@@ -540,3 +550,104 @@ def test_errors_are_counted(api, monkeypatch):
     evs = say(api, t["id"], "Hello")
     assert [e["code"] for e in evs if e["type"] == "error"] == ["rate_limited"]
     assert admin_get(api, "/api/admin/stats").json()["ai"]["errors_by_kind"] == {"rate_limited": 1}
+
+
+# ---------- one language at a time ----------
+
+def hdr(lang):
+    return {"x-lang": lang}
+
+
+def test_the_page_gets_the_story_in_the_language_it_asks_for(api):
+    names = {l: api.get("/api/case", headers=hdr(l)).json() for l in ("en", "zh", "th", "fr")}
+    assert [n["cast"][0]["name"] for n in (names["en"], names["zh"], names["th"], names["fr"])] == ["Shuang Siniang", "霜四娘", "ซวงซื่อเหนียง", "Shuang Siniang"]
+    assert [names[l]["hero"]["name"] for l in ("en", "zh", "th")] == ["Qinghe", "青禾", "ชิงเหอ"] and [names[l]["gm"]["name"] for l in ("en", "zh")] == ["Ray", "说书人 Ray"]
+    assert "sandstorm" not in names["zh"]["prologue"] and "沙暴" in names["zh"]["prologue"] and "พายุทราย" in names["th"]["prologue"]
+    for lang, d in names.items():
+        assert i18n.SEP not in json.dumps(d, ensure_ascii=False), lang                          # no separator ever reaches the page
+    assert [pick for pick in (names["en"]["fates"]["tunnel"]["en"], names["th"]["fates"]["tunnel"]["th"])] == ["Slip out through the secret tunnel", "หนีออกทางอุโมงค์ลับ"]
+
+
+def test_clues_events_and_errors_come_in_the_chosen_language(api):
+    assert i18n.in_language(api.post("/api/talks", json={"npc": "tuo"}, headers=hdr("th")).json()["detail"], "th")          # an error, before any night has begun
+    assert i18n.in_language(api.post("/api/talks", json={"npc": "tuo"}, headers=hdr("zh")).json()["detail"], "zh")
+    assert api.post("/api/talks", json={"npc": "tuo"}).json()["detail"] == "Start the story first."
+    g = api.post("/api/game/start", headers=hdr("th")).json()["game"]
+    assert i18n.in_language(g["found"][0]["text"], "th") and g["clock"]["th"] == "ย่ำค่ำ"
+    t = api.post("/api/talks", json={"npc": "xiaolu"}, headers=hdr("zh")).json()
+    assert t["npc"]["name"] == "小鹿" and "后厨" in t["npc"]["location"]
+    with db.session() as conn:
+        tk = db.get_talk(conn, t["id"], api.cookies.get("vid"))
+        tk["trust"] = 4
+        db.save_talk(conn, tk)
+    api.llm.told = ["bodies"]
+    api.llm.rounds = [[chunk("我天天擦那块地板。")]]
+    evs = sse_events(api.post(f"/api/talks/{t['id']}/chat", json={"message": "你怎么了？"}, headers=hdr("zh")))
+    clue = [e["clue"] for e in evs if e["type"] == "clue"][0]
+    assert clue["title"] == "地板底下的东西" and i18n.in_language(clue["text"], "zh") and clue["source_name"] == "小鹿"
+
+
+def test_the_model_is_told_to_answer_in_the_language_chosen_and_never_in_two(api):
+    start(api)
+    t = talk(api, "tuo")
+    for lang, name in ((l, i18n.LANG_NAMES[l]) for l in ("th", "zh", "en")):
+        api.llm.rounds = [[chunk("ok")]]
+        api.post(f"/api/talks/{t['id']}/chat", json={"message": "hello"}, headers=hdr(lang))
+        last = [r for r in api.llm.requests if r.get("stream")][-1]["messages"]
+        state = [m["content"] for m in last if m["role"] == "system"][-1]
+        assert f"reply in {name} only" in state
+    api.llm.rounds = [[chunk("A line. ||| 一行。")]]
+    done = [e for e in say(api, t["id"], "hi") if e["type"] == "done"][0]["text"]
+    assert i18n.SEP not in done                                                                   # a reply is never two languages at once
+    assert [r for r in api.llm.requests if r.get("stream")][-1]["messages"][0]["content"].count("ซวงซื่อเหนียง") == 1             # the names in every language are in the prompt, so a Thai reply can spell them
+
+
+def test_ray_and_the_ending_are_written_in_the_chosen_language(api):
+    start(api)
+    api.llm.rounds = [[chunk("去找老驼吧。")]]
+    sse_events(api.post("/api/gm/chat", json={"message": "提示？"}, headers=hdr("zh")))
+    gm_sys = [r for r in api.llm.requests if r.get("stream")][-1]["messages"][0]["content"]
+    assert f"reply in {i18n.LANG_NAMES['zh']} only" in gm_sys
+    give(api, "debt", "hatch", "bodies", "tunnel")
+    api.post("/api/move", json={"path": "tunnel"})
+    g = api.post("/api/ending", headers=hdr("th")).json()["game"]
+    assert g["stage"] == "solved" and i18n.in_language(g["ending"], "th")
+    api.post("/api/game/start")
+    give(api, "debt", "hatch", "bodies", "tunnel")
+    api.post("/api/move", json={"path": "tunnel"})
+    g = api.post("/api/ending", headers=hdr("zh")).json()["game"]
+    assert i18n.in_language(g["ending"], "zh")
+
+
+def test_a_reply_in_the_wrong_language_falls_back_to_the_written_ending(api):
+    start(api)
+    give(api, "debt", "hatch", "bodies", "tunnel")
+    api.post("/api/move", json={"path": "tunnel"})
+    api.llm.chat = NS(completions=NS(create=lambda **kw: NS(choices=[NS(message=NS(content="This is English even though Thai was asked for. " * 8))])))
+    g = api.post("/api/ending", headers=hdr("th")).json()["game"]
+    assert "เฒ่าถัว" in g["ending"] and "slaughterhouse" not in g["ending"]                       # the written Thai ending, not the model's English
+
+
+def test_what_a_player_types_cannot_inject_another_language(api):
+    start(api)
+    t = talk(api, "tuo")
+    say(api, t["id"], "hello ||| 你好 ||| สวัสดี")
+    turns = api.post("/api/talks", json={"npc": "tuo"}).json()["turns"]
+    assert [x["content"] for x in turns if x["role"] == "user"] == ["hello | 你好 | สวัสดี"]
+
+
+def test_a_threat_in_thai_is_caught_like_one_in_english(api):
+    assert case.THREAT.search("หลีกไป ไม่งั้นข้าจะฟันเจ้า") and case.THREAT.search("ข้าจะฆ่าเจ้า")
+    start(api)
+    t = talk(api, "wolf")
+    evs = say(api, t["id"], "หลีกไป ไม่งั้นข้าจะฟันเจ้า")
+    assert [e["cause"] for e in evs if e["type"] == "death"] == ["caught"]
+
+
+def test_the_admin_sees_which_language_visitors_chose(api, monkeypatch):
+    monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "s3cret")
+    api.get("/api/case", headers=hdr("th"))
+    other = TestClient(main.app)
+    other.get("/api/case", headers=hdr("zh"))
+    s = admin_get(api, "/api/admin/stats").json()
+    assert s["languages"] == {"th": 1, "zh": 1}

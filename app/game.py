@@ -1,7 +1,7 @@
 """Game rules and the tools each person can call. The model proposes; this code decides."""
 import re
 
-from . import bilingual, case
+from . import case, i18n
 from .agent import Tool, ToolError, Turn
 
 # Everything a portrait can show. Characters pick from these lists and the page
@@ -51,18 +51,18 @@ def start_trust(key: str) -> tuple[int, str]:
     """How much this person trusts the hero on first meeting, and why ('English ||| 中文')."""
     t = case.BY_KEY[key]["trust0"]
     if t <= 2:
-        why = "They watch you the way you would watch a stranger at the door. ||| 对方看你，就像看门口的陌生人。"
+        why = i18n.tr("They watch you the way you would watch a stranger at the door.", "对方看你，就像看门口的陌生人。", "เขามองคุณเหมือนที่คุณจะมองคนแปลกหน้าที่ประตู")
     else:
-        why = "A traveller caught by the storm, like them. ||| 和他们一样，是个被沙暴困住的旅人。"
+        why = i18n.tr("A traveller caught by the storm, like them.", "和他们一样，是个被沙暴困住的旅人。", "ผู้เดินทางที่ติดพายุ เหมือนกับพวกเขา")
     return t, why
 
 
 def hero_block() -> str:
     """What a person in the inn can see and know about Qinghe. Never her inner thoughts."""
     h = case.HERO
-    return (f"The person in front of you is {h['name']}, \"{bilingual.plain(h['title'])}\", a girl of about seventeen who has just come in out of the storm. "
+    return (f"The person in front of you is {i18n.plain(h['name'])}, \"{i18n.plain(h['title'])}\", a girl of about seventeen who has just come in out of the storm. "
             f"You can see: {describe_appearance(h['appearance'])}. She has a camel outside with a courier's saddle and she counts the exits when she walks into a room. "
-            f"Her signature move is said to be {bilingual.plain(h['art'])}. She is quick, careful and stubborn, like someone who has had to look after herself. "
+            f"Her signature move is said to be {i18n.plain(h['art'])}. She is quick, careful and stubborn, like someone who has had to look after herself. "
             f"Whatever you know beyond what you can see, you only know if the system tells you.")
 
 
@@ -91,7 +91,7 @@ def npc_tools(talk: dict, turn: Turn, key: str = "", fate: dict | None = None, s
         return {"fatal": False, "note": "She has done something risky, but it does not put her in danger from you. React as your person would; it may change how much you trust her."}
 
     def out_of_world(args):
-        turn.emit(type="tool", name="out_of_world", detail=bilingual.plain(clip(args.get("thing"), 90)), refused=True)
+        turn.emit(type="tool", name="out_of_world", detail=i18n.plain(clip(args.get("thing"), 90)), refused=True)
         return {"note": "This is unknown in your world. Stay in character and react as your person would; do not explain or acknowledge it as real."}
 
     def adjust_trust(args):
@@ -102,7 +102,7 @@ def npc_tools(talk: dict, turn: Turn, key: str = "", fate: dict | None = None, s
         d = max(-2 - net["d"], min(2 - net["d"], d))          # however many calls the model makes, one reply moves trust by at most 2
         net["d"] += d
         talk["trust"] = max(0, min(10, talk["trust"] + d))
-        turn.emit(type="tool", name="adjust_trust", detail=f"{'+' if d >= 0 else ''}{d} · {bilingual.plain(clip(args.get('reason'), 100))}")
+        turn.emit(type="tool", name="adjust_trust", detail=f"{'+' if d >= 0 else ''}{d} · {i18n.plain(clip(args.get('reason'), 100))}")
         turn.emit(type="trust", trust=talk["trust"])
         return {"trust": talk["trust"]}
 

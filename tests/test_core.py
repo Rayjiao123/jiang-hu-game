@@ -8,56 +8,68 @@ from types import SimpleNamespace as NS
 os.environ["DATABASE_PATH"] = str(Path(tempfile.mkdtemp()) / "test.db")
 os.environ["DEEPSEEK_API_KEY"] = ""
 
-from app import agent, bilingual  # noqa: E402
+from app import agent, i18n  # noqa: E402
 from app.agent import Tool  # noqa: E402
 
 
-def test_language_detection():
-    assert bilingual.language_of("What do you sell, old man?") == "English"
-    assert bilingual.language_of("老人家，你卖的是什么？") == "Chinese"
-    assert bilingual.language_of("Have you met 柳寒烟 on the canal?") == "English"   # a Chinese name inside English stays English
+# ---------- three languages ----------
+
+def test_fixed_text_holds_all_three_languages_and_the_server_picks_one():
+    text = i18n.tr("Hello", "你好", "สวัสดี")
+    assert i18n.parts(text) == ["Hello", "你好", "สวัสดี"] and i18n.complete(text)
+    assert [i18n.pick(text, l) for l in ("en", "zh", "th")] == ["Hello", "你好", "สวัสดี"]
+    assert i18n.pick(text, "fr") == "Hello" and i18n.valid("fr") == "en" and i18n.valid(None) == "en"
+    assert i18n.plain(text) == "Hello"                                                 # prompts get the English part
+    assert i18n.pick("No separator here", "th") == "No separator here"
+    assert i18n.pick("Only ||| 只有两种", "th") == "Only"                              # a missing language falls back to English
+    assert i18n.tr("Only English", "仅英文") .endswith("Only English")                  # and tr() fills a missing Thai with English
 
 
-def test_bilingual_format():
-    assert bilingual.is_pair("Never forgives a debt ||| 有债必讨")
-    assert not bilingual.is_pair("Never forgives a debt")                  # one language only
-    assert not bilingual.is_pair("有债必讨 ||| Never forgives a debt")      # wrong order
-    assert not bilingual.is_pair("Never forgives a debt ||| ")             # an empty half
-    assert bilingual.split("Hello ||| 你好") == ("Hello", "你好")
-    assert bilingual.plain("Hello ||| 你好") == "Hello / 你好"
-    assert bilingual.has_both("Ask about the Jin war 问问金国战事")
-    assert not bilingual.has_both("Ask about the Jin war")
+def test_localize_walks_a_whole_response():
+    data = {"name": i18n.tr("Qinghe", "青禾", "ชิงเหอ"), "cast": [{"title": i18n.tr("Guard", "守卫", "ยาม"), "n": 3, "ok": True}], "plain": "text", "none": None}
+    assert i18n.localize(data, "zh") == {"name": "青禾", "cast": [{"title": "守卫", "n": 3, "ok": True}], "plain": "text", "none": None}
+    assert i18n.localize(data, "th")["cast"][0]["title"] == "ยาม"
 
 
-class Translator:
-    def __init__(self, reply="你好，老人家"):
-        self.reply, self.prompts = reply, []
-        self.chat = NS(completions=NS(create=self._create))
-
-    def _create(self, **kw):
-        self.prompts.append(kw["messages"][0]["content"])
-        return NS(choices=[NS(message=NS(content=self.reply))])
+def test_join_keeps_each_language_together():
+    joined = i18n.join(i18n.tr("One.", "一。", "หนึ่ง"), i18n.tr("Two.", "二。", "สอง"))
+    assert i18n.parts(joined) == ["One.\n\nTwo.", "一。\n\n二。", "หนึ่ง\n\nสอง"]
 
 
-def test_counterpart_translates_to_the_other_language_only_when_needed():
-    t = Translator("Hello, old man")
-    assert bilingual.counterpart(t, "m", "你好，老人家") == "Hello, old man"
-    assert "into English" in t.prompts[0]
-    t2 = Translator()
-    assert bilingual.counterpart(t2, "m", "Hello, old man") == "你好，老人家"
-    assert "into Chinese" in t2.prompts[0]
-    assert bilingual.counterpart(t2, "m", "Hello 你好 old man 老人家") == ""      # already both: no call
-    assert len(t2.prompts) == 1
+def test_a_fixed_text_is_complete_only_with_each_language_in_its_own_script():
+    assert not i18n.complete("English only") and not i18n.complete("a b ||| 你好")
+    assert not i18n.complete("Hello there ||| 你好 ||| still English here")
+    assert i18n.complete("Hello there ||| 你好 ||| สวัสดี")
 
 
-def test_a_failed_translation_never_breaks_a_reply():
-    class Boom:
-        chat = NS(completions=NS(create=lambda **kw: (_ for _ in ()).throw(RuntimeError("down"))))
-    assert bilingual.counterpart(Boom(), "m", "Hello, old man") == ""
+def test_a_reply_is_checked_against_the_language_that_was_asked_for():
+    en, zh, th = "The wind is strong tonight, child. Stay inside.", "今晚风很大，孩子，待在屋里。", "คืนนี้ลมแรง เด็กน้อย อยู่ข้างในเถอะ"
+    assert i18n.in_language(en, "en") and not i18n.in_language(zh, "en") and not i18n.in_language(th, "en")
+    assert i18n.in_language(zh, "zh") and not i18n.in_language(en, "zh") and not i18n.in_language(th, "zh")
+    assert i18n.in_language(th, "th") and not i18n.in_language(en, "th") and not i18n.in_language(zh, "th")
+    assert i18n.in_language("Madam Shuang says 霜四娘 is near, and the wind is cold.", "en")       # a name in another script is fine
+    assert i18n.in_language("老驼说：风很大，孩子。Tuo is kind.", "zh")
 
 
-# ---------- game rules ----------
+def test_what_the_model_writes_is_cleaned_before_it_is_shown():
+    cleaned = i18n.clean_ai('Hm. <reveal_clue id="x" /> I mind camels.')
+    assert "<" not in cleaned and "camels" in cleaned
+    assert i18n.SEP not in i18n.clean_ai("A ||| B")
 
+
+def test_chinese_characters_are_removed_from_thai_and_english_replies_but_not_from_chinese():
+    thai = "ข้าเลี้ยงอูฐมา三十年 ใครผ่านด่านนี้ข้าจำได้หมด"
+    assert i18n.clean_ai(thai, "th") == "ข้าเลี้ยงอูฐมา ใครผ่านด่านนี้ข้าจำได้หมด"
+    assert i18n.clean_ai("Madam 霜四娘 is near。", "en") == "Madam is near" and i18n.clean_ai("She said “no”.", "en") == "She said “no”."
+    assert i18n.clean_ai("三十年，我都在这里。", "zh") == "三十年，我都在这里。" and i18n.clean_ai("三十年", None) == "三十年"
+
+
+def test_the_model_is_told_which_language_to_write():
+    for lang, name in (("en", "English"), ("zh", "Simplified Chinese"), ("th", "Thai")):
+        rule = i18n.reply_rule(lang)
+        assert name in rule and "only" in rule and i18n.SEP in rule                                  # it names the language and forbids the separator
+        assert ("no Chinese characters" in rule) == (lang != "zh")                                     # and keeps Chinese out of Thai and English
+    assert i18n.reply_rule("xx") == i18n.reply_rule("en")
 
 
 def set_fields_tool(sheet, turn):
@@ -68,10 +80,6 @@ def set_fields_tool(sheet, turn):
         turn.emit(type="sheet", sheet=sheet)
         return {"ok": True}
     return [Tool("set_fields", "write fields", {"type": "object", "properties": {"name": {"type": "string"}}}, run)]
-
-
-def _clip(v, n):
-    return v[:n] if bilingual.SEP in v else v.strip('"')[:n]
 
 
 def chunk(content=None, tool=None):
@@ -122,20 +130,14 @@ def test_agent_survives_bad_tool_arguments():
     assert "error" in client.requests[1]["messages"][-1]["content"]
 
 
-def test_quotes_inside_bilingual_text_are_kept():
-    assert _clip('"Hello there"', 40) == "Hello there"                                 # wrapped around a single value: dropped
-    both = 'Calls every blade "little sister" ||| 管每把剑叫"小妹"'
-    assert _clip(both, 80) == both                                                      # each half keeps its own quotes
-
-
 def test_a_reply_without_narration_is_kept_whole():
     turn = agent.Turn()
     if True:
         tools = set_fields_tool({}, turn)
-        client = FakeClient([[chunk("Hello there "), chunk("friend ||| 你好，朋友")]])
+        client = FakeClient([[chunk("Hello there "), chunk("friend")]])
         events = list(agent.run(client, "m", [{"role": "user", "content": "hi"}], tools, turn, "visitor-c"))
     assert all(e["type"] != "retract" for e in events)
-    assert events[-1]["text"] == "Hello there friend ||| 你好，朋友"
+    assert events[-1]["text"] == "Hello there friend"
 
 
 def test_text_that_follows_tool_calls_in_the_same_round_is_not_the_reply():
@@ -149,37 +151,3 @@ def test_text_that_follows_tool_calls_in_the_same_round_is_not_the_reply():
         events = list(agent.run(client, "m", [{"role": "user", "content": "hi"}], tools, turn, "visitor-d"))
     assert "retract" in [e["type"] for e in events]
     assert events[-1]["text"] == "The real reply ||| 正式回复"
-
-
-# ---------- the world, first impressions and tailored prompts ----------
-
-
-def test_a_reply_is_tidied_into_one_english_half_and_one_chinese_half():
-    clean = "Hello there.\n|||\n你好。"
-    assert bilingual.normalize(clean) == clean
-    # the separator forgotten: sort the paragraphs by language
-    assert bilingual.normalize("*Waves.* Hello there.\n\n*挥手。* 你好。") == "*Waves.* Hello there.\n|||\n*挥手。* 你好。"
-    # the separator repeated for every paragraph
-    messy = "First part. ||| 第一段。\n\nSecond part.\n|||\n第二段。"
-    assert bilingual.normalize(messy) == "First part.\n\nSecond part.\n|||\n第一段。\n\n第二段。"
-    # one language only is left for the translator
-    assert bilingual.normalize("Only English here.") == "Only English here."
-    assert bilingual.SEP not in bilingual.normalize("只有中文。")
-
-
-def test_the_translator_is_told_how_to_spell_the_cast():
-    assert bilingual.glossary(["陆沉舟 Lu Chenzhou", "谢三碗 Xie Sanwan", "no chinese here"]) == "Lu Chenzhou = 陆沉舟; Xie Sanwan = 谢三碗"
-    t = Translator("陆沉舟在哪里？")
-    assert bilingual.counterpart(t, "m", "Where is Lu Chenzhou?", "Lu Chenzhou = 陆沉舟") == "陆沉舟在哪里？"
-    assert "Lu Chenzhou = 陆沉舟" in t.prompts[0]
-
-
-def test_a_language_leaking_into_the_other_half_is_cut_out():
-    # the model copies the history's "English / 中文" form into its English half
-    assert bilingual.normalize("Start where the light is. / 从有光的地方开始。\n|||\n从有光的地方开始。") == "Start where the light is.\n|||\n从有光的地方开始。"
-    # a Chinese paragraph sitting inside the English half
-    messy = "Sit down.\n\n除了那件事——有人来。\n|||\n坐下。"
-    assert bilingual.normalize(messy) == "Sit down.\n|||\n坐下。"
-    # a Chinese name inside English is not a leak
-    keep = "Tell Old Tuo / 老驼 I said hello.\n|||\n替我向老驼问好。"
-    assert bilingual.normalize(keep) == keep

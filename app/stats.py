@@ -6,7 +6,7 @@ import json
 import time
 from collections import Counter, defaultdict
 
-from . import case
+from . import case, i18n
 
 
 def _who(visitor_id: str) -> str:
@@ -58,7 +58,7 @@ def summary(conn, days: int = 14) -> dict:
         talks = [e for e in by_kind["talk"] if e["data"].get("npc") == key]
         told = [e for e in by_kind["clue"] if e["data"].get("npc") == key]
         fb = [e for e in by_kind["feedback"] if e["data"].get("npc") == key]
-        npcs[key] = {"name": c["name"], "talks": len(talks), "messages": len(msgs), "clues_told": len(told),
+        npcs[key] = {"name": i18n.plain(c["name"]), "talks": len(talks), "messages": len(msgs), "clues_told": len(told),
                      "avg_trust_change": round(sum(e["data"].get("delta", 0) for e in msgs) / len(msgs), 2) if msgs else 0,
                      "killed_her": sum(1 for e in msgs if e["data"].get("fatal")) + sum(1 for e in ends if e["data"].get("npc") == key),
                      "up": sum(1 for e in fb if e["data"].get("rating") == "up"), "down": sum(1 for e in fb if e["data"].get("rating") == "down")}
@@ -70,6 +70,7 @@ def summary(conn, days: int = 14) -> dict:
 
     return {
         "days": days,
+        "languages": dict(Counter({e["vid"]: e["data"].get("lang", "en") for e in visits}.values())),
         "visitors": uniq("visit"), "page_loads": len(visits), "returning_loads": sum(1 for e in visits if e["data"].get("returning")),
         "nights_started": len(by_kind["start"]), "nights_finished": len(ends), "nights_abandoned": len(by_kind["abandoned"]),
         "funnel": [{"step": s, "visitors": n} for s, n in funnel],
@@ -104,7 +105,7 @@ def transcripts(conn, limit: int = 40, only_down: bool = False) -> list[dict]:
             marked.append({"role": t["role"], "content": t["content"], "rating": ratings.get((r["id"], i)) if t["role"] == "assistant" else None})
         if only_down and not any(m["rating"] == "down" for m in marked):
             continue
-        out.append({"id": r["id"], "visitor": _who(r["visitor_id"]), "npc": case.BY_KEY.get(r["npc_key"], {}).get("name", r["npc_key"]),
+        out.append({"id": r["id"], "visitor": _who(r["visitor_id"]), "npc": i18n.plain(case.BY_KEY[r["npc_key"]]["name"]) if r["npc_key"] in case.BY_KEY else r["npc_key"],
                     "trust": r["trust"], "updated": time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["updated_at"])), "archived": bool(r["archived"]),
                     "turns": marked})
     return out[:limit]

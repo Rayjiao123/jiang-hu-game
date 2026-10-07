@@ -7,12 +7,12 @@ from typing import Iterator
 
 import openai
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, bilingual, case, config, db, game, prompts, ratelimit, stats
-from .bilingual import bi
+from . import agent, case, config, db, game, i18n, prompts, ratelimit, stats
+from .i18n import tr
 from .ratelimit import RateLimited
 
 app = FastAPI(title="人在江湖，身不由己")
@@ -24,7 +24,7 @@ _client: openai.OpenAI | None = None
 def llm() -> openai.OpenAI:
     global _client
     if not config.DEEPSEEK_API_KEY:
-        raise HTTPException(503, bi("The AI isn't configured on this server yet (DEEPSEEK_API_KEY is missing).", "此服务器尚未配置 AI（缺少 DEEPSEEK_API_KEY）。"))
+        raise HTTPException(503, tr("The AI isn't configured on this server yet (DEEPSEEK_API_KEY is missing).", "此服务器尚未配置 AI（缺少 DEEPSEEK_API_KEY）。", "เซิร์ฟเวอร์นี้ยังไม่ได้ตั้งค่า AI (ไม่มี DEEPSEEK_API_KEY)"))
     if _client is None:
         _client = openai.OpenAI(api_key=config.DEEPSEEK_API_KEY, base_url=config.DEEPSEEK_BASE_URL, timeout=120, max_retries=1)
     return _client
@@ -40,6 +40,7 @@ async def visitor_cookie(request: Request, call_next):
         vid = uuid.uuid4().hex
     request.state.vid = vid
     request.state.fresh = fresh
+    request.state.lang = i18n.valid(request.headers.get("x-lang"))
     response = await call_next(request)
     if not request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-cache"      # re-check pages and scripts each visit, so updates show up at once
@@ -61,10 +62,10 @@ class Move(BaseModel):
     path: str = Field(max_length=20)
 
 
-def sse(events: Iterator[dict]) -> StreamingResponse:
+def sse(events: Iterator[dict], lang: str = i18n.DEFAULT) -> StreamingResponse:
     def body():
         for ev in events:
-            yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps(i18n.localize(ev, lang), ensure_ascii=False)}\n\n"
     return StreamingResponse(body(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -88,8 +89,19 @@ def guarded(events: Iterator[dict], vid: str = "") -> Iterator[dict]:
         yield {"type": "error", "code": "bad_request", "message": str(e.detail)}
     except openai.APIError as e:
         _count_error(vid, "upstream")
-        yield {"type": "error", "code": "upstream", "message": bi("The AI service didn't answer. Try again in a moment.", "AI 服务没有响应，请稍后再试。")}
+        yield {"type": "error", "code": "upstream", "message": tr("The AI service didn't answer. Try again in a moment.", "AI 服务没有响应，请稍后再试。", "บริการ AI ไม่ตอบสนอง ลองใหม่อีกครั้งในอีกสักครู่")}
         print("DeepSeek error:", repr(e))
+
+
+@app.exception_handler(HTTPException)
+async def http_error(request: Request, exc: HTTPException):
+    """Error messages are written once in all three languages; the page gets the one it asked for."""
+    detail = i18n.localize(exc.detail, getattr(request.state, "lang", i18n.DEFAULT)) if isinstance(exc.detail, str) else exc.detail
+    return JSONResponse({"detail": detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
+
+
+def _L(request: Request, data):
+    return i18n.localize(data, request.state.lang)
 
 
 # ---------- read-only ----------
@@ -103,17 +115,17 @@ def status():
 def get_case(request: Request):
     """What the landing page shows before anyone has started: the story, the people in the inn, the game master."""
     with db.session() as conn:
-        db.log(conn, request.state.vid, "visit", returning=not request.state.fresh)
-    return {"title": case.CASE_TITLE, "situation": case.SITUATION, "prologue": case.PROLOGUE, "cast": [case.public_card(k) for k in case.BY_KEY],
-            "hero": case.hero_card(), "gm": case.gm_card(), "categories": case.CATEGORIES, "fates": case.FATES, "clock": case.CLOCK}
+        db.log(conn, request.state.vid, "visit", returning=not request.state.fresh, lang=request.state.lang)
+    return _L(request, {"title": case.CASE_TITLE, "situation": case.SITUATION, "prologue": case.PROLOGUE, "cast": [case.public_card(k) for k in case.BY_KEY],
+                        "hero": case.hero_card(), "gm": case.gm_card(), "categories": case.CATEGORIES, "fates": case.FATES})
 
 
 def _play(conn, vid: str, stage: str | tuple | None = None) -> dict:
     g = db.get_play(conn, vid)
     if not g:
-        raise HTTPException(409, bi("Start the story first.", "请先开始故事。"))
+        raise HTTPException(409, tr("Start the story first.", "请先开始故事。", "เริ่มเรื่องก่อนนะ"))
     if stage and g["stage"] not in ((stage,) if isinstance(stage, str) else stage):
-        raise HTTPException(409, bi("That isn't possible at this point in the story.", "故事此刻不能这样做。"))
+        raise HTTPException(409, tr("That isn't possible at this point in the story.", "故事此刻不能这样做。", "ในตอนนี้ของเรื่อง ทำแบบนั้นไม่ได้"))
     return g
 
 
@@ -123,10 +135,7 @@ def _events(upto: int) -> list[dict]:
 
 def _ways(found: list[str]) -> dict:
     """How close each way out is: only counts, never what is missing."""
-    return {k: {"have": len([n for n in v["needs"] if n in found]), "need": len(v["needs"]), "en": CATEGORIES_EN[k], "zh": v["zh"]} for k, v in case.PATHS.items()}
-
-
-CATEGORIES_EN = {"tunnel": "The tunnel", "kill": "Killing the keeper"}
+    return {k: {"have": len([n for n in v["needs"] if n in found]), "need": len(v["needs"]), "label": case.CATEGORIES[k]} for k, v in case.PATHS.items()}
 
 
 def _state(conn, g: dict) -> dict:
@@ -150,7 +159,7 @@ def _state(conn, g: dict) -> dict:
 def get_game(request: Request):
     with db.session() as conn:
         g = db.get_play(conn, request.state.vid)
-        return {"game": _state(conn, g) if g else None}
+        return _L(request, {"game": _state(conn, g) if g else None})
 
 
 @app.post("/api/game/start")
@@ -158,7 +167,8 @@ def start_game(request: Request):
     """The night begins: the doors are barred, and that is the first thing she knows."""
     with db.session() as conn:
         g = db.new_play(conn, request.state.vid, ["official"])
-        return {"game": _state(conn, g)}
+        db.log(conn, request.state.vid, "language", lang=request.state.lang)
+        return _L(request, {"game": _state(conn, g)})
 
 
 @app.post("/api/game/reset")
@@ -170,43 +180,14 @@ def reset_game(request: Request):
 
 # ---------- language helpers ----------
 
-_MARKUP = re.compile(r"</?[A-Za-z_][\w-]*(?:\s[^<>]*)?/?>")
+def _finish(client, vid: str, ev: dict, lang: str = i18n.DEFAULT) -> Iterator[dict]:
+    """The model's reply, tidied: stray tag markup, any '|||' and (outside Chinese) any stray Chinese characters are removed. The reply is already in the player's language, so there is nothing to translate."""
+    yield {"type": "done", "text": i18n.clean_ai(ev["text"], lang)}      # the page replaces what it streamed with this tidied version
 
 
-def _names() -> str:
-    """People who must keep one spelling in both languages."""
-    return bilingual.glossary([c["name"] for c in case.CAST] + [case.HERO["name"]])
-
-
-def _finish(client, vid: str, ev: dict) -> Iterator[dict]:
-    """On a reply that is in one language only, translate it and append the other half (the model sometimes forgets).
-    Stray tool-call markup the model sometimes writes into its text is removed first."""
-    text = bilingual.normalize(re.sub(r"[ \t]+\n", "\n", _MARKUP.sub("", ev["text"])).strip())
-    if text and bilingual.SEP not in text:
-        try:
-            ratelimit.check(vid)
-            other = bilingual.counterpart(client, config.CHAT_MODEL, text, _names())
-        except RateLimited:
-            other = ""
-        if other:
-            en, zh = (other, text) if bilingual.language_of(text) == "Chinese" else (text, other)
-            text = f"{en}\n{bilingual.SEP}\n{zh}"
-    yield {"type": "done", "text": text}      # the page replaces what it streamed with this tidied version
-
-
-def _bilingual_line(client, vid: str, message: str) -> str:
-    """The visitor's own line as 'English ||| 中文', so both languages show under it and in the history."""
-    if bilingual.SEP in message or bilingual.has_both(message):
-        return message
-    try:
-        ratelimit.check(vid)
-    except RateLimited:
-        return message
-    other = bilingual.counterpart(client, config.CHAT_MODEL, message, _names())
-    if not other:
-        return message
-    en, zh = (other, message) if bilingual.language_of(message) == "Chinese" else (message, other)
-    return f"{en} {bilingual.SEP} {zh}"
+def _typed(message: str) -> str:
+    """What the player typed. The separator is ours, so a player cannot use it to inject another language into the log."""
+    return message.replace(i18n.SEP, "|").strip()
 
 
 # ---------- the clock: the night is the deadline ----------
@@ -245,7 +226,7 @@ def new_talk(body: NewTalk, request: Request):
     with db.session() as conn:
         g = _play(conn, vid, ("playing", "moving"))
         if body.npc not in case.BY_KEY:
-            raise HTTPException(404, bi("There is nobody like that here.", "这里没有这个人。"))
+            raise HTTPException(404, tr("There is nobody like that here.", "这里没有这个人。", "ที่นี่ไม่มีคนแบบนั้น"))
         trust0, why = game.start_trust(body.npc)
         talk = db.find_talk(conn, vid, body.npc)
         if not talk:
@@ -253,8 +234,8 @@ def new_talk(body: NewTalk, request: Request):
             db.log(conn, vid, "talk", npc=body.npc)
         state = case.clue_state(body.npc, g["found"], talk["trust"])
     shown = [{**t, "i": i} for i, t in enumerate(talk["turns"]) if not t.get("hidden")][-40:]       # i: the reply's place in the conversation, for feedback
-    return {"id": talk["id"], "npc": _card(body.npc), "trust": talk["trust"], "impression": why, "turns": shown,
-            "fresh": not talk["turns"], "told": len(state["told"]), "total": len(case.BY_KEY[body.npc]["topics"])}
+    return _L(request, {"id": talk["id"], "npc": _card(body.npc), "trust": talk["trust"], "impression": why, "turns": shown,
+                        "fresh": not talk["turns"], "told": len(state["told"]), "total": len(case.BY_KEY[body.npc]["topics"])})
 
 
 VERIFY = ("You referee a story game. A character has just spoken to the hero. Below are the facts the character was willing to tell. "
@@ -272,7 +253,7 @@ def _credit(client, vid: str, key: str, g: dict, reply: str, trust: int) -> list
         ratelimit.check(vid)
         r = client.chat.completions.create(
             model=config.CHAT_MODEL, max_tokens=60, temperature=0, extra_body={"thinking": {"type": "disabled"}},
-            messages=[{"role": "system", "content": VERIFY}, {"role": "user", "content": f"FACTS:\n{facts}\n\nREPLY:\n{bilingual.plain(reply)}"}])
+            messages=[{"role": "system", "content": VERIFY}, {"role": "user", "content": f"FACTS:\n{facts}\n\nREPLY:\n{reply}"}])
         raw = (r.choices[0].message.content or "")
         told = json.loads(re.search(r"\[.*?\]", raw, re.S).group(0))
     except (RateLimited, AttributeError, ValueError, openai.APIError) as e:
@@ -290,7 +271,7 @@ WATCH = ("You judge one message in a dark story game. The hero, Qinghe, has just
          "Answer with one JSON object: {\"did\": [...], \"trust\": n}. "
          "\"did\" lists any of: \"showed_letter\" (she shows, hands over, reads out or describes the contents of her sealed letter), "
          "\"revealed_plan\" (she says she plans to escape, knows a secret way out, or plans to harm the keeper), "
-         "\"threatened\" (she threatens to hurt or kill someone, or draws a weapon). Only include what she PLAINLY did; questions about the letter or the inn do not count. "
+         "\"threatened\" (she says she will hurt, kill or cut someone, or draws a weapon: a promise or show of violence). Insults, rude names, anger and contempt are NOT threats. Only include what she PLAINLY did; questions about the letter or the inn do not count. "
          "\"trust\" is how the message changes this character's trust in her, from -2 to 2: +1 for sincere kindness, honesty, respect, a gift or a shared moment that fits what the character values "
          "(it should usually move up when she is genuinely kind or fits their values), +2 only for something that truly moves them, 0 for plain questions or small talk, "
          "-1 for rudeness, pressure or a clumsy lie, -2 for insults, threats or a lie caught. Output only the JSON object.\n"
@@ -306,9 +287,9 @@ def _watch(client, vid: str, key: str, text: str) -> dict:
         kinds.append("threatened")
     try:
         ratelimit.check(vid)
-        system = WATCH.replace("{who}", f"{c['name']}, {bilingual.plain(c['title'])}").replace("{earns}", bilingual.plain(c["earns"]))
+        system = WATCH.replace("{who}", f"{i18n.plain(c['name'])}, {i18n.plain(c['title'])}").replace("{earns}", i18n.plain(c["earns"]))
         r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=60, temperature=0, extra_body={"thinking": {"type": "disabled"}},
-                                           messages=[{"role": "system", "content": system}, {"role": "user", "content": bilingual.plain(text)}])
+                                           messages=[{"role": "system", "content": system}, {"role": "user", "content": text}])
         raw = r.choices[0].message.content or ""
         obj = json.loads(re.search(r"\{.*\}", raw, re.S).group(0))
         kinds += [k for k in obj.get("did", []) if isinstance(k, str) and k in case.LETHAL]
@@ -318,21 +299,21 @@ def _watch(client, vid: str, key: str, text: str) -> dict:
     return {"fatal": [k for k in dict.fromkeys(kinds) if case.lethal(k, key)], "delta": delta}
 
 
-def _npc_turn(client, tid: str, vid: str, message: str | None) -> Iterator[dict]:
+def _npc_turn(client, tid: str, vid: str, message: str | None, lang: str = i18n.DEFAULT) -> Iterator[dict]:
     """One turn with a person. message=None means the hero has just walked up and they speak first."""
     opening = message is None
-    line = "*approaches you* ||| *走上前来*" if opening else _bilingual_line(client, vid, message)
+    line = "*approaches you*" if opening else _typed(message)
     if not opening:
         yield {"type": "user", "text": line}
     with db.session() as conn:
         g = _play(conn, vid, ("playing", "moving"))
         talk = db.get_talk(conn, tid, vid)
         if not talk:
-            raise HTTPException(404, bi("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。"))
+            raise HTTPException(404, tr("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。", "บทสนทนานั้นจบแล้ว ลองคุยกับเขาอีกครั้ง"))
         key = talk["npc_key"]
         turn = agent.Turn()
         fate: dict = {}                          # set when the hero does something that is fatal here
-        seen = _watch(client, vid, key, message) if not opening else {"fatal": [], "delta": 0}
+        seen = _watch(client, vid, key, line) if not opening else {"fatal": [], "delta": 0}
         fatal = seen["fatal"]
         if fatal:
             fate["cause"] = "sold" if key == "hu" else "caught"
@@ -345,13 +326,13 @@ def _npc_turn(client, tid: str, vid: str, message: str | None) -> Iterator[dict]
         tools = game.npc_tools(talk, turn, key, fate, start_delta=seen["delta"])
         messages = [{"role": "system", "content": prompts.npc_system(key)},
                     *agent.history(talk["turns"]),
-                    {"role": "system", "content": prompts.npc_state(key, talk["trust"], g["found"], g["beat"], opening)},
-                    {"role": "user", "content": bilingual.plain(line)}]
+                    {"role": "system", "content": prompts.npc_state(key, talk["trust"], g["found"], g["beat"], opening, lang)},
+                    {"role": "user", "content": line}]
         if fatal:
             messages.insert(-1, {"role": "system", "content": f"The hero just plainly did this: {', '.join(fatal)}. {game.fatal_instruction(key)}"})
         try:
             for raw in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=800):
-                for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
+                for ev in (_finish(client, vid, raw, lang) if raw["type"] == "done" else [raw]):
                     if ev["type"] == "done":
                         talk["turns"] += [{"role": "user", "content": line, **({"hidden": True} if opening else {})},
                                           {"role": "assistant", "content": ev["text"] or "…"}]
@@ -382,7 +363,7 @@ def _own_talk(tid: str, vid: str) -> dict:
     with db.session() as conn:
         talk = db.get_talk(conn, tid, vid)
     if not talk:
-        raise HTTPException(404, bi("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。"))
+        raise HTTPException(404, tr("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。", "บทสนทนานั้นจบแล้ว ลองคุยกับเขาอีกครั้ง"))
     return talk
 
 
@@ -391,9 +372,9 @@ def npc_open(tid: str, request: Request):
     """The person speaks first, to this particular hero."""
     vid = request.state.vid
     if _own_talk(tid, vid)["turns"]:
-        raise HTTPException(409, bi("This conversation has already begun.", "这段对话已经开始。"))
+        raise HTTPException(409, tr("This conversation has already begun.", "这段对话已经开始。", "บทสนทนานี้เริ่มไปแล้ว"))
     client = llm()
-    return sse(guarded(_npc_turn(client, tid, vid, None), vid))
+    return sse(guarded(_npc_turn(client, tid, vid, None, request.state.lang), vid), request.state.lang)
 
 
 @app.post("/api/talks/{tid}/chat")
@@ -401,23 +382,23 @@ def npc_chat(tid: str, body: Message, request: Request):
     vid = request.state.vid
     _own_talk(tid, vid)
     client = llm()
-    return sse(guarded(_npc_turn(client, tid, vid, body.message), vid))
+    return sse(guarded(_npc_turn(client, tid, vid, body.message, request.state.lang), vid), request.state.lang)
 
 
 # ---------- Ray, the game master ----------
 
-def _gm_turn(client, vid: str, message: str) -> Iterator[dict]:
-    line = _bilingual_line(client, vid, message)
+def _gm_turn(client, vid: str, message: str, lang: str = i18n.DEFAULT) -> Iterator[dict]:
+    line = _typed(message)
     yield {"type": "user", "text": line}
     with db.session() as conn:
         g = _play(conn, vid)
         db.log(conn, vid, "gm")
         turn = agent.Turn()
-        messages = [{"role": "system", "content": prompts.gm_system(g["found"], g["beat"])}, *agent.history(g["turns"]),
-                    {"role": "user", "content": bilingual.plain(line)}]
+        messages = [{"role": "system", "content": prompts.gm_system(g["found"], g["beat"], lang)}, *agent.history(g["turns"]),
+                    {"role": "user", "content": line}]
         try:
             for raw in agent.run(client, config.CHAT_MODEL, messages, [], turn, vid, max_tokens=600):
-                for ev in (_finish(client, vid, raw) if raw["type"] == "done" else [raw]):
+                for ev in (_finish(client, vid, raw, lang) if raw["type"] == "done" else [raw]):
                     if ev["type"] == "done":
                         g["turns"] += [{"role": "user", "content": line}, {"role": "assistant", "content": ev["text"] or "…"}]
                     yield ev
@@ -432,7 +413,7 @@ def gm_chat(body: Message, request: Request):
     with db.session() as conn:
         _play(conn, vid)
     client = llm()
-    return sse(guarded(_gm_turn(client, vid, body.message), vid))
+    return sse(guarded(_gm_turn(client, vid, body.message, request.state.lang), vid), request.state.lang)
 
 
 # ---------- the move ----------
@@ -441,7 +422,7 @@ def gm_chat(body: Message, request: Request):
 def make_move(body: Move, request: Request):
     """Try one of the two ways out. This is the last move: if the clues she holds don't open it, she dies."""
     if body.path not in case.PATHS:
-        raise HTTPException(400, bi("Choose one of the two.", "请从两条路里选一条。"))
+        raise HTTPException(400, tr("Choose one of the two.", "请从两条路里选一条。", "เลือกหนึ่งในสองทาง"))
     with db.session() as conn:
         g = _play(conn, request.state.vid, "playing")
         if case.can_move(body.path, g["found"]):
@@ -450,7 +431,7 @@ def make_move(body: Move, request: Request):
             _die(g, "move")
         db.log(conn, request.state.vid, "move", path=body.path, verdict="go" if g["stage"] == "moving" else "dead")
         db.save_play(conn, g)
-        return {"verdict": "go" if g["stage"] == "moving" else "dead", "game": _state(conn, g)}
+        return _L(request, {"verdict": "go" if g["stage"] == "moving" else "dead", "game": _state(conn, g)})
 
 
 HOW = {"tunnel": "through the secret tunnel under the cellar, with Old Tuo staying behind to cover her tracks",
@@ -465,21 +446,17 @@ def ending(request: Request):
         g = _play(conn, vid, "moving")
         path, found = g["path"], list(g["found"])
     text = ""
+    lang = request.state.lang
     try:
         ratelimit.check(vid)
         client = llm()
-        learned = "; ".join(bilingual.plain(case.CLUES[c]["title"]) for c in found if c in case.CLUES and c != "official")
-        prompt = prompts.ENDING.format(truth=case.truth().replace(" ||| ", " / "), how=HOW[path], learned=learned or "very little",
-                                       format=bilingual.REPLY_FORMAT)
-        r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=1200, extra_body={"thinking": {"type": "disabled"}},
+        learned = "; ".join(i18n.plain(case.CLUES[c]["title"]) for c in found if c in case.CLUES and c != "official")
+        prompt = prompts.ENDING.format(truth=i18n.plain(case.truth()), how=HOW[path], learned=learned or "very little",
+                                       names=prompts.names_line(), format=i18n.reply_rule(lang))
+        r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=1500, extra_body={"thinking": {"type": "disabled"}},
                                            messages=[{"role": "system", "content": prompt}, {"role": "user", "content": "Tell the ending."}])
-        text = bilingual.normalize(_MARKUP.sub("", (r.choices[0].message.content or "")).strip())
-        if text and bilingual.SEP not in text:
-            other = bilingual.counterpart(client, config.CHAT_MODEL, text, _names())
-            if other:
-                en, zh = (other, text) if bilingual.language_of(text) == "Chinese" else (text, other)
-                text = f"{en}\n{bilingual.SEP}\n{zh}"
-        if not bilingual.is_pair(text):
+        text = i18n.clean_ai(r.choices[0].message.content or "", lang)
+        if not i18n.in_language(text, lang) or len(text) < 200:
             text = ""
     except (RateLimited, HTTPException, openai.APIError) as e:
         print("Ending fell back to the written version:", repr(e))
@@ -488,7 +465,7 @@ def ending(request: Request):
         g = _play(conn, vid, "moving")
         g.update(stage="solved", ending=text)
         db.save_play(conn, g)
-        return {"game": _state(conn, g)}
+        return _L(request, {"game": _state(conn, g)})
 
 
 class Feedback(BaseModel):
@@ -504,7 +481,7 @@ def feedback(body: Feedback, request: Request):
     with db.session() as conn:
         talk = db.get_talk(conn, body.talk, vid)
         if not talk or body.turn >= len(talk["turns"]) or talk["turns"][body.turn]["role"] != "assistant":
-            raise HTTPException(404, bi("That reply isn't here any more.", "找不到这句回复。"))
+            raise HTTPException(404, tr("That reply isn't here any more.", "找不到这句回复。", "ไม่พบคำตอบนั้นแล้ว"))
         db.log(conn, vid, "feedback", talk=body.talk, turn=body.turn, rating=body.rating, npc=talk["npc_key"])
     return {"ok": True}
 

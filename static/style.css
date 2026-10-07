@@ -725,3 +725,27 @@ html, body { overflow-x: hidden; }
 .lang-toggle button { background: none; border: 0; padding: 4px 14px; font-size: 13px; color: var(--dim); }
 .lang-toggle button[aria-pressed="true"] { background: rgba(216, 180, 90, .2); color: var(--text); }
 .only-en .zh, .only-zh .en { display: none; }
+
+/* ---------- one language at a time ---------- */
+.txt { white-space: pre-wrap; }
+.ray-text .bi .txt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.gm-toast .bi .txt, .gm-log .txt, .learned-card .txt, .end-text .txt, .pl-text .txt, .clue .txt { white-space: pre-wrap; }
+.end-text .bi + .bi { margin-top: 10px; }
+.lang-pick { display: inline-flex; border: 1px solid var(--gold-dim); border-radius: 99px; overflow: hidden; justify-self: start; background: rgba(0, 0, 0, .3); }
+.lang-pick button { background: none; border: 0; padding: 5px 16px; font-size: 14px; color: var(--dim); }
+.lang-pick button:hover { color: var(--text); }
+.lang-pick button[aria-pressed="true"] { background: rgba(216, 180, 90, .24); color: var(--text); font-weight: 700; }
+.lang-pick.in-menu { margin: 6px 6px 4px; justify-self: stretch; display: flex; }
+.lang-pick.in-menu button { flex: 1; padding: 7px 4px; }
+.kicker-text { color: var(--dim); }
+/* Thai: a Thai font for everything, with the brush font kept behind it for the Chinese title */
+html[lang="th"] { --f-body: "Noto Serif Thai", "Noto Serif SC", Georgia, serif; --f-brush: "Noto Serif Thai", "Ma Shan Zheng", serif; --f-title: "Noto Serif Thai", Georgia, serif; }
+html[lang="th"] body { line-height: 1.75; }
+html[lang="th"] .gate-title { font-family: "Ma Shan Zheng", "Noto Serif SC", serif; }
+html[lang="th"] .brand .logo, html[lang="th"] .loading-card .logo { font-family: "Ma Shan Zheng", "Noto Serif SC", serif; }
+html[lang="th"] .gate-en { font-style: normal; font-weight: 600; font-size: 17px; }
+html[lang="th"] .p-text b, html[lang="th"] .who-text b, html[lang="th"] .chat-who b, html[lang="th"] .scene-title, html[lang="th"] .pl-title { font-weight: 700; }
+html[lang="zh-Hans"] .gate-en { display: none; }
+
+.gmbtn .gm-label { white-space: nowrap; }
+.align { font-size: 12px; }

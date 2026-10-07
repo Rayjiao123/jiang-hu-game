@@ -28,9 +28,9 @@ A wrong move is fatal. So is a wrong word to the wrong person.
 """
 import re
 
-from . import bilingual
+from . import case_th as _th, i18n
 
-CASE_TITLE = "Helpless in the Jianghu ||| 人在江湖，身不由己"
+CASE_TITLE = "Helpless in the Jianghu ||| 人在江湖，身不由己 ||| คนในยุทธภพ ไม่อาจเป็นตัวของตัวเอง"
 DAWN_BEAT = 7                       # the story ends at dawn
 MSGS_PER_BEAT = 7                   # every seventh thing the hero says, an hour of the night passes
 
@@ -142,7 +142,7 @@ LETHAL = {
 }
 # Reaching zero trust with these people is fatal: they are the ones who kill.
 LETHAL_AT_ZERO = {"shuang", "wolf", "hu"}
-THREAT = re.compile(r"\b(?:kill|murder|stab|slit|slice|gut|strangle|cut you|cut (?:him|her) down|cut your throat|run you through|end you|hurt you|harm you|break your|draw my (?:saber|blade|sword|knife))\b|杀了你|宰了你|砍了你|砍你|拔刀|一刀捅|要你的命|让你死", re.I)
+THREAT = re.compile(r"\b(?:kill|murder|stab|slit|slice|gut|strangle|cut you|cut (?:him|her) down|cut your throat|run you through|end you|hurt you|harm you|break your|draw my (?:saber|blade|sword|knife))\b|杀了你|宰了你|砍了你|砍你|拔刀|一刀捅|要你的命|让你死|ฆ่าเจ้า|ฆ่าเธอ|ฆ่าแก|ฆ่าท่าน|ฟันเจ้า|ฟันแก|ฟันท่าน|แทงเจ้า|แทงแก|ชักดาบ|ชักมีด|เอาชีวิตเจ้า|เอาชีวิตแก", re.I)
 
 # The people. Public fields are shown to the player; the rest is for the AI that plays them.
 CAST = [
@@ -330,19 +330,6 @@ def names(name: str) -> tuple[str, str]:
     return (m.group(2).strip() or zh), zh
 
 
-def join_bi(*texts: str) -> str:
-    """Join several 'English ||| 中文' texts into one."""
-    en, zh = [], []
-    for t in texts:
-        a, b = bilingual.split(t)
-        if a:
-            en.append(a)
-        if b:
-            zh.append(b)
-    gap = chr(10) * 2
-    return f"{gap.join(en)}\n{bilingual.SEP}\n{gap.join(zh)}"
-
-
 def clue_view(cid: str) -> dict:
     c = CLUES[cid]
     return {"id": cid, "title": c["title"], "text": c["text"], "category": c["category"],
@@ -369,8 +356,9 @@ def gm_card() -> dict:
 
 
 def clock(beat: int) -> dict:
-    zh, en = CLOCK[max(0, min(len(CLOCK) - 1, beat))]
-    return {"beat": beat, "zh": zh, "en": en, "last": DAWN_BEAT}
+    i = max(0, min(len(CLOCK) - 1, beat))
+    zh, en = CLOCK[i]
+    return {"beat": beat, "zh": zh, "en": en, "th": _th.CLOCK[i], "last": DAWN_BEAT}
 
 
 def event_for(beat: int) -> str:
@@ -391,7 +379,7 @@ def clue_state(key: str, found: list[str], trust: int) -> dict:
 
 
 def plain_fact(cid: str) -> str:
-    return bilingual.plain(CLUES[cid]["text"])
+    return i18n.plain(CLUES[cid]["text"])
 
 
 def progress(found: list[str]) -> dict:
@@ -413,12 +401,62 @@ def lethal(kind: str, npc: str) -> bool:
 
 def death_text(cause: str) -> str:
     """Ray explains: how she died, what really happened in the inn, and what she could have done."""
-    return join_bi(DEATHS.get(cause, DEATHS["caught"]), TRUTH_BI, MISSED)
+    return i18n.join(DEATHS.get(cause, DEATHS["caught"]), TRUTH_BI, MISSED)
 
 
 def fallback_ending(path: str) -> str:
-    return join_bi(_ENDINGS[path], TRUTH_BI)
+    return i18n.join(_ENDINGS[path], TRUTH_BI)
 
 
 def truth() -> str:
     return TRUTH_BI
+
+
+# ---------- Thai ----------
+# Every text a player reads that is fixed gets its Thai appended, so one string holds all three languages ('English ||| 中文 ||| ไทย').
+# This runs when the module loads and fails loudly if a Thai text is missing, so a new clue can never ship half translated.
+
+def _add(text: str, th: str) -> str:
+    return f"{text} {i18n.SEP} {th}"
+
+
+def _name3(name: str, th: str) -> str:
+    """'霜四娘 Shuang Siniang' -> 'Shuang Siniang ||| 霜四娘 ||| ซวงซื่อเหนียง'"""
+    en, zh = names(name)
+    return f"{en} {i18n.SEP} {zh} {i18n.SEP} {th}"
+
+
+def _merge_thai() -> None:
+    for cid, c in CLUES.items():
+        th_title, th_text = _th.CLUES[cid]
+        c["title"], c["text"] = _add(c["title"], th_title), _add(c["text"], th_text)
+    for c in CAST:
+        n, title, sect, location, public, earns = _th.CAST[c["key"]]
+        c["name"] = _name3(c["name"], n)
+        for field, th in (("title", title), ("sect", sect), ("location", location), ("public", public), ("earns", earns)):
+            c[field] = _add(c[field], th)
+    n, title, art, quirk, bio = _th.HERO
+    HERO["name"] = _name3(HERO["name"], n)
+    for field, th in (("title", title), ("art", art), ("quirk", quirk), ("bio", bio)):
+        HERO[field] = _add(HERO[field], th)
+    GM["name"] = f"Ray {i18n.SEP} 说书人 Ray {i18n.SEP} {_th.GM[0]}"
+    GM["title"] = _add(GM["title"], _th.GM[1])
+    for k, v in PATHS.items():
+        v["th"] = _th.PATHS[k]
+    for k, v in CATEGORIES.items():
+        v["th"] = _th.CATEGORIES[k]
+    for beat, text in EVENTS.items():
+        EVENTS[beat] = _add(text, _th.EVENTS[beat])
+    for cause, text in DEATHS.items():
+        DEATHS[cause] = _add(text, _th.DEATHS[cause])
+    for path, text in _ENDINGS.items():
+        _ENDINGS[path] = _add(text, _th.ENDINGS[path])
+    g = globals()
+    g["DAWN"] = _add(DAWN, _th.DAWN)
+    g["PROLOGUE"] = _add(PROLOGUE, _th.PROLOGUE)
+    g["TRUTH_BI"] = _add(TRUTH_BI, _th.TRUTH)
+    g["MISSED"] = _add(MISSED, _th.MISSED)
+    g["FATES"] = {k: {"en": v["en"], "zh": v["zh"], "th": v["th"]} for k, v in PATHS.items()}
+
+
+_merge_thai()

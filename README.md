@@ -19,7 +19,7 @@ The ending screen tracks which ones this browser has found.
 **Phone first.** The landing page is one screen: the name, the setting, Qinghe and her goal, Ray, and an enter button. The inn is a
 list of six people with a status line each (not spoken to / learned 2 of 3). A conversation is a chat thread: every reply stays on the
 page, trust changes show as tags, and each clue Ray files appears in the thread as a green card. There is no separate clue screen:
-"问 Ray" opens a sheet with Ray's notes (everything she has learned, and how close each way out is) above the chat with him.
+"Ask Ray" opens a sheet with Ray's notes (everything she has learned, and how close each way out is) above the chat with him.
 
 **Ray is the game master.** Ray (the author) narrates in the voice of a teahouse storyteller, has a portrait, opens the story, fires the
 events of the night (a scream upstairs, the lamps snuffed, camel bells on the pass), and can be asked anything at any time: what's going
@@ -75,7 +75,9 @@ app/main.py            FastAPI routes; streams replies as server-sent events; th
 app/agent.py           streaming tool-use loop for DeepSeek (OpenAI chat format)
 app/game.py            appearance options, first impressions, what people can see of Qinghe, and the tools they may call (including hero_did)
 app/prompts.py         world bible, era rules, per-person instructions, Ray's instructions, the ending prompt
-app/bilingual.py       the "English ||| 中文" format, tidying replies, and the fallback translation
+app/i18n.py            the three languages: picking one for a request, cleaning the model's text, checking a reply is in the right language
+app/case_th.py         the Thai text of everything fixed in the story (case.py appends it at start-up and refuses to start if any is missing)
+static/i18n.js         the page's own text in English, Chinese and Thai, and the language picker
 app/db.py              SQLite: plays (one per visitor) and talks (one per visitor and person)
 app/ratelimit.py       per-visitor and daily caps on model calls
 app/stats.py           the admin's numbers and transcripts, built from the events table
@@ -93,10 +95,20 @@ draws the matching layers. Portraits appear instantly and cost nothing. Ray's lo
 to match. They are procedural vector art; for painted-from-scratch art, send the same `appearance` object to an image model, or have an
 artist draw the layers.
 
-**Everything is in English and Chinese.** AI text is written `English ||| 中文`. Replies use that form, and if the model forgets or
-repeats the separator, the server tidies it into one English half and one Chinese half (`bilingual.normalize`: it also cuts a language
-that leaks into the other half and strips stray tag markup), and translates a missing half. The visitor's own lines are translated
-by the server and stored in both languages. Fixed messages are written in both languages in the code.
+**Three languages, one at a time.** The player picks English, 中文 or ไทย on the home page (it is remembered, guessed from the browser the first time, and
+changeable from the ☰ menu, even mid-game). The page shows only that language.
+
+- **Fixed story text** (the cast cards, clues, the night's events, the opening, the deaths and written endings, error messages) is written once in all three in a single
+  string, `English ||| 中文 ||| ไทย`. The browser sends an `X-Lang` header and the server picks the part before anything leaves it (`i18n.localize`), so
+  the page never sees a separator. English and Chinese live in `app/case.py`, Thai in `app/case_th.py`; `case.py` fails to import if a Thai text is missing,
+  and a test checks every one is in the right script. The AI-only fields (how a person talks, what they know) are English and Chinese only.
+- **What the AI writes** is one language from the start. Every turn ends with an instruction to reply in the chosen language only (`i18n.reply_rule`: no translation, no `|||`,
+  no Chinese characters in Thai or English, natural idiom for the language), and every prompt carries the names spelled in all three languages so a Thai reply writes ชิงเหอ,
+  not 青禾. This replaced the old "English then Chinese" replies, so there are no translation calls any more. If a stray Chinese phrase still slips into Thai or English,
+  `i18n.clean_ai` removes it.
+- **The player's words** are sent as typed, in whatever language, and the separator is stripped from them. The checks that read them (fatal slips, trust, the clue referee) are
+  evaluated in all three languages.
+- **Thai** has its own font (Noto Serif Thai) and Thai threats are recognised like English and Chinese ones.
 
 ## API
 
@@ -113,6 +125,8 @@ by the server and stored in both languages. Fixed messages are written in both l
 | GET | `/api/admin/stats` · `/api/admin/transcripts` | visitor numbers and conversations (needs `ADMIN_PASSWORD`) |
 | POST | `/api/move` | try one of the two ways out (`tunnel` or `kill`); fatal if the clues she holds don't open it |
 | POST | `/api/ending` | after a successful move: Ray's telling of the whole story and what became of everyone |
+
+Every request may carry `X-Lang: en|zh|th`; responses, errors and streamed events come back in that language.
 
 Visitors are identified by an anonymous `vid` cookie, which owns their night and conversations. Nothing is shared between visitors.
 
@@ -131,19 +145,19 @@ and is switched off entirely when the variable is empty.
   The landing page says chats are saved to run and improve the game; if you keep them for long, add a retention rule and a privacy page.
 - **Thumbs.** Every reply has 👍 / 👎. The admin transcript view can show only the conversations with a 👎.
 - **Spend.** `CALLS_PER_VISITOR_PER_10_MIN` (default 150) and `DAILY_CALL_CAP` (default 8000) cap model calls. One player message costs about four or five calls
-  (translation, the message check, the reply, the clue referee), and a whole night is a few hundred. The counters live in memory, so a restart resets them.
+  (the message check, the reply, the clue referee, sometimes the ending), and a whole night is a few hundred. The counters live in memory, so a restart resets them.
 
 ## Evaluating the characters
 
 Three layers, from cheap to real:
 
-1. **`pytest` (offline, free, 51 tests)**: the rules that must never break, with a fake model. Facts above the trust line are not in a person's prompt;
+1. **`pytest` (offline, free, 59 tests)**: the rules that must never break, with a fake model. Facts above the trust line are not in a person's prompt;
    clues are filed only when offered; a wrong move or a fatal slip kills her; trust moves at most ±2; endings fall back to written text; the admin is locked.
-2. **`python -m evals.run` (live model, about 60 calls, a minute and a half)**: what a player would notice if it went wrong, run on all six characters.
-   It checks that every reply is English then Chinese with no leaks or markup; that a nosy, polite question gets no gated fact out of anyone and never gets her killed;
+2. **`python -m evals.run [--lang en|zh|th|all] [--judge]` (live model, about 60 calls and a minute per language)**: what a player would notice if it went wrong, run on all six characters.
+   It checks that every reply is in the language asked for with no leaks or markup; that a nosy, polite question gets no gated fact out of anyone and never gets her killed;
    that modern things are met with confusion; that the check on her words catches fatal slips (showing the letter, revealing a plan, threatening) and,
    most importantly, never flags innocent messages; that kindness and rudeness move trust the right way; and that the clue referee files only what was really told.
-   `--judge` adds a model that scores voice, period feel and drama from 1 to 5. Hard checks make the exit code 1; the report goes to `evals/last_report.json`.
+   Every probe message is written in all three languages, so Chinese and Thai are tested on their own terms (a threat in Thai must be understood as one, a polite question in Chinese must not kill her). `--judge` adds a model that scores voice, period feel, drama and fluency from 1 to 5. Hard checks make the exit code 1; the report goes to `evals/last_report.json`.
    Run it whenever a prompt or the model changes and compare with the last report.
 3. **Real players**: 👍/👎 on every reply, the transcripts page, the death-cause and per-person numbers. The eval set is small by design; the way it grows
    is to copy a 👎 reply from the admin into `evals/run.py` as a new case.

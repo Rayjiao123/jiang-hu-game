@@ -59,7 +59,7 @@
     const s = await get("/api/admin/stats?days=" + $("#days").value);
     $("#cards").innerHTML = [["Visitors", s.visitors], ["Page loads", s.page_loads], ["Nights started", s.nights_started], ["Finished", s.nights_finished], ["Left unfinished", s.nights_abandoned],
       ["Minutes to finish (avg)", s.avg_minutes_to_finish ?? "–"], ["Player messages", s.ai.player_messages], ["Asked Ray", s.ai.ray_questions], ["AI errors", s.ai.errors],
-      ["👍 / 👎", `${s.feedback.up} / ${s.feedback.down}`]].map(([k, v]) => `<div class="card"><b>${v}</b><span>${k}</span></div>`).join("");
+      ["👍 / 👎", `${s.feedback.up} / ${s.feedback.down}`], ["Languages", Object.entries(s.languages || {}).map(([k, v]) => `${k} ${v}`).join(" · ") || "–"]].map(([k, v]) => `<div class="card"><b>${v}</b><span>${k}</span></div>`).join("");
     const top = Math.max(1, ...s.funnel.map(f => f.visitors));
     table($("#funnel"), ["Step", "Visitors", ""], s.funnel.map(f => [f.step, f.visitors, `<div class="bar" style="width:${Math.round(f.visitors / top * 100)}%"></div>`]));
     const names = { dead: "Died", tunnel: "Escaped by the tunnel", kill: "Killed the keeper" };
