@@ -438,7 +438,7 @@ def test_three_languages_all_the_way_through(api):
         g = api.post("/api/roll", headers=h).json()["game"]
         assert "|||" not in json.dumps(g, ensure_ascii=False)
     th = api.get("/api/case", headers={"x-lang": "th"}).json()
-    assert any("฀" <= ch <= "๿" for ch in th["setup"]) and th["cast"][0]["name"] == "ฮูหยินซวง"
+    assert any("฀" <= ch <= "๿" for ch in th["setup"]) and th["cast"][0]["name"] == "เถ้าแก่เนี้ยซวง"
 
 
 def test_the_admin_lists_every_player_with_how_long_they_played(api, monkeypatch):

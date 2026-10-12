@@ -21,7 +21,7 @@ SETUP = tr(
     "The storm will not break for a long while. Out of it, one by one, other travellers keep pushing through the door: outlaws, righteous swordsmen, and the law, and every one of them is looking at you.",
     "黑沙客栈，大漠官道旁，约莫公元一二〇〇年。沙暴封了关口，你，一个怀里藏着偷来的玉印的贼，被困在大堂里，面前一杯凉茶。"
     "风沙一时半会儿不会停。人一个接一个从风沙里推门进来：绿林好汉、正道侠客、官府的人，而每一个人，都在看着你。",
-    "โรงเตี๊ยมทรายดำ ริมทางสายทะเลทราย ราวปี ค.ศ. 1200 พายุทรายปิดช่องเขา และเจ้า โจรที่มีตราหยกขโมยซ่อนอยู่ในเสื้อ ก็ติดอยู่ในโถงโรงเตี๊ยมกับชาเย็นหนึ่งถ้วย "
+    "โรงเตี๊ยมทรายดำ ริมทางสายทะเลทราย ราวปี ค.ศ. 1200 พายุทรายปิดช่องเขา และเจ้า โจรที่ซ่อนตราหยกขโมยมาไว้ใต้เสื้อ ก็ติดอยู่ในโถงโรงเตี๊ยมกับชาเย็นหนึ่งถ้วย "
     "พายุจะไม่สงบง่าย ๆ ผู้คนผลักประตูฝ่าพายุเข้ามาทีละคน ทั้งพวกนอกกฎหมาย ยอดฝีมือฝ่ายธรรมะ และทางการ และทุกคนกำลังมองมาที่เจ้า")
 
 GOAL = tr(
@@ -37,7 +37,7 @@ HOW_TO = tr(
 # ---------- the stats and the martial arts ----------
 
 STATS = {
-    "str": {"name": tr("Strength", "力量", "พลัง"), "does": tr("sets your hit points", "决定你的生命值", "กำหนดพลังชีวิตของเจ้า")},
+    "str": {"name": tr("Strength", "力量", "กำลัง"), "does": tr("sets your hit points", "决定你的生命值", "กำหนดพลังชีวิตของเจ้า")},
     "int": {"name": tr("Intelligence", "智慧", "ปัญญา"), "does": tr("strengthens your martial arts", "强化你的武功", "ทำให้วิชายุทธ์ของเจ้าแรงขึ้น")},
     "agi": {"name": tr("Agility", "敏捷", "ความคล่องแคล่ว"), "does": tr("sets your defence", "决定你的防御", "กำหนดการป้องกันของเจ้า")},
 }
@@ -58,7 +58,7 @@ ARTS = {
     "yield_palm": {"kind": "defence", "name": tr("Yielding Palm", "以柔克刚", "ฝ่ามือน้ำอ่อนชนะแข็ง"),
                    "does": tr("If your defence beats their attack by 4 or more, their own force strikes them back.", "防御总点数比对方攻击高出 4 以上时，对方的力道反弹回去伤他自己。", "ถ้าแต้มป้องกันสูงกว่าแต้มโจมตีของศัตรูตั้งแต่ 4 ขึ้นไป แรงของเขาจะสะท้อนกลับ")},
     "stone_breath": {"kind": "defence", "name": tr("Stone Breath", "磐石息", "ลมหายใจศิลา"),
-                     "does": tr("If both defence dice match, you catch your breath and heal.", "两颗防御骰点数相同时，你调息回血。", "ถ้าลูกเต๋าป้องกันทั้งสองลูกออกแต้มเท่ากัน เจ้าหายใจเรียกพลังและฟื้นเลือด")},
+                     "does": tr("If both defence dice match, you catch your breath and heal.", "两颗防御骰点数相同时，你调息回血。", "ถ้าลูกเต๋าป้องกันทั้งสองลูกออกแต้มเท่ากัน เจ้าหายใจเรียกลมปราณและฟื้นเลือด")},
 }
 
 NOTES = {   # what an art did in a round: shown under the dice
@@ -80,16 +80,16 @@ MOODS = {
 # effect kinds: edge (+N to her attack against `target` from now on), heal (+N hit points), shortcut (the storm passes N beats sooner)
 CAST = [
     {
-        "key": "shuang", "talk_limit": 5, "goal": tr("Win Madam Shuang's trust and she will show you a way to leave the pass early.", '赢得霜四娘的信任，她会告诉你提早离开关口的路。', 'ชนะใจฮูหยินซวง นางจะบอกทางออกจากช่องเขาก่อนเวลา'), "name": tr("Madam Shuang", "霜四娘", "ฮูหยินซวง"), "mood": "friendly", "arrive": 0, "start_trust": 3, "calm": 0,
+        "key": "shuang", "talk_limit": 5, "goal": tr("Win Madam Shuang's trust and she will show you a way to leave the pass early.", '赢得霜四娘的信任，她会告诉你提早离开关口的路。', 'ชนะใจเถ้าแก่เนี้ยซวง นางจะบอกทางออกจากช่องเขาก่อนเวลา'), "name": tr("Madam Shuang", "霜四娘", "เถ้าแก่เนี้ยซวง"), "mood": "friendly", "arrive": 0, "start_trust": 3, "calm": 0,
         "title": tr("Keeper of the Black Sand Inn, a fence", "黑沙客栈掌柜，销赃人", "เจ้าของโรงเตี๊ยมทรายดำ ผู้รับซื้อของโจร"),
         "public": tr("Everything in this inn has a price, and she buys what thieves bring.", "这店里什么都有价，贼带来的东西她也收。", "ในโรงเตี๊ยมนี้ทุกอย่างมีราคา และนางรับซื้อของที่โจรนำมา"),
         "hp": 25, "atk": 3, "defn": 3, "dmg": 3,
-        "arrival": tr("Madam Shuang is already behind the counter, polishing a cup that does not need it. 'Another one for the storm,' she purrs.", "霜四娘早已站在柜台后，擦着一只本不需要擦的杯子。“又是一个来躲风沙的。”她轻声道。", "ฮูหยินซวงยืนอยู่หลังเคาน์เตอร์แล้ว ขัดถ้วยที่ไม่จำเป็นต้องขัด 'มาหลบพายุอีกคนสินะ' นางพูดเบา ๆ"),
-        "hostile": tr("Madam Shuang's smile does not move. Her fan opens, and needles glitter between its ribs.", "霜四娘的笑纹丝不动，折扇一展，扇骨之间寒光点点。", "รอยยิ้มของฮูหยินซวงไม่ขยับ พัดกางออก เข็มวาวระหว่างซี่พัด"),
-        "down": tr("Madam Shuang folds against the counter and spits out a laugh. Her keys slide across the floor to you.", "霜四娘伏在柜台上，啐出一声笑，钥匙滑到你脚边。", "ฮูหยินซวงฟุบกับเคาน์เตอร์ หัวเราะในลำคอ พวงกุญแจลื่นมาถึงเท้าเจ้า"),
+        "arrival": tr("Madam Shuang is already behind the counter, polishing a cup that does not need it. 'Another one for the storm,' she purrs.", "霜四娘早已站在柜台后，擦着一只本不需要擦的杯子。“又是一个来躲风沙的。”她轻声道。", "เถ้าแก่เนี้ยซวงยืนอยู่หลังเคาน์เตอร์แล้ว ขัดถ้วยที่ไม่จำเป็นต้องขัด 'มาหลบพายุอีกคนสินะ' นางพูดเบา ๆ"),
+        "hostile": tr("Madam Shuang's smile does not move. Her fan opens, and needles glitter between its ribs.", "霜四娘的笑纹丝不动，折扇一展，扇骨之间寒光点点。", "รอยยิ้มของเถ้าแก่เนี้ยซวงไม่ขยับ พัดกางออก เข็มวาวระหว่างซี่พัด"),
+        "down": tr("Madam Shuang folds against the counter and spits out a laugh. Her keys slide across the floor to you.", "霜四娘伏在柜台上，啐出一声笑，钥匙滑到你脚边。", "เถ้าแก่เนี้ยซวงฟุบกับเคาน์เตอร์ หัวเราะในลำคอ พวงกุญแจลื่นมาถึงเท้าเจ้า"),
         "reward": {"trust": 7, "effect": {"kind": "shortcut", "n": 5},
                    "fact": "There is an old smugglers' tunnel under the cellar that leaves the pass early. She will show you the way, for a favour owed; with it you can leave five beats sooner.",
-                   "gain": tr("Shuang shows you the smugglers' tunnel: the storm will not be a problem sooner than you thought. You can leave 5 beats earlier.", "霜四娘告诉你走私客的暗道：你可以提早 5 拍离开。", "ฮูหยินซวงบอกทางอุโมงค์ของพวกลักลอบ เจ้าออกไปได้เร็วขึ้น 5 จังหวะ")},
+                   "gain": tr("Shuang shows you the smugglers' tunnel. You can leave 5 beats earlier.", "霜四娘告诉你走私客的暗道：你可以提早 5 拍离开。", "เถ้าแก่เนี้ยซวงบอกทางอุโมงค์ของพวกลักลอบ เจ้าออกไปได้เร็วขึ้น 5 จังหวะ")},
         "voice": "Silky and amused, every favour with a price tag; calls the young woman 'little sister'; never raises her voice, and is most gentle when she is most dangerous.",
         "wants": "She wants the thief to sell her the jade seal cheaply, and she hates the law.",
         "calms": "Respects the clever who don't beg; likes jokes and a fair price.",
@@ -120,7 +120,7 @@ CAST = [
         "hp": 31, "atk": 5, "defn": 4, "dmg": 4,
         "arrival": tr("A woman in white shakes the sand from her sleeves. Her eyes find your bulging collar. 'A thief,' says Yue Qinghan. 'I can smell it.'", "一位白衣女子抖落袖上的沙。她的目光落在你鼓起的衣领上。“有贼。”岳清寒说，“我闻得出来。”", "หญิงชุดขาวสะบัดทรายออกจากแขนเสื้อ สายตาจับที่ปกเสื้อป่อง ๆ ของเจ้า 'มีโจร' เย่ว์ชิงหานว่า 'ข้าได้กลิ่น'"),
         "hostile": tr("Yue Qinghan's sword leaves its sheath with a whisper. 'For the people you robbed,' she says.", "岳清寒长剑出鞘，轻吟一声。“为了被你偷过的人。”她说。", "กระบี่ของเย่ว์ชิงหานออกจากฝักเสียงแผ่ว 'เพื่อผู้คนที่เจ้าขโมยมา' นางว่า"),
-        "down": tr("Yue Qinghan lowers her sword. 'Strike me down, then. A thief with a spine is still a thief.'", "岳清寒垂下剑。“要杀便杀。有骨气的贼，也还是贼。”", "เย่ว์ชิงหานลดกระบี่ 'จะฆ่าก็ฆ่าเถอะ โจรที่มีกระดูกสันหลังก็ยังเป็นโจร'"),
+        "down": tr("Yue Qinghan lowers her sword. 'Strike me down, then. A thief with a spine is still a thief.'", "岳清寒垂下剑。“要杀便杀。有骨气的贼，也还是贼。”", "เย่ว์ชิงหานลดกระบี่ 'จะฆ่าก็ฆ่าเถอะ โจรที่มีศักดิ์ศรีก็ยังเป็นโจร'"),
         "reward": {"trust": 5, "effect": {"kind": "edge", "target": "gu", "n": 2},
                    "fact": "She has worked with Captain Gu and knows he is arrogant: he always lunges first, so a quick counter-stroke after his lunge lands cleanly on him.",
                    "gain": tr("Yue warns you about Captain Gu's lunge. You hit Captain Gu more easily (+2).", "岳清寒提醒你顾捕头的突刺。你打顾捕头更容易命中（+2）。", "เย่ว์ชิงหานเตือนเรื่องท่าพุ่งแทงของหัวหน้ากู้ เจ้าโจมตีเขาโดนง่ายขึ้น (+2)")},
@@ -132,12 +132,12 @@ CAST = [
     },
     {
         "key": "monk", "talk_limit": 4, "goal": tr('Convince Monk Wuhui you can change, and he will stand down and give you medicine.', '说服无晦和尚你能改过，他会收杖，并给你药。', 'โน้มน้าวพระอู๋ฮุ่ยว่าเจ้าเปลี่ยนได้ ท่านจะวางไม้เท้าและให้ยา'), "name": tr("Monk Wuhui", "无晦和尚", "พระอู๋ฮุ่ย"), "mood": "aggressive", "arrive": 5, "start_trust": 1, "calm": 5, "fuse": 4,
-        "title": tr("Warrior monk of the Stone Temple", "石寺的武僧", "พระยุทธ์แห่งวัดศิลา"),
+        "title": tr("Warrior monk of the Stone Temple", "石寺的武僧", "พระนักสู้แห่งวัดศิลา"),
         "public": tr("Huge, slow-spoken, and absolutely certain that thieves must be corrected.", "身躯魁梧，说话缓慢，坚信窃贼必须被管教。", "ร่างใหญ่ พูดช้า และมั่นใจเต็มร้อยว่าโจรต้องถูกสั่งสอน"),
         "hp": 36, "atk": 4, "defn": 5, "dmg": 4,
         "arrival": tr("A monk as wide as the doorframe ducks inside. 'Amitabha,' says Wuhui, and sets his iron staff against the wall with a clang. 'Who here has stolen?'", "一位宽得像门框的和尚低头进门。“阿弥陀佛。”无晦把铁杖靠在墙上，当啷一响，“这里谁偷了东西？”", "พระรูปหนึ่งตัวกว้างเท่าวงกบประตูก้มตัวเข้ามา 'อมิตพุทธ' อู๋ฮุ่ยว่า วางไม้เท้าเหล็กพิงผนังเสียงดังก้อง 'ใครในนี้ขโมยของมา?'"),
-        "hostile": tr("Monk Wuhui lifts his staff in one hand. 'Be still, child. This will hurt me more than you.'", "无晦单手举起铁杖。“别动，孩子。这一下，疼的是我，不是你。”", "พระอู๋ฮุ่ยยกไม้เท้าด้วยมือเดียว 'อยู่นิ่ง ๆ เด็กน้อย เรื่องนี้ข้าเจ็บกว่าเจ้า'"),
-        "down": tr("Monk Wuhui sits down on the floor and folds his hands. 'The Buddha was not so fast as you.'", "无晦盘腿坐在地上，合十。“佛祖也没你快。”", "พระอู๋ฮุ่ยนั่งลงกับพื้น ประนมมือ 'พระพุทธองค์ก็ไม่ไวเท่าเจ้า'"),
+        "hostile": tr("Monk Wuhui lifts his staff in one hand. 'Be still, child. This will hurt me more than you.'", "无晦单手举起铁杖。“别动，孩子。这一下，疼的是我，不是你。”", "พระอู๋ฮุ่ยยกไม้เท้าด้วยมือเดียว 'อยู่นิ่ง ๆ เด็กน้อย เรื่องนี้อาตมาเจ็บยิ่งกว่าเจ้า'"),
+        "down": tr("Monk Wuhui sits down on the floor and folds his hands. 'The Buddha was not so fast as you.'", "无晦盘腿坐在地上，合十。“佛祖也没你快。”", "พระอู๋ฮุ่ยนั่งลงกับพื้น ประนมมือ 'ความเร็วแบบนี้ อาตมายังไม่เคยเห็นมาก่อน'"),
         "reward": {"trust": 5, "effect": {"kind": "heal", "n": 10},
                    "fact": "He carries a bitter pill that closes wounds, and he is willing to give one to a thief who really does mean to change.",
                    "gain": tr("Wuhui gives you a pill. You heal 10 hit points.", "无晦给了你一颗药丸。你回复 10 点生命。", "อู๋ฮุ่ยให้ยาเม็ดหนึ่งแก่เจ้า เจ้าฟื้นเลือด 10 แต้ม")},
@@ -148,11 +148,11 @@ CAST = [
                            outfit="monk", outfit_color="ash", accent_color="gold", headwear="none", mark="none", weapon="staff", aura="moon", scene="mountains"),
     },
     {
-        "key": "gu", "talk_limit": 4, "goal": tr('Make Captain Gu doubt you have the seal, and he will stand down and clear the road for you.', '让顾捕头怀疑你身上有玉印，他会收手，并为你清出道路。', 'ทำให้หัวหน้ากู้สงสัยว่าเจ้าไม่ได้มีตรา เขาจะยอมถอยและเปิดทางให้'), "name": tr("Captain Gu", "顾捕头", "หัวหน้ากู้"), "mood": "police", "arrive": 7, "start_trust": 1, "calm": 6, "fuse": 4,
-        "title": tr("Chief constable of the pass", "关口的总捕头", "หัวหน้าตำรวจประจำด่าน"),
-        "public": tr("A proud officer who has never lost a prisoner.", "骄傲的捕头，从没跑掉过一个犯人。", "นายตำรวจทระนง ไม่เคยปล่อยนักโทษหลุดมือ"),
+        "key": "gu", "talk_limit": 4, "goal": tr('Make Captain Gu doubt you have the seal, and he will stand down and clear the road for you.', '让顾捕头相信你身上没有玉印，他会收手，并为你清出道路。', 'ทำให้หัวหน้ากู้เชื่อว่าเจ้าไม่ได้พกตราไว้ เขาจะยอมถอยและเปิดทางให้'), "name": tr("Captain Gu", "顾捕头", "หัวหน้ากู้"), "mood": "police", "arrive": 7, "start_trust": 1, "calm": 6, "fuse": 4,
+        "title": tr("Chief constable of the pass", "关口的总捕头", "หัวหน้าชุดจับกุมประจำด่าน"),
+        "public": tr("A proud officer who has never lost a prisoner.", "骄傲的捕头，从没跑掉过一个犯人。", "เจ้าพนักงานผู้ทระนง ไม่เคยปล่อยนักโทษหลุดมือ"),
         "hp": 35, "atk": 5, "defn": 5, "dmg": 5,
-        "arrival": tr("The door opens on a wet black cloak and a chain at the belt. 'Constable Gu,' says the man. 'A seal was stolen from the magistrate. Whoever has it is under arrest.'", "门开了，湿透的黑斗篷，腰间一串铁链。“我是顾捕头。”来人说，“知府的印被偷了。谁带着，谁就被捕。”", "ประตูเปิดออก ผ้าคลุมสีดำเปียกชุ่ม โซ่ห้อยที่เอว 'กู้หัวหน้าตำรวจ' ชายผู้นั้นว่า 'ตราของเจ้าเมืองถูกขโมย ใครมีอยู่กับตัว ถูกจับกุม'"),
+        "arrival": tr("The door opens on a wet black cloak and a chain at the belt. 'Constable Gu,' says the man. 'A seal was stolen from the magistrate. Whoever has it is under arrest.'", "门开了，湿透的黑斗篷，腰间一串铁链。“我是顾捕头。”来人说，“知府的印被偷了。谁带着，谁就被捕。”", "ประตูเปิดออก ผ้าคลุมสีดำเปียกชุ่ม โซ่ห้อยที่เอว 'ข้าคือกู้ หัวหน้าชุดจับกุม' ชายผู้นั้นว่า 'ตราของเจ้าเมืองถูกขโมย ใครพกตราไว้ ถูกจับกุมทันที'"),
         "hostile": tr("Captain Gu snaps the chain loose. 'You had your chance to come quietly.'", "顾捕头抖开铁链。“我给过你机会，让你乖乖跟我走。”", "หัวหน้ากู้สะบัดโซ่ 'เจ้ามีโอกาสแล้วที่จะไปกับข้าดี ๆ'"),
         "down": tr("Captain Gu drops to the floor, gasping, his pride in pieces. 'No… prisoner has ever…'", "顾捕头跌坐在地，喘息着，傲气碎了一地。“从来……没有犯人……”", "หัวหน้ากู้ทรุดลงบนพื้นหอบหายใจ ความทระนงแตกเป็นเสี่ยง ๆ 'ไม่เคย... มีนักโทษคนไหน...'"),
         "reward": {"trust": 6, "effect": {"kind": "shortcut", "n": 3},
@@ -169,7 +169,7 @@ CAST = [
         "title": tr("Gu's young deputy", "顾捕头的年轻差役", "ลูกน้องหนุ่มของหัวหน้ากู้"),
         "public": tr("Nervous, soaked, and secretly afraid of his captain.", "紧张、浑身湿透，暗地里怕他的头儿。", "ประหม่า เปียกโชก และแอบกลัวหัวหน้าของตัวเอง"),
         "hp": 22, "atk": 3, "defn": 3, "dmg": 4,
-        "arrival": tr("A boy in a constable's cap stumbles in, dripping. 'Deputy Fang,' he stammers, 'on the captain's orders, I have to… search… everyone.'", "一个戴着差役帽的少年跌跌撞撞进来，浑身滴水。“我、我是方差役，”他结结巴巴，“奉捕头之命，要……搜……每一个人。”", "เด็กหนุ่มสวมหมวกตำรวจเซเข้ามา น้ำหยดติ๋ง ๆ 'รองฟาง...' เขาติดอ่าง 'ตามคำสั่งหัวหน้า ต้อง... ค้น... ทุกคน'"),
+        "arrival": tr("A boy in a constable's cap stumbles in, dripping. 'Deputy Fang,' he stammers, 'on the captain's orders, I have to… search… everyone.'", "一个戴着差役帽的少年跌跌撞撞进来，浑身滴水。“我、我是方差役，”他结结巴巴，“奉捕头之命，要……搜……每一个人。”", "เด็กหนุ่มสวมหมวกเจ้าพนักงานเซเข้ามา น้ำหยดติ๋ง ๆ 'รองฟาง...' เขาติดอ่าง 'ตามคำสั่งหัวหน้า ต้อง... ค้น... ทุกคน'"),
         "hostile": tr("Deputy Fang's hands shake, but he draws his short sword. 'I'm sorry, I'm sorry. Please don't make me.'", "方小乙手在抖，还是拔出了短剑。“对不住，对不住。求你别逼我。”", "มือของรองฟางสั่น แต่เขาก็ชักกระบี่สั้น 'ขอโทษ ๆ อย่าบังคับข้าเลย'"),
         "down": tr("Deputy Fang curls up around his stomach. 'Captain Gu is going to kill me.'", "方小乙抱着肚子蜷成一团。“顾捕头会杀了我的。”", "รองฟางงอตัวกุมท้อง 'หัวหน้ากู้ต้องฆ่าข้าแน่'"),
         "reward": {"trust": 5, "effect": {"kind": "edge", "target": "gu", "n": 3},

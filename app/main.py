@@ -415,7 +415,7 @@ def _npc_turn(client, tid: str, vid: str, message: str | None, lang: str = i18n.
             db.log(conn, vid, "msg", npc=key, delta=seen["delta"], threat=seen["threat"], trust=n["trust"])
             if n["status"] == "here" and c["mood"] != "friendly" and c.get("calm") and n["trust"] >= c["calm"]:
                 n["status"] = "calm"
-                yield _say(st, "calm", tr(f"{i18n.plain(c['name'])} lowers their guard and stands down.", f"{i18n.plain(c['name'])} 放下了戒备，不再动手。", f"{i18n.plain(c['name'])} ลดการ์ดลง ไม่คิดจะลงมือแล้ว"), f"{_name(key)} was talked down and stood down.", key)
+                yield _say(st, "calm", tr(f"{i18n.plain(c['name'])} lowers their guard and stands down.", f"{i18n.plain(c['name'])} 放下了戒备，不再动手。", f"{i18n.plain(c['name'])} ผ่อนท่าทีลง ไม่คิดจะลงมือแล้ว"), f"{_name(key)} was talked down and stood down.", key)
             if not n["rewarded"] and n["trust"] >= c["reward"]["trust"]:
                 fact_now = c["reward"]["fact"]
                 yield from _apply_reward(st, key, "by talking")
@@ -510,7 +510,7 @@ def fight_round(body: Round, request: Request):
             raise HTTPException(409, tr("You are not in a fight.", "你现在没有在打斗。", "เจ้าไม่ได้อยู่ในการต่อสู้"))
         c, n, hero = story.BY_KEY[key], st["npcs"][key], st["hero"]
         if body.action == "art" and hero["qi"] < 1:
-            raise HTTPException(409, tr("You are out of breath for your art. Guard to recover.", "你气息不足，无法施展武功。先防守调息。", "เจ้าหมดลมหายใจสำหรับวิชายุทธ์ ตั้งรับเพื่อเรียกพลังคืน"))
+            raise HTTPException(409, tr("You are out of breath for your art. Guard to recover.", "你气息不足，无法施展武功。先防守调息。", "เจ้าหมดลมหายใจสำหรับวิชายุทธ์ ตั้งรับเพื่อเรียกลมปราณคืน"))
         foe = {"hp": n["hp"], "atk": c["atk"], "defn": c["defn"], "dmg": c["dmg"]}
         result = rules.fight_round(hero, foe, body.action, _dice, story.edge_for(st["edges"], key), st["intent"])
         n["hp"] = foe["hp"]

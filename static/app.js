@@ -113,7 +113,7 @@
   function derived(k, h) {
     return k === "str" ? tr(`${h.hp_max} hit points`, `生命值 ${h.hp_max}`, `พลังชีวิต ${h.hp_max}`)
       : k === "agi" ? tr(`+${h.defence_bonus} to every defence roll`, `每次防御骰 +${h.defence_bonus}`, `+${h.defence_bonus} ทุกครั้งที่ทอยป้องกัน`)
-        : tr(`start with ${Math.min(5, 1 + Math.floor(h.int / 4))} Qi, regain ${h.int >= 11 ? 2 : 1} per guard`, `起始气 ${Math.min(5, 1 + Math.floor(h.int / 4))}，每次防守回复 ${h.int >= 11 ? 2 : 1}`, `เริ่มด้วยพลัง ${Math.min(5, 1 + Math.floor(h.int / 4))} ฟื้น ${h.int >= 11 ? 2 : 1} ต่อการตั้งรับ`);
+        : tr(`start with ${Math.min(5, 1 + Math.floor(h.int / 4))} Qi, regain ${h.int >= 11 ? 2 : 1} per guard`, `起始气 ${Math.min(5, 1 + Math.floor(h.int / 4))}，每次防守回复 ${h.int >= 11 ? 2 : 1}`, `เริ่มด้วยลมปราณ ${Math.min(5, 1 + Math.floor(h.int / 4))} ฟื้น ${h.int >= 11 ? 2 : 1} ต่อการตั้งรับ`);
   }
   function renderRoll(h) {
     const box = $("#gateStats"); box.textContent = "";
@@ -209,7 +209,7 @@
     const nm = el("b", "", n.name); tx.append(nm, el("div", "p-title", n.title), el("div", "mood m-" + n.mood, `${mood.icon} ${pick(mood.name)}`));
     let st = "";
     if (n.status === "down") st = tr("Defeated", "已被击败", "พ่ายแพ้แล้ว");
-    else if (n.status === "calm") st = tr("Standing down", "已放下戒备", "ลดการ์ดแล้ว");
+    else if (n.status === "calm") st = tr("Standing down", "已放下戒备", "ผ่อนท่าทีลงแล้ว");
     else if (n.fuse_left != null) st = n.fuse_left > 0 ? tr(`⏳ Loses patience in ${n.fuse_left} beat${n.fuse_left === 1 ? "" : "s"}`, `⏳ ${n.fuse_left} 拍后失去耐心`, `⏳ หมดความอดทนใน ${n.fuse_left} จังหวะ`) : tr("⏳ About to attack", "⏳ 即将动手", "⏳ กำลังจะลงมือ");
     if (st) tx.append(el("div", "p-status", st));
     if (n.status === "here" || n.status === "calm") {
@@ -376,7 +376,7 @@
     box.textContent = "";
     const av = el("span", "avatar big"); setPortrait(av, c, true, false);
     box.append(av, el("b", "", label), el("div", "hp-text", `❤ ${hp} / ${max}`), bar(hp, max, hp / max < .35 ? "low" : "hp-bar"));
-    if (qi != null) { const q = el("div", "qi", ""); q.append(el("small", "", tr("Qi", "气", "พลัง") + " "), qiPips(qi, S.game.hero.qi_max)); box.append(q); }
+    if (qi != null) { const q = el("div", "qi", ""); q.append(el("small", "", tr("Qi", "气", "ลมปราณ") + " "), qiPips(qi, S.game.hero.qi_max)); box.append(q); }
   }
   function renderDuel(foeKey, foeHp, foeMax) {
     const g = S.game, h = g.hero, f = g.fight;
@@ -388,7 +388,7 @@
   const INTENT = {
     heavy: n => [tr("⚠ HEAVY BLOW", "⚠ 重击", "⚠ ฟาดหนัก"), tr(`${n} winds up for a crushing blow. Counter it, or guard!`, `${n}蓄力要来一记重击。反击它，或者防守！`, `${n} รวบรวมแรงเตรียมฟาดหนัก สวนกลับ หรือตั้งรับ!`)],
     quick: n => [tr("⚡ QUICK STRIKE", "⚡ 快攻", "⚡ ฟันเร็ว"), tr(`${n} lunges fast. Hit first, or guard.`, `${n}出手极快。抢先攻击，或者防守。`, `${n} พุ่งเข้าฟันเร็ว ชิงโจมตีก่อน หรือตั้งรับ`)],
-    guard: n => [tr("🛡 TURTLING UP", "🛡 严守", "🛡 ตั้งการ์ด"), tr(`${n} braces behind their guard: harder to hit, and no attack this round. Use your art, or catch your breath.`, `${n}收势严守：更难打中，这一回合不会进攻。用武功，或者调息。`, `${n} ตั้งการ์ดแน่น โดนยากขึ้นและรอบนี้ไม่โจมตี ใช้วิชายุทธ์ หรือหายใจเรียกพลัง`)],
+    guard: n => [tr("🛡 BRACING", "🛡 严守", "🛡 ตั้งท่ารับ"), tr(`${n} braces behind a tight guard: harder to hit, and no attack this round. Use your art, or catch your breath.`, `${n}收势严守：更难打中，这一回合不会进攻。用武功，或者调息。`, `${n} ตั้งท่ารับแน่น โดนยากขึ้นและรอบนี้ไม่โจมตี ใช้วิชายุทธ์ หรือหายใจเรียกลมปราณ`)],
   };
   function renderIntent() {
     const g = S.game, box = $("#rolls"); box.textContent = "";
@@ -403,8 +403,8 @@
   function actionButtons() {
     const h = S.game.hero, mk = (id, title, sub) => { const b = $(id); b.textContent = ""; b.append(el("b", "", title), el("small", "", sub)); };
     mk("#atkBtn", tr("⚔ Strike", "⚔ 出招", "⚔ ฟัน"), tr("plain attack", "普通攻击", "โจมตีธรรมดา"));
-    mk("#artBtn", `✨ ${h.off.name}`, tr("costs 1 Qi · lands easier, hits harder", "耗 1 点气 · 更易命中，伤害更高", "ใช้พลัง 1 · โดนง่ายขึ้น แรงขึ้น"));
-    mk("#grdBtn", tr("🛡 Guard", "🛡 防守", "🛡 ตั้งรับ"), tr(`+3 defence · regain ${h.int >= 11 ? 2 : 1} Qi`, `防御 +3 · 回复 ${h.int >= 11 ? 2 : 1} 点气`, `ป้องกัน +3 · ฟื้นพลัง ${h.int >= 11 ? 2 : 1}`));
+    mk("#artBtn", `✨ ${h.off.name}`, tr("costs 1 Qi · lands easier, hits harder", "耗 1 点气 · 更易命中，伤害更高", "ใช้ลมปราณ 1 · โดนง่ายขึ้น แรงขึ้น"));
+    mk("#grdBtn", tr("🛡 Guard", "🛡 防守", "🛡 ตั้งรับ"), tr(`+3 defence · regain ${h.int >= 11 ? 2 : 1} Qi`, `防御 +3 · 回复 ${h.int >= 11 ? 2 : 1} 点气`, `ป้องกัน +3 · ฟื้นลมปราณ ${h.int >= 11 ? 2 : 1}`));
     mk("#ctrBtn", tr("↩ Counter", "↩ 反击", "↩ สวนกลับ"), tr("huge against a heavy blow, risky otherwise", "对重击极强，其余情况有风险", "ได้ผลมากกับการฟาดหนัก ที่เหลือเสี่ยง"));
   }
   function enterFight() {
@@ -426,7 +426,7 @@
       line(x.hit ? "good" : "dim", x.hit ? tr(`${what}: ${x.damage} damage to ${foeName}!`, `${what}：对${foeName}造成 ${x.damage} 点伤害！`, `${what}: ${foeName} เสีย ${x.damage} แต้ม!`) : tr(`${what} misses ${foeName}.`, `${what}没有打中${foeName}。`, `${what} พลาด ${foeName}`),
         `${diceStr(x.dice)} ${x.total} vs ${diceStr(x.against.dice)} ${x.against.total}`);
       if (note(x)) line("art", note(x));
-    } else if (R.action === "guard") line("dim", tr("You guard and steady your breath.", "你防守并调整气息。", "เจ้าตั้งรับและหายใจเรียกพลัง"));
+    } else if (R.action === "guard") line("dim", tr("You guard and steady your breath.", "你防守并调整气息。", "เจ้าตั้งรับและหายใจเรียกลมปราณ"));
     else if (R.action === "counter") line("dim", tr("You wait for the blow to counter it.", "你等着对方出招，伺机反击。", "เจ้ารอรับการโจมตีเพื่อสวนกลับ"));
     if (R.npc) {
       const x = R.npc;
@@ -465,7 +465,7 @@
 
   /* ---------- Ray ---------- */
   function rayQuick() {
-    return [[tr("How does this work?", "这游戏怎么玩？", "เกมนี้เล่นอย่างไร?"), tr("Explain the rules to me, quickly: dice, stats, and how I win.", "快速给我讲讲规则：骰子、属性，还有怎么才算赢。", "อธิบายกติกาให้ข้าฟังเร็ว ๆ: ลูกเต๋า ค่าพลัง และข้าจะชนะได้อย่างไร")],
+    return [[tr("How does this work?", "这游戏怎么玩？", "เกมนี้เล่นอย่างไร?"), tr("Explain the rules to me, quickly: dice, stats, and how I win.", "快速给我讲讲规则：骰子、属性，还有怎么才算赢。", "อธิบายกติกาให้ข้าฟังเร็ว ๆ: ลูกเต๋า ค่าสถานะ และข้าจะชนะได้อย่างไร")],
       [tr("Who should I talk to?", "我该找谁谈？", "ควรคุยกับใคร?"), tr("Who should I talk to right now, and how?", "我现在该找谁谈，怎么谈？", "ตอนนี้ข้าควรคุยกับใคร และคุยอย่างไร?")],
       [tr("Should I fight?", "该动手吗？", "ควรสู้ไหม?"), tr("Should I fight anyone? Be honest about my odds.", "我该跟谁动手吗？照实说我的胜算。", "ข้าควรสู้กับใครไหม บอกโอกาสของข้าตามตรง")]];
   }
@@ -480,7 +480,7 @@
   function renderGmLog() {
     const body = $("#gmLog"); body.textContent = "";
     const turns = S.game.gm_turns || [];
-    const add = (who, text) => { const e = el("div", "entry " + who); e.append(el("span", "who", who === "hero" ? tr("You", "你", "คุณ") : gm().name)); const x = el("div", "bi"); fillText(x, text); e.append(x); body.append(e); };
+    const add = (who, text) => { const e = el("div", "entry " + who); e.append(el("span", "who", who === "hero" ? tr("You", "你", "เจ้า") : gm().name)); const x = el("div", "bi"); fillText(x, text); e.append(x); body.append(e); };
     if (!turns.length) add("npc", tr("Ask me anything: the rules, who to trust, whether a fight is worth it. I won't tell you what people are hiding, but I can point you the right way.", "想问什么都行：规则、该信谁、值不值得动手。别人藏着的事我不会说，但我能给你指个方向。", "ถามได้ทุกอย่าง: กติกา ควรเชื่อใคร คุ้มไหมที่จะสู้ สิ่งที่คนอื่นซ่อนไว้ข้าไม่บอก แต่ชี้ทางให้ได้"));
     turns.forEach(l => add(l.role === "user" ? "hero" : "npc", l.content));
     const b = $("#gmBody"); b.scrollTop = b.scrollHeight;
