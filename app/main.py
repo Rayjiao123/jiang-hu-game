@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, config, db, i18n, prompts, ratelimit, rules, stats, story
+from . import agent, config, db, geo, i18n, prompts, ratelimit, rules, stats, story
 from .i18n import tr
 from .ratelimit import RateLimited
 
@@ -264,7 +264,12 @@ def status():
 def get_case(request: Request):
     """What the home page shows before anyone has started: the setting, the goal, the rules, the people, the game master."""
     with db.session() as conn:
-        db.log(conn, request.state.vid, "visit", returning=not request.state.fresh, lang=request.state.lang)
+        ref = re.sub(r"^https?://([^/:]+).*$", r"\1", request.headers.get("x-ref", "")).lower()[:60]
+        if ref == request.url.hostname:
+            ref = ""
+        db.log(conn, request.state.vid, "visit", returning=not request.state.fresh, lang=request.state.lang,
+               country=geo.country(geo.client_ip(request.headers, request.client.host if request.client else "")),
+               device=geo.device(request.headers.get("user-agent", "")), ref=ref)
     return _L(request, {"title": story.TITLE, "setup": story.SETUP, "goal": story.GOAL, "how_to": story.HOW_TO, "prologue": story.PROLOGUE,
                         "cast": [story.public_card(c["key"]) for c in story.CAST], "gm": story.gm_card(), "moods": story.MOODS, "notes": story.NOTES,
                         "stats": story.STATS, "arts": story.ARTS, "storm_end": story.STORM_END,

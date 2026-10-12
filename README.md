@@ -112,6 +112,10 @@ the builds that were rolled, per-person numbers (talks, messages, rounds fought,
 only, never message text; conversations are kept in `talk_archive` after a night ends so replies can be reviewed. Every reply has 👍 / 👎.
 `CALLS_PER_VISITOR_PER_10_MIN` (150) and `DAILY_CALL_CAP` (8000) cap model calls; one talk message costs two calls and a night is a few dozen.
 
+**Where visitors are.** The country comes from the IP address, looked up on the server in a bundled free file (DB-IP "IP to Country Lite", CC BY 4.0, <https://db-ip.com>),
+so no address is sent to another service and only the two-letter country is stored, never the IP. The admin also shows the device (phone, tablet, desktop) and the site
+each visitor came from.
+
 ## Evaluating
 
 1. **`pytest` (offline, free)**: the dice (stats total 30, damage is the dice, every martial art, ties), the story rules (arrivals, patience, standing down, rewards,

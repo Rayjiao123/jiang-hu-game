@@ -3,3 +3,4 @@ uvicorn[standard]>=0.30
 openai>=1.50
 python-dotenv>=1.0
 pydantic>=2.7
+maxminddb>=2.6

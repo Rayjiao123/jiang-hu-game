@@ -484,3 +484,25 @@ def test_a_night_saved_by_an_older_shape_of_the_game_is_dropped_too(api):
     with db.session() as conn:
         conn.execute("INSERT OR REPLACE INTO plays (visitor_id, stage, state, updated_at) VALUES (?,?,?,?)", ("b" * 32, "playing", '{"hero": {"hp": 5}}', 0))
     assert TestClient(main.app, cookies={"vid": "b" * 32}).get("/api/game").json() == {"game": None}
+
+
+def test_the_visitors_country_device_and_referrer_are_counted_without_storing_the_ip(api, monkeypatch):
+    monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "s3cret")
+    h = {"authorization": "Bearer s3cret"}
+    thai = TestClient(main.app)
+    thai.get("/api/case", headers={"x-forwarded-for": "49.228.0.1, 10.0.0.2", "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Mobile", "x-ref": "https://www.linkedin.com/feed/"})
+    us = TestClient(main.app)
+    us.get("/api/case", headers={"x-forwarded-for": "8.8.8.8", "user-agent": "Mozilla/5.0 (Windows NT 10.0) Chrome"})
+    s = api.get("/api/admin/stats", headers=h).json()
+    assert s["countries"] == {"TH": 1, "US": 1} and s["devices"] == {"phone": 1, "desktop": 1} and s["referrers"] == {"www.linkedin.com": 1}
+    rows = {r["country"]: r for r in s["players"]}
+    assert rows["TH"]["device"] == "phone"
+    with db.session() as conn:
+        raw = " ".join(r["data"] for r in conn.execute("SELECT data FROM events"))
+    assert "49.228" not in raw and "8.8.8.8" not in raw
+
+
+def test_the_country_lookup_ignores_private_and_bad_addresses():
+    from app import geo
+    assert geo.country("49.228.0.1") == "TH" and geo.country("8.8.8.8") == "US"
+    assert geo.country("127.0.0.1") == "" and geo.country("10.1.2.3") == "" and geo.country("nonsense") == "" and geo.country("") == ""

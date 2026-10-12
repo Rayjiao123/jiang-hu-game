@@ -35,6 +35,8 @@
 <div id="app" hidden>
   <div class="row"><label>Last <select id="days"><option>1</option><option>7</option><option selected>14</option><option>90</option></select> days</label><button id="reload" type="button">Refresh</button></div>
   <div class="cards" id="cards"></div>
+  <h2>Where visitors come from</h2>
+  <div class="scroll"><table id="geo"></table></div>
   <h2>Players (most recent first, Thailand time)</h2><div class="scroll"><table id="players"></table></div>
   <h2>Funnel (distinct visitors)</h2><div class="scroll"><table id="funnel"></table></div>
   <h2>Endings and deaths</h2><div class="scroll"><table id="endings"></table></div>
@@ -61,8 +63,12 @@
     $("#cards").innerHTML = [["Visitors", s.visitors], ["Page loads", s.page_loads], ["Nights started", s.nights_started], ["Finished", s.nights_finished], ["Left unfinished", s.nights_abandoned],
       ["Minutes to finish (avg)", s.avg_minutes_to_finish ?? "–"], ["Total minutes played", s.total_minutes_played], ["Win rate", s.win_rate == null ? "–" : Math.round(s.win_rate * 100) + "%"], ["Fights per night (avg)", s.avg_fights_at_end ?? "–"], ["Player messages", s.ai.player_messages], ["Asked Ray", s.ai.ray_questions], ["AI errors", s.ai.errors],
       ["👍 / 👎", `${s.feedback.up} / ${s.feedback.down}`], ["Languages", Object.entries(s.languages || {}).map(([k, v]) => `${k} ${v}`).join(" · ") || "–"]].map(([k, v]) => `<div class="card"><b>${v}</b><span>${k}</span></div>`).join("");
-    table($("#players"), ["Visitor", "First seen", "Last seen", "Visits", "Lang", "Nights", "Finished", "Wins", "Minutes played", "Last night (min)", "Last result", "Messages", "Fight rounds"],
-      s.players.map(p => [esc(p.who), p.first_seen, p.last_seen, p.visits, p.lang, p.nights, p.finished, p.wins, p.minutes, p.last_night_minutes ?? "–", esc(p.last_result), p.messages, p.fights]));
+    const geoRows = []; const cols = [["Country", s.countries], ["Device", s.devices], ["Came from", s.referrers]];
+    const n = Math.max(1, ...cols.map(([, o]) => Object.keys(o).length));
+    for (let i = 0; i < n; i++) geoRows.push(cols.map(([, o]) => { const e = Object.entries(o)[i]; return e ? `${esc(e[0])}: ${e[1]}` : ""; }));
+    table($("#geo"), cols.map(c => c[0] + " (visitors)"), geoRows);
+    table($("#players"), ["Visitor", "Country", "Device", "First seen", "Last seen", "Visits", "Lang", "Nights", "Finished", "Wins", "Minutes played", "Last night (min)", "Last result", "Messages", "Fight rounds"],
+      s.players.map(p => [esc(p.who), esc(p.country || "?"), esc(p.device || "?"), p.first_seen, p.last_seen, p.visits, p.lang, p.nights, p.finished, p.wins, p.minutes, p.last_night_minutes ?? "–", esc(p.last_result), p.messages, p.fights]));
     const top = Math.max(1, ...s.funnel.map(f => f.visitors));
     table($("#funnel"), ["Step", "Visitors", ""], s.funnel.map(f => [f.step, f.visitors, `<div class="bar" style="width:${Math.round(f.visitors / top * 100)}%"></div>`]));
     const names = { escaped: "Survived the storm", slain: "Cut down", arrested: "Arrested", storm: "Went out into the storm" };

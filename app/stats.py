@@ -44,8 +44,10 @@ def players(conn, since: float = 0, limit: int = 300) -> list[dict]:
             last_end = nights[-1]
         visits = [e for e in ev if e["kind"] == "visit"]
         langs = [e["data"].get("lang") for e in ev if e["data"].get("lang")]
+        countries = [e["data"]["country"] for e in visits if e["data"].get("country")]
+        devices = [e["data"]["device"] for e in visits if e["data"].get("device")]
         rows.append({"who": _who(vid), "first_seen": _stamp(ev[0]["ts"]), "last_seen": _stamp(ev[-1]["ts"]), "last_ts": ev[-1]["ts"], "visits": len(visits),
-                     "lang": langs[-1] if langs else "", "nights": len(nights), "finished": sum(n["ended"] for n in nights), "wins": sum(n["won"] for n in nights),
+                     "lang": langs[-1] if langs else "", "country": countries[-1] if countries else "", "device": devices[-1] if devices else "", "nights": len(nights), "finished": sum(n["ended"] for n in nights), "wins": sum(n["won"] for n in nights),
                      "minutes": round(sum(n["minutes"] for n in nights), 1), "last_night_minutes": round(last_end["minutes"], 1) if last_end else None,
                      "last_result": ("won" if last_end["won"] else last_end["ending"] or "died") if last_end and last_end["ended"] else ("in progress or left" if last_end else "only looked"),
                      "messages": sum(1 for e in ev if e["kind"] == "msg"), "fights": sum(1 for e in ev if e["kind"] == "round")})
@@ -61,6 +63,12 @@ def _events(conn, kind: str | None = None, since: float = 0) -> list[dict]:
         q += " AND kind = ?"
         args.append(kind)
     return [{"ts": r["ts"], "vid": r["visitor_id"], "kind": r["kind"], "data": json.loads(r["data"] or "{}")} for r in conn.execute(q + " ORDER BY ts", args)]
+
+
+def _per_visitor(events: list[dict], field: str) -> dict:
+    """How many distinct visitors had each value (their latest one)."""
+    latest = {e["vid"]: e["data"].get(field) for e in events if e["data"].get(field)}
+    return dict(Counter(latest.values()).most_common(15))
 
 
 def summary(conn, days: int = 14) -> dict:
@@ -118,6 +126,7 @@ def summary(conn, days: int = 14) -> dict:
         "builds": {f"{a} + {b}": n for (a, b), n in builds.most_common(8) if a},
         "avg_minutes_to_finish": round(sum(mins) / len(mins), 1) if mins else None,
         "avg_messages_at_end": round(sum(e["data"].get("msgs", 0) for e in ends) / len(ends), 1) if ends else None,
+        "countries": _per_visitor(visits, "country"), "devices": _per_visitor(visits, "device"), "referrers": _per_visitor([e for e in visits if e["data"].get("ref")], "ref"),
         "people": npcs, "players": players(conn, since), "total_minutes_played": round(sum(r["minutes"] for r in players(conn, since, 100000)), 1),
         "ai": {"player_messages": len(by_kind["msg"]), "ray_questions": len(by_kind["gm"]), "errors": len(by_kind["error"]),
                "errors_by_kind": dict(Counter(e["data"].get("kind", "?") for e in by_kind["error"]))},

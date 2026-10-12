@@ -22,7 +22,7 @@
   const genericAi = () => tr("Something went wrong reaching the AI. Try again.", "连接 AI 时出错，请重试。", "เชื่อมต่อ AI ไม่สำเร็จ ลองอีกครั้ง");
   const noAi = () => tr("The AI isn't connected on this server yet.", "此服务器尚未连接 AI。", "เซิร์ฟเวอร์นี้ยังไม่ได้เชื่อมต่อ AI");
   const detail = d => typeof d.detail === "string" ? d.detail : generic();
-  const headers = () => ({ "content-type": "application/json", "x-lang": lang() });
+  const headers = () => ({ "content-type": "application/json", "x-lang": lang(), "x-ref": document.referrer || "" });
   async function api(path, body) {
     const r = await fetch(path, { method: body === undefined ? "GET" : "POST", headers: headers(), body: body === undefined ? undefined : JSON.stringify(body) });
     const data = await r.json().catch(() => ({}));
