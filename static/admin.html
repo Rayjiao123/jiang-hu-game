@@ -41,6 +41,7 @@
   <h2>Funnel (distinct visitors)</h2><div class="scroll"><table id="funnel"></table></div>
   <h2>Endings and deaths</h2><div class="scroll"><table id="endings"></table></div>
   <h2>People: how each character performs</h2><div class="scroll"><table id="people"></table></div>
+  <h2>Reply quality (AI judge, a sample of real replies, 1 to 5)</h2><div class="scroll"><table id="quality"></table></div>
   <h2>Builds rolled (offence + defence)</h2><div class="scroll"><table id="clues"></table></div>
   <h2>By day (Thailand time)</h2><div class="scroll"><table id="daily"></table></div>
   <h2>Conversations</h2>
@@ -75,13 +76,17 @@
     table($("#endings"), ["Ending", "Count"], [...Object.entries(s.endings).map(([k, v]) => [names[k] || k, v]), ...Object.entries(s.death_causes).map(([k, v]) => ["&nbsp;&nbsp;killed by: " + (k || "the storm"), v])]);
     table($("#people"), ["Person", "Talks started", "Messages", "Rounds fought", "Avg trust change", "Killed her", "👍", "👎"],
       Object.values(s.people).map(p => [esc(p.name), p.talks, p.messages, p.rounds_fought, p.avg_trust_change, p.killed_her, `<span class="up">${p.up}</span>`, `<span class="down">${p.down}</span>`]));
+    const q = s.quality || { scored: 0, by_person: {}, by_lang: {} };
+    const qrow = (name, r) => [esc(name), r.scored, r.overall ?? "–", r.character ?? "–", r.drive ?? "–", r.language ?? "–", r.era ?? "–", r.format ?? "–", r.leaks ?? "–", r.low ?? "–"];
+    table($("#quality"), ["", "Scored", "Overall", "In character", "Drives the talk", "Language", "Period", "Format", "Leaks", "Under 3"],
+      [qrow("All replies", q), ...Object.values(q.by_person).map(p => qrow(p.name, p)), ...Object.entries(q.by_lang).map(([k, v]) => [esc("language: " + k), v.scored, v.overall ?? "–", "", "", v.language ?? "–", "", "", "", ""])]);
     table($("#clues"), ["Build", "Nights"], Object.entries(s.builds || {}).map(([k, v]) => [esc(k), v]));
     table($("#daily"), ["Date", "Page loads", "Nights started", "Endings", "Messages"], s.daily.map(d => [d.date, d.visits, d.starts, d.endings, d.messages]));
   }
   async function loadTalks() {
     const d = await get("/api/admin/transcripts?limit=60&only_down=" + $("#onlyDown").checked);
     $("#talks").innerHTML = d.talks.map(t => `<details class="talk"><summary><b>${esc(t.npc)}</b> · visitor ${t.visitor} · trust ${t.trust} · ${t.updated}${t.archived ? " · finished/left" : " · live"} · ${t.turns.length} lines</summary><div class="turns">` +
-      t.turns.map(m => `<div class="msg ${m.role}">${esc(m.content)}${m.rating ? ` <span class="${m.rating}">${m.rating === "up" ? "👍" : "👎"}</span>` : ""}</div>`).join("") + "</div></details>").join("") || '<p class="dim">Nothing yet.</p>';
+      t.turns.map(m => `<div class="msg ${m.role}">${esc(m.content)}${m.rating ? ` <span class="${m.rating}">${m.rating === "up" ? "👍" : "👎"}</span>` : ""}${m.judge ? ` <span class="dim" title="AI judge">🤖 ${m.judge.overall}${m.judge.leaked ? " ⚠ leak" : ""}</span>` : ""}</div>`).join("") + "</div></details>").join("") || '<p class="dim">Nothing yet.</p>';
   }
   async function open() {
     $("#err").textContent = "";

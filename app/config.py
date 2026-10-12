@@ -30,5 +30,9 @@ DATABASE_PATH = Path(os.getenv("DATABASE_PATH", ROOT / "data" / "jianghu.db"))
 CALLS_PER_VISITOR_PER_10_MIN = _int("CALLS_PER_VISITOR_PER_10_MIN", 150)
 DAILY_CALL_CAP = _int("DAILY_CALL_CAP", 8000)
 
+# The AI judge (app/judge.py) scores this share of real replies in the background and logs the numbers for the admin page. 0 switches it off.
+# Each scored reply costs one extra model call.
+JUDGE_SAMPLE_RATE = float(os.getenv("JUDGE_SAMPLE_RATE", "0.25"))
+
 MAX_MESSAGE_CHARS = 600
 MAX_HISTORY_TURNS = 20

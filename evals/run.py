@@ -21,7 +21,7 @@ os.environ.setdefault("DATABASE_PATH", str(Path(tempfile.mkdtemp()) / "eval.db")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import config, db, i18n, main, story  # noqa: E402
+from app import config, db, i18n, judge, main, story  # noqa: E402
 
 if not config.DEEPSEEK_API_KEY:
     sys.exit("Set DEEPSEEK_API_KEY (in .env or the environment) to run the evals.")
@@ -154,30 +154,27 @@ def check_endings() -> None:
     record("ending", "no markup or double languages", not re.search(r"<\w+|\|\|\|", text))
 
 
-# ---------- 4. a judge scores voice and drama (optional) ----------
+# ---------- 4. the AI judge scores every reply (app/judge.py) ----------
 
-JUDGE = ("You score a line spoken by a character in a dark wuxia game (Song dynasty, an inn in a sandstorm). Reply with JSON only: "
-         "{\"voice\": 1-5, \"period\": 1-5, \"drama\": 1-5, \"why\": \"short\"}. voice = does it sound like the described person (not generic), period = no modern words, drama = does it create tension.")
-
-
-def judge(replies: dict[str, list[str]]) -> None:
-    print("\n4. Judge (reports only)")
-    scores = []
+def judge_replies(replies: dict[str, list[str]]) -> None:
+    print("\n4. AI judge: voice, drive, language, period, format, and whether a locked reward leaked")
+    rows = []
     for key, texts in replies.items():
         c = story.BY_KEY[key]
-        for text in texts[:1]:
-            r = CLIENT.chat.completions.create(model=config.CHAT_MODEL, max_tokens=120, temperature=0, extra_body={"thinking": {"type": "disabled"}},
-                                               messages=[{"role": "system", "content": JUDGE}, {"role": "user", "content": f"Character: {i18n.plain(c['name'])}, {i18n.plain(c['title'])}; speaks: {c['voice']}\nLine: {text}"}])
-            try:
-                s = json.loads(re.search(r"\{.*\}", r.choices[0].message.content, re.S).group(0))
-                scores.append(s)
-                print(f"  {i18n.plain(c['name']):14} voice {s['voice']} period {s['period']} drama {s['drama']}  {s.get('why', '')[:70]}")
-            except (AttributeError, ValueError, KeyError):
-                pass
-    if scores:
-        avg = {k: round(sum(s[k] for s in scores) / len(scores), 2) for k in ("voice", "period", "drama")}
-        print("  average:", avg)
-        record("judge", f"judge average {avg}", True, hard=False)
+        for i, text in enumerate(texts):
+            s = judge.score_reply(CLIENT, key, LANG, text, "" if i == 0 else NOSY[LANG], trust=c["start_trust"], left=c["talk_limit"] - i, locked_fact=c["reward"]["fact"])
+            if not s:
+                continue
+            rows.append((key, s))
+            flag = "  <-- look" if s["overall"] < 3.5 or s["leaked"] else ""
+            print(f"  {i18n.plain(c['name']):14} {'open ' if i == 0 else 'reply'}  char {s['character']} drive {s['drive']} lang {s['language']} era {s['era']} fmt {s['format']}{'  LEAK' if s['leaked'] else ''}{flag}  {s['issue'][:80]}")
+    if not rows:
+        return
+    avg = {d: round(sum(s[d] for _, s in rows) / len(rows), 2) for d in (*judge.DIMS, "overall")}
+    print("  average:", avg)
+    record("judge", f"no reply leaked a locked reward", not any(s["leaked"] for _, s in rows), "see LEAK lines")
+    record("judge", f"every dimension averages 3.5 or better {avg}", all(avg[d] >= 3.5 for d in judge.DIMS), str(avg), hard=False)
+    record("judge", "no reply scored under 3 overall", not any(s["overall"] < 3 for _, s in rows), "see the lines marked", hard=False)
 
 
 def run(lang: str, with_judge: bool) -> None:
@@ -188,7 +185,7 @@ def run(lang: str, with_judge: bool) -> None:
     check_watch()
     check_endings()
     if with_judge:
-        judge(replies)
+        judge_replies(replies)
 
 
 if __name__ == "__main__":

@@ -71,6 +71,23 @@ def _per_visitor(events: list[dict], field: str) -> dict:
     return dict(Counter(latest.values()).most_common(15))
 
 
+def _quality(judged: list[dict]) -> dict:
+    """What the AI judge thought of the replies it scored (a sample of real ones): averages by person and language, and how many it flagged."""
+    from . import judge
+    avg = lambda rows, f: round(sum(f(r) for r in rows) / len(rows), 2) if rows else None
+    dims = lambda rows: {d: avg(rows, lambda r, d=d: r["data"].get(d, 0)) for d in judge.DIMS}
+    by_person = {}
+    for key, c in story.BY_KEY.items():
+        rows = [e for e in judged if e["data"].get("npc") == key]
+        if rows:
+            by_person[key] = {"name": i18n.plain(c["name"]), "scored": len(rows), "overall": avg(rows, lambda r: r["data"].get("overall", 0)), **dims(rows),
+                              "leaks": sum(1 for r in rows if r["data"].get("leaked")), "low": sum(1 for r in rows if r["data"].get("overall", 5) < 3)}
+    by_lang = {lg: {"scored": len(rs), "overall": avg(rs, lambda r: r["data"].get("overall", 0)), "language": avg(rs, lambda r: r["data"].get("language", 0))}
+               for lg in i18n.LANGS if (rs := [e for e in judged if e["data"].get("lang") == lg])}
+    return {"scored": len(judged), "overall": avg(judged, lambda r: r["data"].get("overall", 0)), **dims(judged), "leaks": sum(1 for r in judged if r["data"].get("leaked")),
+            "low": sum(1 for r in judged if r["data"].get("overall", 5) < 3), "by_person": by_person, "by_lang": by_lang}
+
+
 def summary(conn, days: int = 14) -> dict:
     since = time.time() - days * 86400
     ev = _events(conn, since=since)
@@ -127,7 +144,7 @@ def summary(conn, days: int = 14) -> dict:
         "avg_minutes_to_finish": round(sum(mins) / len(mins), 1) if mins else None,
         "avg_messages_at_end": round(sum(e["data"].get("msgs", 0) for e in ends) / len(ends), 1) if ends else None,
         "countries": _per_visitor(visits, "country"), "devices": _per_visitor(visits, "device"), "referrers": _per_visitor([e for e in visits if e["data"].get("ref")], "ref"),
-        "people": npcs, "players": players(conn, since), "total_minutes_played": round(sum(r["minutes"] for r in players(conn, since, 100000)), 1),
+        "quality": _quality(by_kind["judge"]), "people": npcs, "players": players(conn, since), "total_minutes_played": round(sum(r["minutes"] for r in players(conn, since, 100000)), 1),
         "ai": {"player_messages": len(by_kind["msg"]), "ray_questions": len(by_kind["gm"]), "errors": len(by_kind["error"]),
                "errors_by_kind": dict(Counter(e["data"].get("kind", "?") for e in by_kind["error"]))},
         "feedback": {"up": sum(1 for e in by_kind["feedback"] if e["data"].get("rating") == "up"),
@@ -138,9 +155,11 @@ def summary(conn, days: int = 14) -> dict:
 
 def transcripts(conn, limit: int = 40, only_down: bool = False) -> list[dict]:
     """The latest conversations, with each reply's thumbs, so the AI's replies can be read and judged."""
-    ratings = {}
+    ratings, judged = {}, {}
     for e in _events(conn, "feedback"):
         ratings[(e["data"].get("talk"), e["data"].get("turn"))] = e["data"].get("rating")
+    for e in _events(conn, "judge"):
+        judged[(e["data"].get("talk"), e["data"].get("turn"))] = {"overall": e["data"].get("overall"), "leaked": e["data"].get("leaked"), "language": e["data"].get("language")}
     rows = conn.execute("SELECT id, visitor_id, npc_key, trust, turns, updated_at, 0 AS archived FROM talks "
                         "UNION ALL SELECT id, visitor_id, npc_key, trust, turns, updated_at, 1 AS archived FROM talk_archive "
                         "ORDER BY updated_at DESC LIMIT ?", (limit * (4 if only_down else 1),)).fetchall()
@@ -151,7 +170,8 @@ def transcripts(conn, limit: int = 40, only_down: bool = False) -> list[dict]:
         for i, t in enumerate(turns):
             if t.get("hidden"):
                 continue
-            marked.append({"role": t["role"], "content": t["content"], "rating": ratings.get((r["id"], i)) if t["role"] == "assistant" else None})
+            marked.append({"role": t["role"], "content": t["content"], "rating": ratings.get((r["id"], i)) if t["role"] == "assistant" else None,
+                           "judge": judged.get((r["id"], i)) if t["role"] == "assistant" else None})
         if only_down and not any(m["rating"] == "down" for m in marked):
             continue
         out.append({"id": r["id"], "visitor": _who(r["visitor_id"]), "npc": i18n.plain(story.BY_KEY[r["npc_key"]]["name"]) if r["npc_key"] in story.BY_KEY else r["npc_key"],

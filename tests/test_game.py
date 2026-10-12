@@ -8,6 +8,7 @@ from types import SimpleNamespace as NS
 
 os.environ["DATABASE_PATH"] = str(Path(tempfile.mkdtemp()) / "game.db")
 os.environ["DEEPSEEK_API_KEY"] = ""
+os.environ["JUDGE_SAMPLE_RATE"] = "0"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -460,6 +461,62 @@ def test_the_admin_lists_every_player_with_how_long_they_played(api, monkeypatch
     played = next(r for r in rows if r["nights"] == 1)
     assert looked["last_result"] == "only looked" and played["finished"] == 1 and played["messages"] == 1
     assert 4.5 < played["minutes"] < 5.5 and played["last_result"] == "storm"
+
+
+def test_the_ai_judge_scores_a_sample_of_replies_and_the_admin_shows_it(api, monkeypatch):
+    monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "s3cret")
+    monkeypatch.setattr(main.config, "JUDGE_SAMPLE_RATE", 1.0)
+    h = {"authorization": "Bearer s3cret"}
+    orig = api.llm._create
+
+    def create(**kw):
+        if not kw.get("stream") and kw["messages"][0]["content"].startswith("You are a strict editor"):
+            api.llm.judged = kw
+            return NS(choices=[NS(message=NS(content='{"character": 5, "drive": 4, "language": 3, "era": 5, "format": 4, "leaked": false, "issue": "ok"}'))])
+        return orig(**kw)
+    api.llm.chat = NS(completions=NS(create=create))
+    begin(api)
+    t = api.post("/api/talks", json={"npc": "shuang"}).json()
+    say(api, t["id"], "hello there")
+    for th in list(main._judge_threads):
+        th.join(5)
+    sent = api.llm.judged
+    assert "hidden fact" in sent["messages"][0]["content"] and "smugglers" in sent["messages"][0]["content"]          # it is told what must not leak
+    assert "hello there" in sent["messages"][1]["content"] and "4 exchange" in sent["messages"][1]["content"]
+    s = api.get("/api/admin/stats", headers=h).json()["quality"]
+    assert s["scored"] == 1 and s["overall"] == 4.2 and s["language"] == 3.0 and s["by_person"]["shuang"]["scored"] == 1 and s["leaks"] == 0
+    talks = api.get("/api/admin/transcripts", headers=h).json()["talks"]
+    assert any(m["judge"] and m["judge"]["overall"] == 4.2 for tk in talks for m in tk["turns"])
+    with db.session() as conn:
+        raw = " ".join(r["data"] for r in conn.execute("SELECT data FROM events WHERE kind = 'judge'"))
+    assert "hello there" not in raw and "ok" not in raw.replace("overall", "")                                         # numbers only, never text
+
+
+def test_a_judge_that_fails_never_disturbs_the_player(api, monkeypatch):
+    monkeypatch.setattr(main.config, "JUDGE_SAMPLE_RATE", 1.0)
+    orig = api.llm._create
+
+    def create(**kw):
+        if not kw.get("stream") and kw["messages"][0]["content"].startswith("You are a strict editor"):
+            raise main.openai.APIConnectionError(request=NS())
+        return orig(**kw)
+    api.llm.chat = NS(completions=NS(create=create))
+    begin(api)
+    t = api.post("/api/talks", json={"npc": "shuang"}).json()
+    assert any(e["type"] == "done" for e in say(api, t["id"], "hi"))
+    for th in list(main._judge_threads):
+        th.join(5)
+
+
+def test_the_judge_reads_scores_and_ignores_nonsense():
+    from app import judge
+    good = NS(chat=NS(completions=NS(create=lambda **kw: NS(choices=[NS(message=NS(content='noise {"character": 9, "drive": 0, "language": "4", "era": 5, "format": 5, "leaked": true} noise'))]))))
+    s = judge.score_reply(good, "monk", "th", "reply")
+    assert (s["character"], s["drive"], s["language"], s["leaked"]) == (5, 1, 4, True)
+    bad = NS(chat=NS(completions=NS(create=lambda **kw: NS(choices=[NS(message=NS(content="no json here"))]))))
+    assert judge.score_reply(bad, "monk", "en", "reply") is None
+    tr_ = NS(chat=NS(completions=NS(create=lambda **kw: NS(choices=[NS(message=NS(content='{"faithful": 2, "natural": 5, "issue": "reversed"}'))]))))
+    assert judge.score_translation(tr_, "a", "b", "th") == {"faithful": 2, "natural": 5, "issue": "reversed"}
 
 
 def test_the_admin_sees_nights_wins_and_what_killed_her(api, monkeypatch):

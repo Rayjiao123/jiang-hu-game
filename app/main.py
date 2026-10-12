@@ -3,6 +3,7 @@ import json
 import random
 import re
 import secrets
+import threading
 import uuid
 from typing import Iterator
 
@@ -12,7 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, config, db, geo, i18n, prompts, ratelimit, rules, stats, story
+from . import agent, config, db, geo, i18n, judge, prompts, ratelimit, rules, stats, story
 from .i18n import tr
 from .ratelimit import RateLimited
 
@@ -364,6 +365,29 @@ def _watch(client, vid: str, key: str, text: str) -> dict:
     return {"threat": threat, "delta": delta}
 
 
+# ---------- the AI judge: scores a sample of real replies in the background ----------
+
+_judge_threads: list[threading.Thread] = []      # kept so the tests can wait for the judge
+
+
+def _maybe_judge(vid: str, key: str, lang: str, reply: str, player: str, trust: int, left: int, locked_fact: str, talk_id: str, turn: int) -> None:
+    if not reply or _dice.random() >= config.JUDGE_SAMPLE_RATE:
+        return
+
+    def work() -> None:
+        try:
+            ratelimit.check(vid)
+            s = judge.score_reply(llm(), key, lang, reply, player, trust, left, locked_fact)
+            if s:
+                with db.session() as conn:
+                    db.log(conn, vid, "judge", npc=key, lang=lang, talk=talk_id, turn=turn, leaked=s["leaked"], overall=s["overall"], **{d: s[d] for d in judge.DIMS})
+        except Exception as e:   # scoring must never disturb a player
+            print("Judge skipped:", repr(e))
+    t = threading.Thread(target=work, daemon=True)
+    _judge_threads[:] = [x for x in _judge_threads if x.is_alive()][-20:] + [t]
+    t.start()
+
+
 # ---------- talking to the people in the inn ----------
 
 @app.post("/api/talks")
@@ -434,6 +458,8 @@ def _npc_turn(client, tid: str, vid: str, message: str | None, lang: str = i18n.
                 yield ev
                 if ev["type"] == "done":
                     yield {"type": "turn", "i": len(talk["turns"]) - 1}                      # which reply this was, so the page can ask what the player thought of it
+                    _maybe_judge(vid, key, lang, ev["text"], "" if opening else line, n["trust"], max(0, c["talk_limit"] - n["talks"] - (0 if opening else 1)),
+                                 "" if (n["rewarded"] or fact_now) else c["reward"]["fact"], talk["id"], len(talk["turns"]) - 1)
                     if not opening:
                         g["msgs"] += 1
                         n["talks"] += 1

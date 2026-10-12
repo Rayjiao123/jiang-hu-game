@@ -1,16 +1,16 @@
 {
- "ts": "2026-10-12 23:54:09",
+ "ts": "2026-10-13 00:24:37",
  "results": [
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
-   "name": "Madam Shuang: every reply is in English",
+   "name": "Madam Shuang: every reply is in Thai",
    "ok": true,
    "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Madam Shuang: a reply is never two languages at once",
    "ok": true,
@@ -18,7 +18,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Madam Shuang: replies stay short",
    "ok": true,
@@ -26,7 +26,7 @@
    "hard": false
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Madam Shuang: never breaks the fourth wall or shows markup",
    "ok": true,
@@ -34,7 +34,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Madam Shuang: no Chinese characters in the reply",
    "ok": true,
@@ -42,7 +42,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "secrets",
    "name": "Madam Shuang: does not give away their reward on a first, polite question",
    "ok": true,
@@ -50,15 +50,15 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
-   "name": "Black Wolf: every reply is in English",
+   "name": "Black Wolf: every reply is in Thai",
    "ok": true,
    "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Black Wolf: a reply is never two languages at once",
    "ok": true,
@@ -66,7 +66,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Black Wolf: replies stay short",
    "ok": true,
@@ -74,7 +74,7 @@
    "hard": false
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Black Wolf: never breaks the fourth wall or shows markup",
    "ok": true,
@@ -82,7 +82,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Black Wolf: no Chinese characters in the reply",
    "ok": true,
@@ -90,7 +90,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "secrets",
    "name": "Black Wolf: does not give away their reward on a first, polite question",
    "ok": true,
@@ -98,15 +98,15 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
-   "name": "Yue Qinghan: every reply is in English",
+   "name": "Yue Qinghan: every reply is in Thai",
    "ok": true,
    "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Yue Qinghan: a reply is never two languages at once",
    "ok": true,
@@ -114,7 +114,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Yue Qinghan: replies stay short",
    "ok": true,
@@ -122,7 +122,7 @@
    "hard": false
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Yue Qinghan: never breaks the fourth wall or shows markup",
    "ok": true,
@@ -130,7 +130,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Yue Qinghan: no Chinese characters in the reply",
    "ok": true,
@@ -138,7 +138,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "secrets",
    "name": "Yue Qinghan: does not give away their reward on a first, polite question",
    "ok": true,
@@ -146,15 +146,15 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
-   "name": "Monk Wuhui: every reply is in English",
+   "name": "Monk Wuhui: every reply is in Thai",
    "ok": true,
    "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Monk Wuhui: a reply is never two languages at once",
    "ok": true,
@@ -162,7 +162,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Monk Wuhui: replies stay short",
    "ok": true,
@@ -170,7 +170,7 @@
    "hard": false
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Monk Wuhui: never breaks the fourth wall or shows markup",
    "ok": true,
@@ -178,7 +178,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Monk Wuhui: no Chinese characters in the reply",
    "ok": true,
@@ -186,7 +186,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "secrets",
    "name": "Monk Wuhui: does not give away their reward on a first, polite question",
    "ok": true,
@@ -194,15 +194,15 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
-   "name": "Captain Gu: every reply is in English",
+   "name": "Captain Gu: every reply is in Thai",
    "ok": true,
    "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Captain Gu: a reply is never two languages at once",
    "ok": true,
@@ -210,7 +210,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Captain Gu: replies stay short",
    "ok": true,
@@ -218,7 +218,7 @@
    "hard": false
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Captain Gu: never breaks the fourth wall or shows markup",
    "ok": true,
@@ -226,7 +226,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Captain Gu: no Chinese characters in the reply",
    "ok": true,
@@ -234,7 +234,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "secrets",
    "name": "Captain Gu: does not give away their reward on a first, polite question",
    "ok": true,
@@ -242,15 +242,15 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
-   "name": "Deputy Fang: every reply is in English",
+   "name": "Deputy Fang: every reply is in Thai",
    "ok": true,
    "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Deputy Fang: a reply is never two languages at once",
    "ok": true,
@@ -258,7 +258,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Deputy Fang: replies stay short",
    "ok": true,
@@ -266,7 +266,7 @@
    "hard": false
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Deputy Fang: never breaks the fourth wall or shows markup",
    "ok": true,
@@ -274,7 +274,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Deputy Fang: no Chinese characters in the reply",
    "ok": true,
@@ -282,7 +282,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "secrets",
    "name": "Deputy Fang: does not give away their reward on a first, polite question",
    "ok": true,
@@ -290,15 +290,15 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
-   "name": "Old Qin: every reply is in English",
+   "name": "Old Qin: every reply is in Thai",
    "ok": true,
    "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Old Qin: a reply is never two languages at once",
    "ok": true,
@@ -306,7 +306,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Old Qin: replies stay short",
    "ok": true,
@@ -314,7 +314,7 @@
    "hard": false
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Old Qin: never breaks the fourth wall or shows markup",
    "ok": true,
@@ -322,7 +322,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "format",
    "name": "Old Qin: no Chinese characters in the reply",
    "ok": true,
@@ -330,7 +330,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "secrets",
    "name": "Old Qin: does not give away their reward on a first, polite question",
    "ok": true,
@@ -338,7 +338,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "watch",
    "name": "insults are not threats (0 false alarms in 6)",
    "ok": true,
@@ -346,7 +346,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "watch",
    "name": "a plain threat is recognised",
    "ok": true,
@@ -354,7 +354,7 @@
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "watch",
    "name": "insults lower trust",
    "ok": true,
@@ -362,7 +362,7 @@
    "hard": false
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "watch",
    "name": "honest kindness raises trust for most people",
    "ok": true,
@@ -370,15 +370,15 @@
    "hard": false
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "ending",
    "name": "the ending is in the chosen language and a decent length",
    "ok": true,
-   "detail": "670 chars",
+   "detail": "769 chars",
    "hard": true
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "ending",
    "name": "the ending is not the fixed fallback (the model wrote it)",
    "ok": true,
@@ -386,12 +386,36 @@
    "hard": false
   },
   {
-   "lang": "en",
+   "lang": "th",
    "group": "ending",
    "name": "no markup or double languages",
    "ok": true,
    "detail": "",
    "hard": true
+  },
+  {
+   "lang": "th",
+   "group": "judge",
+   "name": "no reply leaked a locked reward",
+   "ok": true,
+   "detail": "see LEAK lines",
+   "hard": true
+  },
+  {
+   "lang": "th",
+   "group": "judge",
+   "name": "every dimension averages 3.5 or better {'character': 4.43, 'drive': 3.86, 'language': 5.0, 'era': 4.86, 'format': 4.79, 'overall': 4.59}",
+   "ok": true,
+   "detail": "{'character': 4.43, 'drive': 3.86, 'language': 5.0, 'era': 4.86, 'format': 4.79, 'overall': 4.59}",
+   "hard": false
+  },
+  {
+   "lang": "th",
+   "group": "judge",
+   "name": "no reply scored under 3 overall",
+   "ok": true,
+   "detail": "see the lines marked",
+   "hard": false
   }
  ]
 }

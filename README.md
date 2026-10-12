@@ -116,6 +116,19 @@ only, never message text; conversations are kept in `talk_archive` after a night
 so no address is sent to another service and only the two-letter country is stored, never the IP. The admin also shows the device (phone, tablet, desktop) and the site
 each visitor came from.
 
+## The AI judge
+
+`app/judge.py` is a second model call that reads a character's reply and scores it 1 to 5 on five things: **in character**, **drives the talk** toward a decision,
+**language** (natural, correct, no mixing), **period** (nothing modern) and **format** (short, no meta talk), and flags whether the reply **leaked** the reward
+the player has not earned yet. It never changes a reply and never blocks a player. It is used three ways:
+
+- **Live.** `JUDGE_SAMPLE_RATE` (default 0.25) of real replies are scored in a background thread. Only numbers are stored (with the talk and reply index, never the text), and the
+  admin page shows averages per person and language, leaks and low scores, and a 🤖 score next to each reply in the transcripts. One extra model call per scored reply; set the rate to 0 to switch it off.
+- **`python -m evals.run --judge`** scores every character's replies in a language and fails the run if a reward leaked.
+- **`python -m evals.translations --lang th|zh|all`** checks the fixed Thai and Chinese text in `app/story.py` against the English for faithfulness (a reversed meaning scores 1) and naturalness.
+  It over-flags deliberate adaptations such as the martial-art names, so read its list, don't just obey it. The judge is a model from the same family as the characters, so it can be too kind about fluency:
+  it complements a native speaker's read and does not replace it.
+
 ## Evaluating
 
 1. **`pytest` (offline, free)**: the dice (stats total 30, damage is the dice, every martial art, ties), the story rules (arrivals, patience, standing down, rewards,
