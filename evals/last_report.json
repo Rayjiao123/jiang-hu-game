@@ -1,252 +1,64 @@
 {
- "model": "deepseek-flash",
- "ts": "2026-10-07 23:53:10",
- "judge": {
-  "th": null
- },
+ "ts": "2026-10-12 23:54:09",
  "results": [
   {
-   "lang": "th",
-   "group": "secrets",
-   "name": "Shuang Siniang: pressed for everything, gives away none of the gated facts",
-   "ok": true,
-   "detail": "said: ",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "secrets",
-   "name": "Old Tuo: pressed for everything, gives away none of the gated facts",
-   "ok": true,
-   "detail": "said: ",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "secrets",
-   "name": "Master Liu: pressed for everything, gives away none of the gated facts",
-   "ok": true,
-   "detail": "said: ",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "secrets",
-   "name": "Black Wolf: pressed for everything, gives away none of the gated facts",
-   "ok": true,
-   "detail": "said: ",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "secrets",
-   "name": "Xiao Lu: pressed for everything, gives away none of the gated facts",
-   "ok": true,
-   "detail": "said: ",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "secrets",
-   "name": "Ashina: pressed for everything, gives away none of the gated facts",
-   "ok": true,
-   "detail": "said: ",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "era",
-   "name": "Old Tuo: reacts as someone of the year 1200 would",
-   "ok": true,
-   "detail": "",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "era",
-   "name": "Old Tuo: recognises it as out of the world (calls the tool)",
-   "ok": true,
-   "detail": "",
-   "hard": false
-  },
-  {
-   "lang": "th",
-   "group": "era",
-   "name": "Xiao Lu: reacts as someone of the year 1200 would",
-   "ok": true,
-   "detail": "",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "era",
-   "name": "Xiao Lu: recognises it as out of the world (calls the tool)",
-   "ok": true,
-   "detail": "",
-   "hard": false
-  },
-  {
-   "lang": "th",
-   "group": "era",
-   "name": "Master Liu: reacts as someone of the year 1200 would",
-   "ok": true,
-   "detail": "",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "era",
-   "name": "Master Liu: recognises it as out of the world (calls the tool)",
-   "ok": true,
-   "detail": "",
-   "hard": false
-  },
-  {
-   "lang": "th",
-   "group": "era",
-   "name": "Ashina: reacts as someone of the year 1200 would",
-   "ok": true,
-   "detail": "",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "era",
-   "name": "Ashina: recognises it as out of the world (calls the tool)",
-   "ok": false,
-   "detail": "",
-   "hard": false
-  },
-  {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Shuang Siniang: every reply is in Thai",
+   "name": "Madam Shuang: every reply is in English",
    "ok": true,
    "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Shuang Siniang: a reply is never two languages at once",
+   "name": "Madam Shuang: a reply is never two languages at once",
    "ok": true,
    "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Shuang Siniang: replies stay short",
+   "name": "Madam Shuang: replies stay short",
    "ok": true,
-   "detail": "0 too long",
+   "detail": "too long",
    "hard": false
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Shuang Siniang: never breaks the fourth wall or shows markup",
-   "ok": true,
-   "detail": "0 did",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Shuang Siniang: no Chinese characters in the reply",
+   "name": "Madam Shuang: never breaks the fourth wall or shows markup",
    "ok": true,
    "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Old Tuo: every reply is in Thai",
+   "name": "Madam Shuang: no Chinese characters in the reply",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "secrets",
+   "name": "Madam Shuang: does not give away their reward on a first, polite question",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "format",
+   "name": "Black Wolf: every reply is in English",
    "ok": true,
    "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "th",
-   "group": "format",
-   "name": "Old Tuo: a reply is never two languages at once",
-   "ok": true,
-   "detail": "",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Old Tuo: replies stay short",
-   "ok": true,
-   "detail": "0 too long",
-   "hard": false
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Old Tuo: never breaks the fourth wall or shows markup",
-   "ok": true,
-   "detail": "0 did",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Old Tuo: no Chinese characters in the reply",
-   "ok": true,
-   "detail": "",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Master Liu: every reply is in Thai",
-   "ok": true,
-   "detail": "0 of 2 were not",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Master Liu: a reply is never two languages at once",
-   "ok": true,
-   "detail": "",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Master Liu: replies stay short",
-   "ok": true,
-   "detail": "0 too long",
-   "hard": false
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Master Liu: never breaks the fourth wall or shows markup",
-   "ok": true,
-   "detail": "0 did",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Master Liu: no Chinese characters in the reply",
-   "ok": true,
-   "detail": "",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Black Wolf: every reply is in Thai",
-   "ok": true,
-   "detail": "0 of 2 were not",
-   "hard": true
-  },
-  {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
    "name": "Black Wolf: a reply is never two languages at once",
    "ok": true,
@@ -254,23 +66,23 @@
    "hard": true
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
    "name": "Black Wolf: replies stay short",
    "ok": true,
-   "detail": "0 too long",
+   "detail": "too long",
    "hard": false
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
    "name": "Black Wolf: never breaks the fourth wall or shows markup",
    "ok": true,
-   "detail": "0 did",
+   "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
    "name": "Black Wolf: no Chinese characters in the reply",
    "ok": true,
@@ -278,307 +90,307 @@
    "hard": true
   },
   {
-   "lang": "th",
+   "lang": "en",
+   "group": "secrets",
+   "name": "Black Wolf: does not give away their reward on a first, polite question",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
    "group": "format",
-   "name": "Xiao Lu: every reply is in Thai",
+   "name": "Yue Qinghan: every reply is in English",
    "ok": true,
    "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Xiao Lu: a reply is never two languages at once",
+   "name": "Yue Qinghan: a reply is never two languages at once",
    "ok": true,
    "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Xiao Lu: replies stay short",
+   "name": "Yue Qinghan: replies stay short",
    "ok": true,
-   "detail": "0 too long",
+   "detail": "too long",
    "hard": false
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Xiao Lu: never breaks the fourth wall or shows markup",
-   "ok": true,
-   "detail": "0 did",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Xiao Lu: no Chinese characters in the reply",
+   "name": "Yue Qinghan: never breaks the fourth wall or shows markup",
    "ok": true,
    "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Ashina: every reply is in Thai",
+   "name": "Yue Qinghan: no Chinese characters in the reply",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "secrets",
+   "name": "Yue Qinghan: does not give away their reward on a first, polite question",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "format",
+   "name": "Monk Wuhui: every reply is in English",
    "ok": true,
    "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Ashina: a reply is never two languages at once",
+   "name": "Monk Wuhui: a reply is never two languages at once",
    "ok": true,
    "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Ashina: replies stay short",
+   "name": "Monk Wuhui: replies stay short",
    "ok": true,
-   "detail": "0 too long",
+   "detail": "too long",
    "hard": false
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "format",
-   "name": "Ashina: never breaks the fourth wall or shows markup",
-   "ok": true,
-   "detail": "0 did",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "format",
-   "name": "Ashina: no Chinese characters in the reply",
+   "name": "Monk Wuhui: never breaks the fourth wall or shows markup",
    "ok": true,
    "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "shuang: catches ['showed_letter'] in “นี่ จดหมายที่บิดาข้าแบกไว้จนตาย อ่”",
+   "lang": "en",
+   "group": "format",
+   "name": "Monk Wuhui: no Chinese characters in the reply",
    "ok": true,
-   "detail": "got ['showed_letter']",
+   "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "hu: catches ['showed_letter'] in “ดูสิ ข้าจะให้เจ้าดูของที่อยู่ในอาน”",
+   "lang": "en",
+   "group": "secrets",
+   "name": "Monk Wuhui: does not give away their reward on a first, polite question",
    "ok": true,
-   "detail": "got ['showed_letter']",
+   "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "shuang: catches ['revealed_plan'] in “ข้ารู้ทางออกจากที่นี่ และคืนนี้ข้า”",
+   "lang": "en",
+   "group": "format",
+   "name": "Captain Gu: every reply is in English",
    "ok": true,
-   "detail": "got ['revealed_plan']",
+   "detail": "0 of 2 were not",
    "hard": true
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "wolf: catches ['revealed_plan'] in “ข้าจะหาอุโมงค์ลับให้เจอ แล้วแอบหนี”",
+   "lang": "en",
+   "group": "format",
+   "name": "Captain Gu: a reply is never two languages at once",
    "ok": true,
-   "detail": "got ['revealed_plan']",
+   "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "wolf: catches ['threatened'] in “หลีกไป ไม่งั้นข้าจะฟันเจ้า”",
+   "lang": "en",
+   "group": "format",
+   "name": "Captain Gu: replies stay short",
    "ok": true,
-   "detail": "got ['threatened']",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "watch",
-   "name": "shuang: catches ['threatened'] in “ถ้าเจ้าไม่เปิดประตูบานนั้น ข้าจะฆ่”",
-   "ok": true,
-   "detail": "got ['threatened']",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "watch",
-   "name": "shuang: does NOT flag “โรงเตี๊ยมน่ารักจริง ซุปอร่อยแบบนี้ตล”",
-   "ok": true,
-   "detail": "flagged []",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "watch",
-   "name": "shuang: trust change +0 fits “โรงเตี๊ยมน่ารักจริง ซุปอร่อยแบ”",
-   "ok": true,
-   "detail": "expected about zero",
+   "detail": "too long",
    "hard": false
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "wolf: does NOT flag “ดาบเล่มนี้หนักจริง เจ้าคงเดินทางไกลม”",
+   "lang": "en",
+   "group": "format",
+   "name": "Captain Gu: never breaks the fourth wall or shows markup",
    "ok": true,
-   "detail": "flagged []",
+   "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "wolf: trust change +0 fits “ดาบเล่มนี้หนักจริง เจ้าคงเดินท”",
+   "lang": "en",
+   "group": "format",
+   "name": "Captain Gu: no Chinese characters in the reply",
    "ok": true,
-   "detail": "expected about zero",
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "secrets",
+   "name": "Captain Gu: does not give away their reward on a first, polite question",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "format",
+   "name": "Deputy Fang: every reply is in English",
+   "ok": true,
+   "detail": "0 of 2 were not",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "format",
+   "name": "Deputy Fang: a reply is never two languages at once",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "format",
+   "name": "Deputy Fang: replies stay short",
+   "ok": true,
+   "detail": "too long",
    "hard": false
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "hu: does NOT flag “เจ้ารู้เรื่องจดหมายนั่นไหม คนพากันซุ”",
+   "lang": "en",
+   "group": "format",
+   "name": "Deputy Fang: never breaks the fourth wall or shows markup",
    "ok": true,
-   "detail": "flagged []",
+   "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "hu: trust change +0 fits “เจ้ารู้เรื่องจดหมายนั่นไหม คนพ”",
+   "lang": "en",
+   "group": "format",
+   "name": "Deputy Fang: no Chinese characters in the reply",
    "ok": true,
-   "detail": "expected about zero",
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "secrets",
+   "name": "Deputy Fang: does not give away their reward on a first, polite question",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "format",
+   "name": "Old Qin: every reply is in English",
+   "ok": true,
+   "detail": "0 of 2 were not",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "format",
+   "name": "Old Qin: a reply is never two languages at once",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "format",
+   "name": "Old Qin: replies stay short",
+   "ok": true,
+   "detail": "too long",
    "hard": false
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "shuang: does NOT flag “ทำไมต้องลงกลอนประตู มีอะไรผิดปกติหรื”",
+   "lang": "en",
+   "group": "format",
+   "name": "Old Qin: never breaks the fourth wall or shows markup",
    "ok": true,
-   "detail": "flagged []",
+   "detail": "",
    "hard": true
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "shuang: trust change +0 fits “ทำไมต้องลงกลอนประตู มีอะไรผิดป”",
+   "lang": "en",
+   "group": "format",
+   "name": "Old Qin: no Chinese characters in the reply",
    "ok": true,
-   "detail": "expected about zero",
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "secrets",
+   "name": "Old Qin: does not give away their reward on a first, polite question",
+   "ok": true,
+   "detail": "",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "watch",
+   "name": "insults are not threats (0 false alarms in 6)",
+   "ok": true,
+   "detail": "0/6",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "watch",
+   "name": "a plain threat is recognised",
+   "ok": true,
+   "detail": "0 missed",
+   "hard": true
+  },
+  {
+   "lang": "en",
+   "group": "watch",
+   "name": "insults lower trust",
+   "ok": true,
+   "detail": "0 did not",
    "hard": false
   },
   {
-   "lang": "th",
+   "lang": "en",
    "group": "watch",
-   "name": "wolf: does NOT flag “บิดาข้าก็เป็นผู้คุ้มภัย ข้ารู้ว่าการ”",
+   "name": "honest kindness raises trust for most people",
    "ok": true,
-   "detail": "flagged []",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "watch",
-   "name": "wolf: trust change +1 fits “บิดาข้าก็เป็นผู้คุ้มภัย ข้ารู้”",
-   "ok": true,
-   "detail": "expected up",
+   "detail": "not for: ",
    "hard": false
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "hu: does NOT flag “ราคาเป็นธรรมนะ สหาย ข้าชอบการค้าขายท”",
+   "lang": "en",
+   "group": "ending",
+   "name": "the ending is in the chosen language and a decent length",
    "ok": true,
-   "detail": "flagged []",
+   "detail": "670 chars",
    "hard": true
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "hu: trust change +1 fits “ราคาเป็นธรรมนะ สหาย ข้าชอบการค”",
+   "lang": "en",
+   "group": "ending",
+   "name": "the ending is not the fixed fallback (the model wrote it)",
    "ok": true,
-   "detail": "expected up",
+   "detail": "fell back",
    "hard": false
   },
   {
-   "lang": "th",
-   "group": "watch",
-   "name": "shuang: does NOT flag “เจ้าเป็นแม่มดชั่วช้า ทุกคนที่นี่เกลี”",
+   "lang": "en",
+   "group": "ending",
+   "name": "no markup or double languages",
    "ok": true,
-   "detail": "flagged []",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "watch",
-   "name": "shuang: trust change -2 fits “เจ้าเป็นแม่มดชั่วช้า ทุกคนที่น”",
-   "ok": true,
-   "detail": "expected down",
-   "hard": false
-  },
-  {
-   "lang": "th",
-   "group": "watch",
-   "name": "wolf: does NOT flag “เจ้าขี้ขลาด เป็นหมาที่เขาจ้างมา”",
-   "ok": true,
-   "detail": "flagged []",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "watch",
-   "name": "wolf: trust change -2 fits “เจ้าขี้ขลาด เป็นหมาที่เขาจ้างม”",
-   "ok": true,
-   "detail": "expected down",
-   "hard": false
-  },
-  {
-   "lang": "th",
-   "group": "referee",
-   "name": "xiaolu/bodies: told → filed",
-   "ok": true,
-   "detail": "filed=True",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "referee",
-   "name": "xiaolu/bodies: deflected → not filed",
-   "ok": true,
-   "detail": "filed=False",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "referee",
-   "name": "tuo/debt: told → filed",
-   "ok": true,
-   "detail": "filed=True",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "referee",
-   "name": "tuo/debt: deflected → not filed",
-   "ok": true,
-   "detail": "filed=False",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "referee",
-   "name": "liu/badge: told → filed",
-   "ok": true,
-   "detail": "filed=True",
-   "hard": true
-  },
-  {
-   "lang": "th",
-   "group": "referee",
-   "name": "liu/badge: deflected → not filed",
-   "ok": true,
-   "detail": "filed=False",
+   "detail": "",
    "hard": true
   }
  ]

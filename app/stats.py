@@ -6,7 +6,7 @@ import json
 import time
 from collections import Counter, defaultdict
 
-from . import case, i18n
+from . import i18n, story
 
 
 def _who(visitor_id: str) -> str:
@@ -35,12 +35,12 @@ def summary(conn, days: int = 14) -> dict:
     uniq = lambda kind: len({e["vid"] for e in by_kind[kind]})
 
     visits = by_kind["visit"]
-    funnel = [("Opened the page", uniq("visit")), ("Started a night", uniq("start")), ("Talked to someone", uniq("talk")),
-              ("Asked Ray", uniq("gm")), ("Made the final move", uniq("move")), ("Reached an ending", uniq("end"))]
+    funnel = [("Opened the page", uniq("visit")), ("Rolled a thief", uniq("roll")), ("Started a night", uniq("start")), ("Talked to someone", uniq("talk")),
+              ("Fought someone", uniq("round")), ("Reached an ending", uniq("end"))]
 
     ends = by_kind["end"]
     endings = Counter(e["data"].get("ending", "?") for e in ends)
-    causes = Counter(e["data"].get("cause", "") for e in ends if e["data"].get("ending") == "dead")
+    causes = Counter(e["data"].get("killer", "") for e in ends if not e["data"].get("won"))
 
     # how long a finished night took: from the visitor's last start before the end
     starts: dict[str, list[float]] = defaultdict(list)
@@ -53,15 +53,17 @@ def summary(conn, days: int = 14) -> dict:
             mins.append((e["ts"] - max(before)) / 60)
 
     npcs = {}
-    for key, c in case.BY_KEY.items():
+    for key, c in story.BY_KEY.items():
         msgs = [e for e in by_kind["msg"] if e["data"].get("npc") == key]
         talks = [e for e in by_kind["talk"] if e["data"].get("npc") == key]
-        told = [e for e in by_kind["clue"] if e["data"].get("npc") == key]
+        rounds = [e for e in by_kind["round"] if e["data"].get("npc") == key]
         fb = [e for e in by_kind["feedback"] if e["data"].get("npc") == key]
-        npcs[key] = {"name": i18n.plain(c["name"]), "talks": len(talks), "messages": len(msgs), "clues_told": len(told),
+        npcs[key] = {"name": i18n.plain(c["name"]), "talks": len(talks), "messages": len(msgs), "rounds_fought": len(rounds),
                      "avg_trust_change": round(sum(e["data"].get("delta", 0) for e in msgs) / len(msgs), 2) if msgs else 0,
-                     "killed_her": sum(1 for e in msgs if e["data"].get("fatal")) + sum(1 for e in ends if e["data"].get("npc") == key),
+                     "killed_her": sum(1 for e in ends if e["data"].get("killer") == key),
                      "up": sum(1 for e in fb if e["data"].get("rating") == "up"), "down": sum(1 for e in fb if e["data"].get("rating") == "down")}
+    wins = sum(1 for e in ends if e["data"].get("won"))
+    builds = Counter((e["data"].get("off"), e["data"].get("defn")) for e in by_kind["start"])
 
     day_rows: dict[str, dict] = defaultdict(lambda: {"visits": 0, "starts": 0, "endings": 0, "messages": 0})
     for kind, field in (("visit", "visits"), ("start", "starts"), ("end", "endings"), ("msg", "messages")):
@@ -75,10 +77,11 @@ def summary(conn, days: int = 14) -> dict:
         "nights_started": len(by_kind["start"]), "nights_finished": len(ends), "nights_abandoned": len(by_kind["abandoned"]),
         "funnel": [{"step": s, "visitors": n} for s, n in funnel],
         "endings": dict(endings), "death_causes": {k or "?": v for k, v in causes.items()},
+        "win_rate": round(wins / len(ends), 3) if ends else None, "avg_fights_at_end": round(sum(e["data"].get("fights", 0) for e in ends) / len(ends), 1) if ends else None,
+        "builds": {f"{a} + {b}": n for (a, b), n in builds.most_common(8) if a},
         "avg_minutes_to_finish": round(sum(mins) / len(mins), 1) if mins else None,
         "avg_messages_at_end": round(sum(e["data"].get("msgs", 0) for e in ends) / len(ends), 1) if ends else None,
         "people": npcs,
-        "clues": dict(Counter(e["data"].get("id", "?") for e in by_kind["clue"])),
         "ai": {"player_messages": len(by_kind["msg"]), "ray_questions": len(by_kind["gm"]), "errors": len(by_kind["error"]),
                "errors_by_kind": dict(Counter(e["data"].get("kind", "?") for e in by_kind["error"]))},
         "feedback": {"up": sum(1 for e in by_kind["feedback"] if e["data"].get("rating") == "up"),
@@ -105,7 +108,7 @@ def transcripts(conn, limit: int = 40, only_down: bool = False) -> list[dict]:
             marked.append({"role": t["role"], "content": t["content"], "rating": ratings.get((r["id"], i)) if t["role"] == "assistant" else None})
         if only_down and not any(m["rating"] == "down" for m in marked):
             continue
-        out.append({"id": r["id"], "visitor": _who(r["visitor_id"]), "npc": i18n.plain(case.BY_KEY[r["npc_key"]]["name"]) if r["npc_key"] in case.BY_KEY else r["npc_key"],
+        out.append({"id": r["id"], "visitor": _who(r["visitor_id"]), "npc": i18n.plain(story.BY_KEY[r["npc_key"]]["name"]) if r["npc_key"] in story.BY_KEY else r["npc_key"],
                     "trust": r["trust"], "updated": time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["updated_at"])), "archived": bool(r["archived"]),
                     "turns": marked})
     return out[:limit]

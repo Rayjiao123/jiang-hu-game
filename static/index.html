@@ -12,24 +12,12 @@
 <body>
 
 <header class="topbar">
-  <button class="brand" id="brandBtn" type="button" aria-label="人在江湖，身不由己">
-    <span class="logo">人在江湖，身不由己</span>
-  </button>
-  <div class="clock" id="clock" hidden role="img"></div>
-  <button class="about gmbtn" id="gmBtn" type="button" aria-haspopup="dialog" aria-expanded="false" hidden><span class="avatar mini" id="gmBtnImg"></span><span class="gm-label" data-t="ask_ray">Ask Ray</span></button>
-  <div class="me" id="me" hidden>
-    <button class="me-btn" id="meBtn" type="button" aria-haspopup="dialog">
-      <span class="avatar" id="meImg"></span>
-      <span class="me-text"><b id="meName"></b></span>
-    </button>
-  </div>
-  <button class="menu-btn" id="menuBtn" type="button" aria-haspopup="menu" aria-expanded="false" data-t-aria="menu">☰</button>
+  <button class="brand" id="brandBtn" type="button" aria-label="人在江湖，身不由己"><span class="logo">人在江湖，身不由己</span></button>
+  <button class="gmbtn" id="gmBtn" type="button" aria-haspopup="dialog" aria-expanded="false" hidden><span class="avatar mini" id="gmBtnImg"></span><span data-t="ask_ray">Ask Ray</span></button>
 </header>
-<nav class="menu panel" id="menu" role="menu" hidden data-t-aria="menu"></nav>
 
 <main id="app">
 
-  <!-- shown until the game has started; if something breaks it says so instead of staying blank -->
   <section class="screen on loading" id="screen-loading" aria-live="polite">
     <div class="loading-card">
       <div class="logo">人在江湖，身不由己</div>
@@ -39,58 +27,64 @@
     </div>
   </section>
 
-  <!-- 1. THE GATE: the language, the game, the heroine and her goal, the game master, and a way in. One screen. -->
+  <!-- 1. HOME: language, the scene, the goal, the thief you roll, and Ray -->
   <section class="screen gate" id="screen-gate">
-    <canvas id="gateBg" aria-hidden="true"></canvas>
+    <canvas id="gateBg" class="bg" aria-hidden="true"></canvas>
     <div class="gate-scrim"></div>
     <div class="gate-card">
       <div class="lang-block">
         <div class="lang-label">🌐 Language · 语言 · ภาษา</div>
         <div class="lang-pick big" id="gateLang" role="group" data-t-aria="language">
-          <button type="button" data-lang="en" aria-pressed="false"><b>English</b><small>Play in English</small></button>
-          <button type="button" data-lang="zh" aria-pressed="false"><b>中文</b><small>用中文游玩</small></button>
-          <button type="button" data-lang="th" aria-pressed="false"><b>ไทย</b><small>เล่นเป็นภาษาไทย</small></button>
+          <button type="button" data-lang="en" aria-pressed="false"><b>English</b></button>
+          <button type="button" data-lang="zh" aria-pressed="false"><b>中文</b></button>
+          <button type="button" data-lang="th" aria-pressed="false"><b>ไทย</b></button>
         </div>
       </div>
-      <p class="kicker"><span data-t="kicker_tag">Dark wuxia</span> <span class="kicker-text" data-t="kicker">a story game</span></p>
+      <p class="kicker"><span data-t="kicker_tag">Dark wuxia</span> <span class="kicker-text" data-t="kicker">a 5-minute survival game</span></p>
       <h1 class="gate-title">人在江湖，<br>身不由己</h1>
-      <p class="gate-en" data-t="gate_sub">Helpless in the Jianghu</p>
-      <p class="setting" data-t="setting"></p>
-      <div class="duo">
-        <div class="who-card panel">
+      <p class="gate-en" id="gateSub"></p>
+
+      <div class="block"><h2 data-t="h_scene">The scene</h2><p id="gateSetup" class="story"></p></div>
+      <div class="block goal"><h2 data-t="h_goal">Your goal</h2><p id="gateGoal" class="story"></p><p id="gateHow" class="small"></p></div>
+
+      <div class="block roll">
+        <h2 data-t="h_thief">Your thief</h2>
+        <div class="who">
           <div class="face" id="gateHero"></div>
-          <div class="who-text">
-            <b><span id="gateHeroName"></span> <i data-t="you">you</i></b>
-            <span data-t="hero_goal"></span>
-          </div>
+          <div class="who-text"><b id="gateHeroName"></b> <i id="gateHeroTitle"></i><p id="gateHeroBio" class="small"></p></div>
         </div>
-        <div class="who-card panel">
+        <div class="stats" id="gateStats"></div>
+        <div class="arts" id="gateArts"></div>
+        <button class="btn ghost reroll" id="reroll" type="button"><span class="die" aria-hidden="true">🎲</span> <span data-t="reroll">Roll again</span></button>
+      </div>
+
+      <div class="block gm">
+        <div class="who">
           <div class="face" id="gateGm"></div>
-          <div class="who-text">
-            <b><span id="gateGmName"></span> <i data-t="gm_tag">game master</i></b>
-            <span data-t="gm_goal"></span>
-          </div>
+          <div class="who-text"><b id="gateGmName"></b> <i data-t="gm_tag">game master</i><p class="small" data-t="gm_goal"></p></div>
         </div>
       </div>
+
       <button class="btn big" id="gateStart" type="button" data-t="enter">Enter the inn</button>
+      <button class="btn ghost" id="gateReset" type="button" data-t="start_over" hidden>Start over</button>
       <p class="gate-warn" data-t="warn"></p>
       <p class="gate-privacy" data-t="privacy"></p>
     </div>
   </section>
 
-  <!-- 2. THE INN: who is here -->
-  <section class="screen scene" id="screen-scene">
-    <canvas class="bg" id="sceneBg" aria-hidden="true"></canvas>
-    <div class="scene-wrap">
-      <button class="home-link" id="homeLink" type="button" data-t="home_arrow">← Home</button>
-      <button class="ray-strip panel" id="scNews" type="button" data-t-aria="ask_ray"></button>
-      <h2 class="scene-title"><span data-t="scene_title">The Black Sand Inn</span> <em data-t="scene_sub">Who do you talk to?</em></h2>
+  <!-- 2. THE INN: HUD, the night's story, the people, the door -->
+  <section class="screen game" id="screen-game">
+    <canvas class="bg" id="gameBg" aria-hidden="true"></canvas>
+    <div class="game-wrap">
+      <div class="hud panel" id="hud"></div>
+      <div class="feed panel" id="feed" aria-live="polite"></div>
       <div class="people" id="people"></div>
-      <button class="btn move-btn" id="sceneMove" type="button" data-t="move">Make your move</button>
+      <p class="incoming" id="incoming"></p>
+      <button class="btn door" id="doorBtn" type="button"></button>
     </div>
   </section>
 
-  <!-- 3. A CONVERSATION: a chat, so every reply and every clue stays on the page -->
+  <!-- 3. A CONVERSATION -->
   <section class="screen talk" id="screen-talk">
     <canvas class="bg" id="talkBg" aria-hidden="true"></canvas>
     <div class="chat">
@@ -98,60 +92,63 @@
         <button class="btn ghost back" id="talkBack" type="button" data-t-aria="back_inn">←</button>
         <span class="avatar" id="chatAvatar"></span>
         <div class="chat-who"><b id="chatName"></b><small id="chatTitle"></small></div>
-        <div class="chat-trust" id="chatTrust" aria-live="polite"></div>
+        <button class="btn fight-btn" id="chatFight" type="button" data-t="fight">Fight</button>
       </header>
+      <div class="chat-meta panel" id="chatMeta"></div>
       <div class="thread" id="thread" aria-live="polite"></div>
       <div class="quick" id="quick"></div>
       <p class="note" id="talkNote" hidden></p>
       <form class="composer panel" id="talkForm">
-        <label for="talkInput" data-t="say_label">Say something as Qinghe</label>
+        <label for="talkInput" class="sr" data-t="say_label">Say something as Yan Qi</label>
         <input id="talkInput" autocomplete="off" maxlength="500" data-t-ph="say_ph">
         <button class="btn jade" id="talkSend" type="submit" data-t="say">Say</button>
         <button class="btn ghost" id="talkStop" type="button" hidden data-t="stop">Stop</button>
       </form>
     </div>
   </section>
+
+  <!-- 4. A FIGHT -->
+  <section class="screen fight" id="screen-fight">
+    <canvas class="bg" id="fightBg" aria-hidden="true"></canvas>
+    <div class="fight-wrap">
+      <div class="duel panel">
+        <div class="fighter" id="fHero"></div>
+        <div class="vs">VS</div>
+        <div class="fighter" id="fFoe"></div>
+      </div>
+      <div class="rolls panel" id="rolls" aria-live="polite"></div>
+      <div class="battle-log" id="battleLog" aria-live="polite"></div>
+      <div class="fight-actions" id="fightActions">
+        <button class="btn act" id="atkBtn" type="button"></button>
+        <button class="btn act art" id="artBtn" type="button"></button>
+        <button class="btn act ghost" id="grdBtn" type="button"></button>
+        <button class="btn act ghost" id="ctrBtn" type="button"></button>
+      </div>
+      <button class="btn big jade" id="fightDone" type="button" hidden></button>
+    </div>
+  </section>
 </main>
 
-<!-- Qinghe -->
+<!-- Your thief -->
 <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mdTitle">
   <div class="modal-card panel">
     <button class="x" id="mdClose" type="button" data-t-aria="close">×</button>
     <h2 id="mdTitle" class="sr"></h2>
-    <div class="md-grid">
-      <div class="md-portrait" id="mdPortrait"></div>
-      <div class="md-body" id="mdBody"></div>
-    </div>
-    <div class="md-actions">
-      <button class="btn ghost" id="mdNew" type="button" data-t="start_over">Start the night over</button>
-      <div class="md-confirm" id="mdConfirm" hidden>
-        <p data-t="start_over_note"></p>
-        <button class="btn" id="mdYes" type="button" data-t="yes_start_over">Yes, start over</button>
-        <button class="btn ghost" id="mdNo" type="button" data-t="cancel">Cancel</button>
-      </div>
-    </div>
+    <div class="md-body" id="mdBody"></div>
   </div>
 </div>
 
-<!-- Ray: what you've learned, and the game master to talk to -->
+<!-- Ray -->
 <aside class="sheet gm-drawer panel" id="gmDrawer" hidden role="dialog" data-t-aria="ask_ray">
   <header>
     <span class="gm-head"><span class="avatar mini" id="gmDrawerImg"></span><span id="gmDrawerName"></span> <em data-t="game_master">Game master</em></span>
-    <span class="clock-line" id="gmClock"></span>
     <button class="x" id="gmClose" type="button" data-t-aria="close">×</button>
   </header>
-  <div class="sheet-body" id="gmBody">
-    <details class="learned" id="gmLearned">
-      <summary id="gmLearnedSum"></summary>
-      <div class="clues" id="gmClues"></div>
-      <div class="ways" id="gmWays"></div>
-    </details>
-    <div class="gm-log" id="gmLog"></div>
-  </div>
+  <div class="sheet-body" id="gmBody"><div class="gm-log" id="gmLog"></div></div>
   <div class="quick gm-quick" id="gmQuick"></div>
   <p class="note" id="gmNote" hidden></p>
   <form class="composer" id="gmForm">
-    <label for="gmInput" data-t="ask_ray">Ask Ray</label>
+    <label for="gmInput" class="sr" data-t="ask_ray">Ask Ray</label>
     <input id="gmInput" autocomplete="off" maxlength="400" data-t-ph="ray_ph">
     <button class="btn" id="gmSend" type="submit" data-t="ask">Ask</button>
   </form>
@@ -165,38 +162,31 @@
       <div class="md-body">
         <h2 id="plTitle" class="pl-title" data-t="inn_name">The Black Sand Inn</h2>
         <div class="pl-by" data-t="ray_says">Ray, your game master, says</div>
-        <div class="bi pl-text" id="plText"></div>
+        <div class="pl-text" id="plText"></div>
         <button class="btn big" id="plGo" type="button" data-t="push_door">Push the door</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- the move: the last one she makes -->
-<div class="modal" id="move" hidden role="dialog" aria-modal="true" aria-labelledby="mvTitle">
-  <div class="modal-card panel accuse">
-    <button class="x" id="mvClose" type="button" data-t-aria="close">×</button>
-    <h2 id="mvTitle" class="pl-title" data-t="move_title">Make your move</h2>
-    <p class="case-lead" data-t="move_lead"></p>
-    <div class="fate-list" id="mvPaths"></div>
-    <p class="note" id="mvNote"></p>
+<!-- leaving into the storm needs a second thought -->
+<div class="modal" id="leaveModal" hidden role="dialog" aria-modal="true" aria-labelledby="lvTitle">
+  <div class="modal-card panel">
+    <h2 id="lvTitle" class="pl-title" data-t="leave_title">Go out into the storm?</h2>
+    <p data-t="leave_warn"></p>
+    <div class="md-actions"><button class="btn" id="lvYes" type="button" data-t="leave_yes">Go out anyway</button> <button class="btn ghost" id="lvNo" type="button" data-t="cancel">Cancel</button></div>
   </div>
 </div>
 
 <div class="modal" id="endModal" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
   <div class="modal-card panel ending">
+    <div class="end-status" id="endStatus"></div>
     <h2 id="endTitle" class="pl-title"></h2>
     <div class="end-text" id="endText"></div>
+    <div class="end-stats" id="endStats"></div>
     <div class="end-track" id="endTrack"></div>
-    <div class="md-actions"><button class="btn big" id="endAgain" type="button" data-t="play_again">Play again</button> <button class="btn ghost" id="endStay" type="button" data-t="stay">Stay</button> <button class="btn ghost" id="endHome" type="button" data-t="home">Home</button></div>
+    <div class="md-actions"><button class="btn big" id="endAgain" type="button" data-t="play_again">Play again</button> <button class="btn ghost" id="endHome" type="button" data-t="home">Home</button></div>
   </div>
-</div>
-
-<!-- Ray speaks up when the night moves on -->
-<div class="gm-toast panel" id="gmToast" hidden role="status" aria-live="polite">
-  <span class="avatar" id="gmToastImg"></span>
-  <div><b id="gmToastName"></b><div class="bi" id="gmToastText"></div></div>
-  <button class="x" id="gmToastX" type="button" data-t-aria="close">×</button>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

@@ -11,6 +11,8 @@ from contextlib import contextmanager
 
 from . import config
 
+STATE_VERSION = 2          # bump whenever the shape of a saved night changes: older nights are dropped instead of breaking the page
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS plays (
     visitor_id TEXT PRIMARY KEY,
@@ -81,9 +83,9 @@ def init() -> None:
     with session() as conn:
         conn.executescript(SCHEMA)
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(plays)")}      # a night saved by the earlier version lacks these
-        for name in ("path", "cause"):
+        for name, default in (("path", "''"), ("cause", "''"), ("state", "'{}'")):
             if name not in cols:
-                conn.execute(f"ALTER TABLE plays ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
+                conn.execute(f"ALTER TABLE plays ADD COLUMN {name} TEXT NOT NULL DEFAULT {default}")
 
 
 # ---------- the night: one per visitor ----------
@@ -92,8 +94,12 @@ def get_play(conn, visitor_id: str) -> dict | None:
     r = conn.execute("SELECT * FROM plays WHERE visitor_id = ?", (visitor_id,)).fetchone()
     if not r:
         return None
+    if json.loads(r["state"] or "{}").get("v") != STATE_VERSION:       # a night saved by an earlier version of the game cannot be continued
+        delete_play(conn, visitor_id)
+        return None
     return {"visitor_id": r["visitor_id"], "stage": r["stage"], "found": json.loads(r["found"]), "beat": r["beat"], "msgs": r["msgs"],
-            "tier": r["tier"], "path": r["path"], "cause": r["cause"], "turns": json.loads(r["turns"]), "ending": r["ending"]}
+            "tier": r["tier"], "path": r["path"], "cause": r["cause"], "turns": json.loads(r["turns"]), "ending": r["ending"],
+            "state": json.loads(r["state"] or "{}")}
 
 
 def log(conn, visitor_id: str, event: str, **data) -> None:
@@ -101,23 +107,23 @@ def log(conn, visitor_id: str, event: str, **data) -> None:
     conn.execute("INSERT INTO events (ts, visitor_id, kind, data) VALUES (?,?,?,?)", (time.time(), visitor_id, event, json.dumps(data, ensure_ascii=False)))
 
 
-def new_play(conn, visitor_id: str, found: list[str]) -> dict:
+def new_play(conn, visitor_id: str, state: dict, stage: str = "rolling") -> dict:
     """Start again: any earlier night is closed (its conversations are archived) and a new one begins."""
     delete_play(conn, visitor_id)
-    conn.execute("INSERT INTO plays (visitor_id, stage, found, updated_at) VALUES (?,?,?,?)",
-                 (visitor_id, "playing", json.dumps(found), time.time()))
-    log(conn, visitor_id, "start")
+    conn.execute("INSERT INTO plays (visitor_id, stage, state, updated_at) VALUES (?,?,?,?)",
+                 (visitor_id, stage, json.dumps(state, ensure_ascii=False), time.time()))
     return get_play(conn, visitor_id)
 
 
 def save_play(conn, g: dict) -> None:
     before = conn.execute("SELECT stage FROM plays WHERE visitor_id = ?", (g["visitor_id"],)).fetchone()
     if before and before["stage"] not in ("dead", "solved") and g["stage"] in ("dead", "solved"):
-        log(conn, g["visitor_id"], "end", stage=g["stage"], ending=("dead" if g["stage"] == "dead" else g["path"]), cause=g["cause"], beat=g["beat"],
-            msgs=g["msgs"], clues=len([c for c in g["found"] if c != "official"]), path=g["path"])
-    conn.execute("UPDATE plays SET stage = ?, found = ?, beat = ?, msgs = ?, tier = ?, path = ?, cause = ?, turns = ?, ending = ?, updated_at = ? WHERE visitor_id = ?",
+        st = g["state"]
+        log(conn, g["visitor_id"], "end", stage=g["stage"], ending=g["cause"], beat=g["beat"], msgs=g["msgs"], won=g["stage"] == "solved",
+            hp=st.get("hero", {}).get("hp", 0), fights=st.get("fights", 0), killer=st.get("killer", ""), rewards=sum(1 for n in st.get("npcs", {}).values() if n.get("rewarded")))
+    conn.execute("UPDATE plays SET stage = ?, found = ?, beat = ?, msgs = ?, tier = ?, path = ?, cause = ?, turns = ?, ending = ?, state = ?, updated_at = ? WHERE visitor_id = ?",
                  (g["stage"], json.dumps(g["found"]), g["beat"], g["msgs"], g["tier"], g["path"], g["cause"], json.dumps(g["turns"], ensure_ascii=False),
-                  g["ending"], time.time(), g["visitor_id"]))
+                  g["ending"], json.dumps(g["state"], ensure_ascii=False), time.time(), g["visitor_id"]))
 
 
 def delete_play(conn, visitor_id: str) -> None:

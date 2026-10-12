@@ -1,5 +1,6 @@
-"""人在江湖，身不由己 web server: the page, the story API and the DeepSeek-powered characters and game master."""
+"""人在江湖，身不由己 web server: the page, the game rules and the DeepSeek-powered characters and game master."""
 import json
+import random
 import re
 import secrets
 import uuid
@@ -11,7 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, case, config, db, game, i18n, prompts, ratelimit, stats
+from . import agent, config, db, i18n, prompts, ratelimit, rules, stats, story
 from .i18n import tr
 from .ratelimit import RateLimited
 
@@ -19,6 +20,7 @@ app = FastAPI(title="人在江湖，身不由己")
 db.init()
 
 _client: openai.OpenAI | None = None
+_dice = random.SystemRandom()
 
 
 def llm() -> openai.OpenAI:
@@ -58,8 +60,8 @@ class NewTalk(BaseModel):
     npc: str = Field(max_length=20)
 
 
-class Move(BaseModel):
-    path: str = Field(max_length=20)
+class Round(BaseModel):
+    action: str = Field(pattern="^(strike|art|guard|counter)$")
 
 
 def sse(events: Iterator[dict], lang: str = i18n.DEFAULT) -> StreamingResponse:
@@ -104,6 +106,153 @@ def _L(request: Request, data):
     return i18n.localize(data, request.state.lang)
 
 
+# ---------- the night: the state kept for each visitor ----------
+
+def _fresh_state() -> dict:
+    """A new thief: thirty points over three stats, and one martial art to attack with and one to defend with."""
+    stats_ = rules.roll_stats(_dice)
+    hp = rules.max_hp(stats_)
+    return {"v": db.STATE_VERSION, "hero": {**stats_, "qi": rules.start_qi(stats_), "hp": hp, "hp_max": hp, "off": _dice.choice(rules.OFFENCE), "defn": _dice.choice(rules.DEFENCE)},
+            "tick": 0, "rounds": 0, "intent": "quick", "fights": 0, "shortcut": 0, "edges": {}, "fight": None, "killer": "", "feed": [], "log": [],
+            "npcs": {c["key"]: {"status": "away", "hp": c["hp"], "trust": c["start_trust"], "arrived": -1, "rewarded": False, "talks": 0, "ambush": False} for c in story.CAST}}
+
+
+def _exit_at(st: dict) -> int:
+    return max(story.SHORTEST, story.STORM_END - st["shortcut"])
+
+
+def _say(st: dict, kind: str, text: str, plain: str = "", npc: str = "") -> dict:
+    """One line in the night's story, shown to the player in her language, and kept in plain English for Ray's ending."""
+    item = {"kind": kind, "text": text, "tick": st["tick"], "npc": npc}
+    st["feed"] = (st["feed"] + [item])[-40:]
+    if plain:
+        st["log"] = (st["log"] + [f"[beat {st['tick']}] {plain}"])[-40:]
+    return {"type": "feed", "item": item}
+
+
+def _name(key: str) -> str:
+    return i18n.plain(story.BY_KEY[key]["name"])
+
+
+def _arrive(st: dict) -> list[dict]:
+    out = []
+    for c in story.CAST:
+        n = st["npcs"][c["key"]]
+        if n["status"] == "away" and c["arrive"] <= st["tick"]:
+            n.update(status="here", arrived=st["tick"])
+            out.append(_say(st, "arrival", c["arrival"], f"{_name(c['key'])} ({i18n.plain(c['title'])}) arrived.", c["key"]))
+    return out
+
+
+def _turn_hostile(st: dict, key: str, ambush: bool = True) -> None:
+    """They are going to fight her. Unless she started it, they get the first blow."""
+    st["npcs"][key].update(status="hostile", ambush=ambush)
+
+
+def _fuses(st: dict) -> None:
+    """The righteous and the law do not wait for ever; and anybody whose trust is gone turns on her."""
+    for c in story.CAST:
+        n = st["npcs"][c["key"]]
+        if n["status"] == "here":
+            if c.get("fuse") and st["tick"] - n["arrived"] >= c["fuse"]:
+                _turn_hostile(st, c["key"])
+            elif n["trust"] <= 0:
+                _turn_hostile(st, c["key"])
+
+
+def _start_fight_if_needed(st: dict) -> list[dict]:
+    if st["fight"]:
+        return []
+    for c in story.CAST:
+        n = st["npcs"][c["key"]]
+        if n["status"] == "hostile":
+            return _begin_fight(st, c["key"], n.get("ambush", False))
+    return []
+
+
+def _begin_fight(st: dict, key: str, ambush: bool = False) -> list[dict]:
+    n, c = st["npcs"][key], story.BY_KEY[key]
+    n["status"] = "fighting"
+    st["fight"], st["rounds"] = key, 0
+    st["fights"] += 1
+    st["intent"] = rules.pick_intent(_dice)
+    out = [_say(st, "fight", c["hostile"], f"{_name(key)} attacked her.", key), {"type": "fight", "npc": key}]
+    if ambush:
+        foe = {"hp": n["hp"], "atk": c["atk"], "defn": c["defn"], "dmg": c["dmg"]}
+        hit = rules.ambush(st["hero"], foe, _dice)
+        out.append(_say(st, "fight", tr("They strike first, before you are ready!", "他抢先出手，你措手不及！", "เขาลงมือก่อนก่อนที่เจ้าจะทันตั้งตัว!"),
+                        f"{_name(key)} got the first blow in ({hit['damage']} damage)." if hit["hit"] else f"{_name(key)} struck first but missed.", key))
+        out.append({"type": "ambush", "result": hit})
+    return out
+
+
+def _storm_check(st: dict) -> list[dict]:
+    if st["tick"] >= _exit_at(st) and not st.get("storm_said"):
+        st["storm_said"] = True
+        return [_say(st, "storm", tr("The wind drops. The storm is passing, and the door can be opened. You can leave now.", "风小了，沙暴正在过去，大门可以打开了。你现在可以走了。", "ลมสงบ พายุกำลังผ่านไป ประตูเปิดได้แล้ว เจ้าออกไปได้เลย"), "The storm passed; she could leave.", "")]
+    return []
+
+
+def _advance(st: dict, beats: int = 1) -> list[dict]:
+    """Let the night go on. People arrive, patience runs out, and anyone out of patience attacks."""
+    out = []
+    for _ in range(beats):
+        st["tick"] += 1
+        out += _arrive(st)
+        _fuses(st)
+    return out + _storm_check(st) + _start_fight_if_needed(st)
+
+
+def _apply_reward(st: dict, key: str, how: str) -> list[dict]:
+    """What a person gives, once they trust her or once she has beaten them. The server decides it, never the model."""
+    n, c = st["npcs"][key], story.BY_KEY[key]
+    if n["rewarded"]:
+        return []
+    n["rewarded"] = True
+    e, hero = c["reward"]["effect"], st["hero"]
+    if e["kind"] == "heal":
+        hero["hp"] = min(hero["hp_max"], hero["hp"] + e["n"])
+    elif e["kind"] == "edge":
+        st["edges"][e["target"]] = st["edges"].get(e["target"], 0) + e["n"]
+    elif e["kind"] == "shortcut":
+        st["shortcut"] += e["n"]
+    return [_say(st, "gain", c["reward"]["gain"], f"{_name(key)} gave her something ({how}): {c['reward']['fact']}", key)]
+
+
+def _finish(g: dict, stage: str, cause: str) -> None:
+    g.update(stage=stage, cause=cause)
+
+
+# ---------- the state the page needs ----------
+
+def _look(art: str) -> dict:
+    return {"key": art, "name": story.ARTS[art]["name"], "does": story.ARTS[art]["does"]}
+
+
+def _state(g: dict) -> dict:
+    st = g["state"]
+    h = st["hero"]
+    npcs = []
+    for c in story.CAST:
+        n = st["npcs"][c["key"]]
+        if n["status"] == "away":
+            continue
+        fuse_left = max(0, c["fuse"] - (st["tick"] - n["arrived"])) if c.get("fuse") and n["status"] == "here" else None
+        npcs.append({**story.public_card(c["key"]), "goal": c["goal"], "talks": n["talks"], "talk_limit": c["talk_limit"], "status": n["status"], "hp": n["hp"], "hp_max": c["hp"], "trust": n["trust"], "rewarded": n["rewarded"],
+                     "fuse_left": fuse_left, "goal_trust": c["reward"]["trust"]})
+    away = [c["arrive"] for c in story.CAST if st["npcs"][c["key"]]["status"] == "away"]
+    fight = None
+    if st["fight"]:
+        c, n = story.BY_KEY[st["fight"]], st["npcs"][st["fight"]]
+        fight = {"npc": st["fight"], "hp": n["hp"], "hp_max": c["hp"], "edge": story.edge_for(st["edges"], st["fight"]), "intent": st["intent"]}
+    over = g["stage"] in ("solved", "dead")
+    return {"stage": g["stage"], "hero": {**story.hero_card(), "str": h["str"], "int": h["int"], "agi": h["agi"], "hp": h["hp"], "hp_max": h["hp_max"], "qi": h["qi"], "qi_max": rules.QI_MAX,
+                                          "off": _look(h["off"]), "defn": _look(h["defn"]), "defence_bonus": rules.defence_bonus(h)},
+            "tick": st["tick"], "storm_end": story.STORM_END, "exit_at": _exit_at(st), "can_leave": st["tick"] >= _exit_at(st), "npcs": npcs,
+            "incoming": len(away), "next_in": (min(away) - st["tick"]) if away else None, "fight": fight, "edges": st["edges"], "feed": st["feed"][-30:],
+            "ending_key": g["cause"] if over else "", "won": g["stage"] == "solved", "ending": g["ending"], "killer": st["killer"], "gm_turns": g["turns"][-12:]}
+
+
 # ---------- read-only ----------
 
 @app.get("/api/status")
@@ -113,11 +262,13 @@ def status():
 
 @app.get("/api/case")
 def get_case(request: Request):
-    """What the landing page shows before anyone has started: the story, the people in the inn, the game master."""
+    """What the home page shows before anyone has started: the setting, the goal, the rules, the people, the game master."""
     with db.session() as conn:
         db.log(conn, request.state.vid, "visit", returning=not request.state.fresh, lang=request.state.lang)
-    return _L(request, {"title": case.CASE_TITLE, "situation": case.SITUATION, "prologue": case.PROLOGUE, "cast": [case.public_card(k) for k in case.BY_KEY],
-                        "hero": case.hero_card(), "gm": case.gm_card(), "categories": case.CATEGORIES, "fates": case.FATES})
+    return _L(request, {"title": story.TITLE, "setup": story.SETUP, "goal": story.GOAL, "how_to": story.HOW_TO, "prologue": story.PROLOGUE,
+                        "cast": [story.public_card(c["key"]) for c in story.CAST], "gm": story.gm_card(), "moods": story.MOODS, "notes": story.NOTES,
+                        "stats": story.STATS, "arts": story.ARTS, "storm_end": story.STORM_END,
+                        "endings": {k: {"title": v["title"], "won": v["won"]} for k, v in story.ENDINGS.items()}})
 
 
 def _play(conn, vid: str, stage: str | tuple | None = None) -> dict:
@@ -129,46 +280,40 @@ def _play(conn, vid: str, stage: str | tuple | None = None) -> dict:
     return g
 
 
-def _events(upto: int) -> list[dict]:
-    return [{"beat": b, "text": case.event_for(b)} for b in range(1, min(upto, case.DAWN_BEAT) + 1) if case.event_for(b)]
-
-
-def _ways(found: list[str]) -> dict:
-    """How close each way out is: only counts, never what is missing."""
-    return {k: {"have": len([n for n in v["needs"] if n in found]), "need": len(v["needs"]), "label": case.CATEGORIES[k]} for k, v in case.PATHS.items()}
-
-
-def _state(conn, g: dict) -> dict:
-    """Everything the page needs to draw the night, and nothing the visitor has not earned."""
-    found = g["found"]
-    cast = []
-    for k in case.BY_KEY:
-        card = case.public_card(k)
-        talk = db.find_talk(conn, g["visitor_id"], k)
-        card.update(clues_told=sum(1 for c in case.BY_KEY[k]["topics"] if c in found), met=bool(talk and talk["turns"]),
-                    trust=talk["trust"] if talk else None)
-        cast.append(card)
-    out = {"stage": g["stage"], "cast": cast, "found": [case.clue_view(c) for c in found if c in case.CLUES], "clock": case.clock(g["beat"]),
-           "events": _events(g["beat"]), "ending": g["ending"], "path": g["path"], "cause": g["cause"],
-           "ending_key": "dead" if g["stage"] == "dead" else (g["path"] if g["stage"] == "solved" else ""), "prologue": case.PROLOGUE, "hero": case.hero_card(), "gm": case.gm_card(),
-           "ways": _ways(found), "unmet": len(case.discoverable()) - len([c for c in found if case.CLUES[c]["holder"]]), "gm_turns": g["turns"][-12:]}
-    return out
-
-
 @app.get("/api/game")
 def get_game(request: Request):
     with db.session() as conn:
         g = db.get_play(conn, request.state.vid)
-        return _L(request, {"game": _state(conn, g) if g else None})
+        return _L(request, {"game": _state(g) if g else None})
+
+
+@app.post("/api/roll")
+def roll(request: Request):
+    """Roll a thief: thirty points over Strength, Intelligence and Agility, and two martial arts. As many rolls as she likes before the night starts."""
+    with db.session() as conn:
+        g = db.get_play(conn, request.state.vid)
+        if g and g["stage"] == "playing":
+            raise HTTPException(409, tr("The night has already begun. Start over from the menu to roll again.", "夜晚已经开始。要重新掷骰，请在菜单里重新开始。", "ค่ำคืนเริ่มแล้ว ถ้าอยากทอยใหม่ให้เริ่มใหม่จากเมนู"))
+        g = db.new_play(conn, request.state.vid, _fresh_state(), "rolling")
+        db.log(conn, request.state.vid, "roll", lang=request.state.lang)
+        return _L(request, {"game": _state(g)})
 
 
 @app.post("/api/game/start")
 def start_game(request: Request):
-    """The night begins: the doors are barred, and that is the first thing she knows."""
+    """The night begins with the thief she rolled, and the door still banging."""
     with db.session() as conn:
-        g = db.new_play(conn, request.state.vid, ["official"])
-        db.log(conn, request.state.vid, "language", lang=request.state.lang)
-        return _L(request, {"game": _state(conn, g)})
+        g = db.get_play(conn, request.state.vid)
+        if not g or g["stage"] != "rolling":
+            g = db.new_play(conn, request.state.vid, _fresh_state(), "rolling")
+        st = g["state"]
+        g["stage"] = "playing"
+        _say(st, "start", story.START_LINE, "She was hiding in the Black Sand Inn with a stolen jade seal while a sandstorm closed the road.")
+        _arrive(st)
+        db.save_play(conn, g)
+        h = st["hero"]
+        db.log(conn, request.state.vid, "start", lang=request.state.lang, str=h["str"], int=h["int"], agi=h["agi"], off=h["off"], defn=h["defn"])
+        return _L(request, {"game": _state(g)})
 
 
 @app.post("/api/game/reset")
@@ -180,123 +325,59 @@ def reset_game(request: Request):
 
 # ---------- language helpers ----------
 
-def _finish(client, vid: str, ev: dict, lang: str = i18n.DEFAULT) -> Iterator[dict]:
-    """The model's reply, tidied: stray tag markup, any '|||' and (outside Chinese) any stray Chinese characters are removed. The reply is already in the player's language, so there is nothing to translate."""
-    yield {"type": "done", "text": i18n.clean_ai(ev["text"], lang)}      # the page replaces what it streamed with this tidied version
-
-
 def _typed(message: str) -> str:
     """What the player typed. The separator is ours, so a player cannot use it to inject another language into the log."""
     return message.replace(i18n.SEP, "|").strip()
 
 
-# ---------- the clock: the night is the deadline ----------
+THREAT = re.compile(r"\b(?:kill|murder|stab|slit|slice|gut|strangle|cut you|cut your throat|run you through|end you|hurt you|harm you|break your|draw my (?:saber|blade|sword|knife)|fight me|i(?:'ll| will) fight)\b|杀了你|宰了你|砍了你|砍你|拔刀|一刀捅|要你的命|让你死|来打|打一架|ฆ่าเจ้า|ฆ่าเธอ|ฆ่าแก|ฆ่าท่าน|ฟันเจ้า|ฟันแก|ฟันท่าน|แทงเจ้า|แทงแก|ชักดาบ|ชักมีด|สู้กัน|มาสู้", re.I)
 
-def _advance(g: dict, beats: int) -> list[dict]:
-    """Let some of the night go by. Returns the game master's announcements for every hour that passed; at dawn she dies."""
-    out = []
-    for _ in range(beats):
-        if g["beat"] >= case.DAWN_BEAT:
-            break
-        g["beat"] += 1
-        if case.event_for(g["beat"]):
-            out.append({"type": "gm", "beat": g["beat"], "text": case.event_for(g["beat"]), "clock": case.clock(g["beat"])})
-    if g["beat"] >= case.DAWN_BEAT and g["stage"] in ("playing", "moving"):
-        _die(g, "dawn")
-    return out
+WATCH = ("You judge one message in a wuxia survival game. The hero, Yan Qi, a thief, has just said something to a character. "
+         "Answer with one JSON object: {\"threat\": true|false, \"trust\": n}. "
+         "\"threat\" is true only if she PLAINLY says she will hurt, kill or fight them, or draws a weapon. Insults, rude names, anger and contempt are NOT threats. "
+         "\"trust\" is how the message changes this character's trust in her, from -2 to 2: +1 for sincere honesty, respect, a believable reason, a gift or humour that fits what the character values "
+         "(it should usually move up when she is genuinely good company), +2 only for something that truly moves them, 0 for plain questions or small talk, "
+         "-1 for rudeness, pressure or a clumsy lie, -2 for insults, threats or a lie caught. Output only the JSON object.\n"
+         "The character: {who}. What earns their trust: {earns}")
 
 
-def _die(g: dict, cause: str) -> None:
-    """She is dead. Ray explains how, what really happened in the inn, and what she could have done."""
-    g.update(stage="dead", cause=cause, ending=case.death_text(cause))
+def _watch(client, vid: str, key: str, text: str) -> dict:
+    """Read her own words before the person answers: does it threaten them, and how does it change their trust?
+    A plain check, so neither an insult nor a kindness is left to the roleplaying model's whim."""
+    c = story.BY_KEY[key]
+    threat, delta = bool(THREAT.search(text)), 0
+    try:
+        ratelimit.check(vid)
+        system = WATCH.replace("{who}", f"{i18n.plain(c['name'])}, {i18n.plain(c['title'])}").replace("{earns}", c["calms"])
+        r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=60, temperature=0, extra_body={"thinking": {"type": "disabled"}},
+                                           messages=[{"role": "system", "content": system}, {"role": "user", "content": text}])
+        obj = json.loads(re.search(r"\{.*\}", r.choices[0].message.content or "", re.S).group(0))
+        threat = threat or obj.get("threat") is True
+        delta = max(-2, min(2, round(float(obj.get("trust", 0)))))
+    except (RateLimited, AttributeError, ValueError, TypeError, openai.APIError) as e:
+        print("Message check skipped:", repr(e))
+    return {"threat": threat, "delta": delta}
 
 
 # ---------- talking to the people in the inn ----------
-
-def _card(key: str) -> dict:
-    c = case.public_card(key)
-    c.pop("clues_total", None)
-    return c
-
 
 @app.post("/api/talks")
 def new_talk(body: NewTalk, request: Request):
     """Start talking to someone, or pick up where the hero and that person left off."""
     vid = request.state.vid
     with db.session() as conn:
-        g = _play(conn, vid, ("playing", "moving"))
-        if body.npc not in case.BY_KEY:
+        g = _play(conn, vid, "playing")
+        st = g["state"]
+        if body.npc not in story.BY_KEY or st["npcs"][body.npc]["status"] == "away":
             raise HTTPException(404, tr("There is nobody like that here.", "这里没有这个人。", "ที่นี่ไม่มีคนแบบนั้น"))
-        trust0, why = game.start_trust(body.npc)
+        n = st["npcs"][body.npc]
         talk = db.find_talk(conn, vid, body.npc)
         if not talk:
-            talk = db.create_talk(conn, vid, body.npc, trust0)
+            talk = db.create_talk(conn, vid, body.npc, n["trust"])
             db.log(conn, vid, "talk", npc=body.npc)
-        state = case.clue_state(body.npc, g["found"], talk["trust"])
     shown = [{**t, "i": i} for i, t in enumerate(talk["turns"]) if not t.get("hidden")][-40:]       # i: the reply's place in the conversation, for feedback
-    return _L(request, {"id": talk["id"], "npc": _card(body.npc), "trust": talk["trust"], "impression": why, "turns": shown,
-                        "fresh": not talk["turns"], "told": len(state["told"]), "total": len(case.BY_KEY[body.npc]["topics"])})
-
-
-VERIFY = ("You referee a story game. A character has just spoken to the hero. Below are the facts the character was willing to tell. "
-          "Answer with a JSON array of the ids of facts whose KEY information the character clearly told the hero in this reply. A fact counts when its main "
-          "content was stated, even in other words. Hints, deflections, questions, or only a vague part of it do not count. Answer [] if none. Output only the JSON array.")
-
-
-def _credit(client, vid: str, key: str, g: dict, reply: str, trust: int) -> list[dict]:
-    """Which clues did this reply actually tell? The server decides (not the model that played the person) and files them in the case file."""
-    ready = case.clue_state(key, g["found"], trust)["ready"]
-    if not ready or not reply.strip():
-        return []
-    facts = "\n".join(f"{cid}: {case.plain_fact(cid)}" for cid in ready)
-    try:
-        ratelimit.check(vid)
-        r = client.chat.completions.create(
-            model=config.CHAT_MODEL, max_tokens=60, temperature=0, extra_body={"thinking": {"type": "disabled"}},
-            messages=[{"role": "system", "content": VERIFY}, {"role": "user", "content": f"FACTS:\n{facts}\n\nREPLY:\n{reply}"}])
-        raw = (r.choices[0].message.content or "")
-        told = json.loads(re.search(r"\[.*?\]", raw, re.S).group(0))
-    except (RateLimited, AttributeError, ValueError, openai.APIError) as e:
-        print("Clue check skipped:", repr(e))
-        return []
-    new = []
-    for cid in told if isinstance(told, list) else []:
-        if cid in ready and cid not in g["found"]:
-            g["found"].append(cid)
-            new.append(case.clue_view(cid))
-    return new
-
-
-WATCH = ("You judge one message in a dark story game. The hero, Qinghe, has just said something to a character. "
-         "Answer with one JSON object: {\"did\": [...], \"trust\": n}. "
-         "\"did\" lists any of: \"showed_letter\" (she shows, hands over, reads out or describes the contents of her sealed letter), "
-         "\"revealed_plan\" (she says she plans to escape, knows a secret way out, or plans to harm the keeper), "
-         "\"threatened\" (she says she will hurt, kill or cut someone, or draws a weapon: a promise or show of violence). Insults, rude names, anger and contempt are NOT threats. Only include what she PLAINLY did; questions about the letter or the inn do not count. "
-         "\"trust\" is how the message changes this character's trust in her, from -2 to 2: +1 for sincere kindness, honesty, respect, a gift or a shared moment that fits what the character values "
-         "(it should usually move up when she is genuinely kind or fits their values), +2 only for something that truly moves them, 0 for plain questions or small talk, "
-         "-1 for rudeness, pressure or a clumsy lie, -2 for insults, threats or a lie caught. Output only the JSON object.\n"
-         "The character: {who}. What earns their trust: {earns}")
-
-
-def _watch(client, vid: str, key: str, text: str) -> dict:
-    """Read the hero's own words before the person answers: did she do something fatal, and how does it change their trust?
-    A plain check, so neither a fatal slip nor a kindness is left to the roleplaying model's whim."""
-    c = case.BY_KEY[key]
-    kinds, delta = [], 0
-    if key in case.LETHAL["threatened"] and case.THREAT.search(text):
-        kinds.append("threatened")
-    try:
-        ratelimit.check(vid)
-        system = WATCH.replace("{who}", f"{i18n.plain(c['name'])}, {i18n.plain(c['title'])}").replace("{earns}", i18n.plain(c["earns"]))
-        r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=60, temperature=0, extra_body={"thinking": {"type": "disabled"}},
-                                           messages=[{"role": "system", "content": system}, {"role": "user", "content": text}])
-        raw = r.choices[0].message.content or ""
-        obj = json.loads(re.search(r"\{.*\}", raw, re.S).group(0))
-        kinds += [k for k in obj.get("did", []) if isinstance(k, str) and k in case.LETHAL]
-        delta = max(-2, min(2, round(float(obj.get("trust", 0)))))
-    except (RateLimited, AttributeError, ValueError, TypeError, openai.APIError) as e:
-        print("Message check skipped:", repr(e))
-    return {"fatal": [k for k in dict.fromkeys(kinds) if case.lethal(k, key)], "delta": delta}
+    return _L(request, {"id": talk["id"], "npc": story.public_card(body.npc), "trust": n["trust"], "status": n["status"], "turns": shown,
+                        "fresh": not talk["turns"], "game": _state(g)})
 
 
 def _npc_turn(client, tid: str, vid: str, message: str | None, lang: str = i18n.DEFAULT) -> Iterator[dict]:
@@ -306,57 +387,65 @@ def _npc_turn(client, tid: str, vid: str, message: str | None, lang: str = i18n.
     if not opening:
         yield {"type": "user", "text": line}
     with db.session() as conn:
-        g = _play(conn, vid, ("playing", "moving"))
+        g = _play(conn, vid, "playing")
+        st = g["state"]
         talk = db.get_talk(conn, tid, vid)
         if not talk:
             raise HTTPException(404, tr("That conversation has ended. Talk to them again.", "这段对话已结束，请重新交谈。", "บทสนทนานั้นจบแล้ว ลองคุยกับเขาอีกครั้ง"))
         key = talk["npc_key"]
-        turn = agent.Turn()
-        fate: dict = {}                          # set when the hero does something that is fatal here
-        seen = _watch(client, vid, key, line) if not opening else {"fatal": [], "delta": 0}
-        fatal = seen["fatal"]
-        if fatal:
-            fate["cause"] = "sold" if key == "hu" else "caught"
-        if seen["delta"]:                        # how her words landed, applied before they answer, so it shows in the reply and in what they will tell her
-            talk["trust"] = max(0, min(10, talk["trust"] + seen["delta"]))
-            yield {"type": "trust", "trust": talk["trust"], "delta": seen["delta"]}
-        trust_before = talk["trust"]
+        n, c = st["npcs"][key], story.BY_KEY[key]
+        if st["fight"]:
+            raise HTTPException(409, tr("You are in a fight. Finish it first.", "你正在打斗中，先把它了结。", "เจ้ากำลังสู้อยู่ สู้ให้จบก่อน"))
+        if n["rewarded"]:
+            raise HTTPException(409, tr("They have nothing more to say to you.", "他已经没什么好对你说的了。", "เขาไม่มีอะไรจะพูดกับเจ้าอีกแล้ว"))
+        if n["status"] not in ("here", "calm"):
+            raise HTTPException(409, tr("They are in no state to talk.", "他已经没法和你交谈了。", "เขาอยู่ในสภาพที่คุยไม่ได้แล้ว"))
+        seen = _watch(client, vid, key, line) if not opening else {"threat": False, "delta": 0}
+        n["trust"] = max(0, min(10, n["trust"] + seen["delta"]))
+        talk["trust"] = n["trust"]
+        if seen["delta"]:
+            yield {"type": "trust", "trust": n["trust"], "delta": seen["delta"]}
+        fact_now = ""
         if not opening:
-            db.log(conn, vid, "msg", npc=key, delta=seen["delta"], fatal=bool(fatal), trust=talk["trust"])
-        tools = game.npc_tools(talk, turn, key, fate, start_delta=seen["delta"])
-        messages = [{"role": "system", "content": prompts.npc_system(key)},
-                    *agent.history(talk["turns"]),
-                    {"role": "system", "content": prompts.npc_state(key, talk["trust"], g["found"], g["beat"], opening, lang)},
+            db.log(conn, vid, "msg", npc=key, delta=seen["delta"], threat=seen["threat"], trust=n["trust"])
+            if n["status"] == "here" and c["mood"] != "friendly" and c.get("calm") and n["trust"] >= c["calm"]:
+                n["status"] = "calm"
+                yield _say(st, "calm", tr(f"{i18n.plain(c['name'])} lowers their guard and stands down.", f"{i18n.plain(c['name'])} 放下了戒备，不再动手。", f"{i18n.plain(c['name'])} ลดการ์ดลง ไม่คิดจะลงมือแล้ว"), f"{_name(key)} was talked down and stood down.", key)
+            if not n["rewarded"] and n["trust"] >= c["reward"]["trust"]:
+                fact_now = c["reward"]["fact"]
+                yield from _apply_reward(st, key, "by talking")
+                yield from _storm_check(st)
+        messages = [{"role": "system", "content": prompts.npc_system(key)}, *agent.history(talk["turns"]),
+                    {"role": "system", "content": prompts.npc_state(key, n["trust"], st["tick"], fact_now, opening, lang, max(0, c["talk_limit"] - n["talks"] - (0 if opening else 1)), c["reward"]["trust"], c["goal"])},
                     {"role": "user", "content": line}]
-        if fatal:
-            messages.insert(-1, {"role": "system", "content": f"The hero just plainly did this: {', '.join(fatal)}. {game.fatal_instruction(key)}"})
+        if seen["threat"] and c["mood"] != "friendly":
+            messages.insert(-1, {"role": "system", "content": "The hero just threatened you. Answer with cold anger: you are about to attack her."})
         try:
-            for raw in agent.run(client, config.CHAT_MODEL, messages, tools, turn, vid, max_tokens=800):
-                for ev in (_finish(client, vid, raw, lang) if raw["type"] == "done" else [raw]):
-                    if ev["type"] == "done":
-                        talk["turns"] += [{"role": "user", "content": line, **({"hidden": True} if opening else {})},
-                                          {"role": "assistant", "content": ev["text"] or "…"}]
-                    yield ev
-                    if ev["type"] == "done":
-                        yield {"type": "turn", "i": len(talk["turns"]) - 1}                      # which reply this was, so the page can ask what the player thought of it
-                    if ev["type"] == "done" and not opening:
-                        for clue in _credit(client, vid, key, g, ev["text"], trust_before):
-                            db.log(conn, vid, "clue", id=clue["id"], npc=key)
-                            yield {"type": "clue", "clue": clue}
+            for raw in agent.run(client, config.CHAT_MODEL, messages, [], agent.Turn(), vid, max_tokens=500):
+                ev = {"type": "done", "text": i18n.clean_ai(raw["text"], lang)} if raw["type"] == "done" else raw
+                if ev["type"] == "done":
+                    talk["turns"] += [{"role": "user", "content": line, **({"hidden": True} if opening else {})},
+                                      {"role": "assistant", "content": ev["text"] or "…"}]
+                yield ev
+                if ev["type"] == "done":
+                    yield {"type": "turn", "i": len(talk["turns"]) - 1}                      # which reply this was, so the page can ask what the player thought of it
+                    if not opening:
                         g["msgs"] += 1
-                        if not fate and key in case.LETHAL_AT_ZERO and talk["trust"] <= 0:
-                            fate["cause"] = "betrayed"
-                        if fate.get("cause"):
-                            _die(g, fate["cause"])
-                            yield {"type": "death", "cause": g["cause"]}
-                        elif g["msgs"] % case.MSGS_PER_BEAT == 0:
-                            yield from _advance(g, 1)
-                            yield {"type": "clock", "clock": case.clock(g["beat"]), "stage": g["stage"]}
-                            if g["stage"] == "dead":
-                                yield {"type": "death", "cause": g["cause"]}
+                        n["talks"] += 1
+                        if seen["threat"] and c["mood"] != "friendly":
+                            _turn_hostile(st, key, ambush=False)                 # she provoked it
+                        elif n["trust"] <= 0:
+                            _turn_hostile(st, key)
+                        elif n["rewarded"]:
+                            yield {"type": "resolved", "npc": key}
+                        elif n["talks"] >= c["talk_limit"]:
+                            _turn_hostile(st, key)                               # the talk ran out without winning them: they strike first
+                            yield _say(st, "fight", tr(f"{i18n.plain(c['name'])} has heard enough. The talking is over.", f"{i18n.plain(c['name'])} 听够了，没什么好谈的了。", f"{i18n.plain(c['name'])} ฟังพอแล้ว การเจรจาจบลง"), f"Talking to {_name(key)} failed.", key)
+                        yield from _advance(st, 1)
         finally:
             db.save_talk(conn, talk)
             db.save_play(conn, g)
+        yield {"type": "state", "game": _state(g)}
 
 
 def _own_talk(tid: str, vid: str) -> dict:
@@ -385,7 +474,81 @@ def npc_chat(tid: str, body: Message, request: Request):
     return sse(guarded(_npc_turn(client, tid, vid, body.message, request.state.lang), vid), request.state.lang)
 
 
+# ---------- fighting ----------
+
+@app.post("/api/fight/start")
+def fight_start(body: NewTalk, request: Request):
+    """Pick a fight with someone in the inn (or finish what they started)."""
+    with db.session() as conn:
+        g = _play(conn, request.state.vid, "playing")
+        st = g["state"]
+        if st["fight"]:
+            raise HTTPException(409, tr("You are already in a fight.", "你已经在打斗中了。", "เจ้ากำลังสู้อยู่แล้ว"))
+        n = st["npcs"].get(body.npc)
+        if not n or n["status"] not in ("here", "calm"):
+            raise HTTPException(404, tr("There is nobody like that here.", "这里没有这个人。", "ที่นี่ไม่มีคนแบบนั้น"))
+        events = _begin_fight(st, body.npc)
+        db.log(conn, request.state.vid, "fight", npc=body.npc, chosen=True)
+        db.save_play(conn, g)
+        return _L(request, {"events": events, "game": _state(g)})
+
+
+@app.post("/api/fight/round")
+def fight_round(body: Round, request: Request):
+    """One round: she acts, then they do. Two dice for every attack and every defence, resolved by rules.py, never by the AI."""
+    vid = request.state.vid
+    with db.session() as conn:
+        g = _play(conn, vid, "playing")
+        st = g["state"]
+        key = st["fight"]
+        if not key:
+            raise HTTPException(409, tr("You are not in a fight.", "你现在没有在打斗。", "เจ้าไม่ได้อยู่ในการต่อสู้"))
+        c, n, hero = story.BY_KEY[key], st["npcs"][key], st["hero"]
+        if body.action == "art" and hero["qi"] < 1:
+            raise HTTPException(409, tr("You are out of breath for your art. Guard to recover.", "你气息不足，无法施展武功。先防守调息。", "เจ้าหมดลมหายใจสำหรับวิชายุทธ์ ตั้งรับเพื่อเรียกพลังคืน"))
+        foe = {"hp": n["hp"], "atk": c["atk"], "defn": c["defn"], "dmg": c["dmg"]}
+        result = rules.fight_round(hero, foe, body.action, _dice, story.edge_for(st["edges"], key), st["intent"])
+        n["hp"] = foe["hp"]
+        st["rounds"] += 1
+        events: list[dict] = []
+        if hero["hp"] <= 0:
+            st["killer"] = key
+            st["fight"] = None
+            events.append(_say(st, "death", tr(f"{i18n.plain(c['name'])} wins the fight.", f"{i18n.plain(c['name'])} 赢了这场打斗。", f"{i18n.plain(c['name'])} ชนะการต่อสู้"), f"{_name(key)} beat her in a fight and she fell.", key))
+            _finish(g, "dead", "arrested" if c["mood"] == "police" else "slain")
+        elif foe["hp"] <= 0:
+            n["status"] = "down"
+            st["fight"] = None
+            events.append(_say(st, "win", c["down"], f"She beat {_name(key)} in a fight.", key))
+            events += _apply_reward(st, key, "by force")
+            events += _storm_check(st) + _start_fight_if_needed(st)
+        else:
+            st["intent"] = rules.pick_intent(_dice)
+            if st["rounds"] % 2 == 0:
+                events += _advance(st, 1)
+        db.log(conn, vid, "round", npc=key, action=body.action, hp=hero["hp"], foe=foe["hp"])
+        db.save_play(conn, g)
+        return _L(request, {"round": result, "events": events, "game": _state(g)})
+
+
 # ---------- Ray, the game master ----------
+
+def _snapshot(g: dict) -> str:
+    """Where things stand, in plain English, for Ray. Rewards nobody has earned yet are never in here."""
+    st = g["state"]
+    lines = [f"Beat {st['tick']}. She can leave at beat {_exit_at(st)}. Her hit points: {st['hero']['hp']}/{st['hero']['hp_max']}."]
+    for c in story.CAST:
+        n = st["npcs"][c["key"]]
+        if n["status"] == "away":
+            continue
+        lines.append(f"- {i18n.plain(c['name'])} ({i18n.plain(c['title'])}; {c['mood']}; {i18n.plain(c['public'])}): {n['status']}, trust {n['trust']}/10, hit points {n['hp']}/{c['hp']}"
+                     + (f", calms at trust {c['calm']}" if c.get('calm') and n["status"] == "here" else ""))
+    if st["fight"]:
+        lines.append(f"She is fighting {_name(st['fight'])} right now.")
+    lines.append(f"Advantages she has learned: {st['edges'] or 'none'}; beats saved by shortcuts: {st['shortcut']}.")
+    lines.append(f"{len([c for c in story.CAST if st['npcs'][c['key']]['status'] == 'away'])} more people may still arrive.")
+    return "\n".join(lines)
+
 
 def _gm_turn(client, vid: str, message: str, lang: str = i18n.DEFAULT) -> Iterator[dict]:
     line = _typed(message)
@@ -393,22 +556,21 @@ def _gm_turn(client, vid: str, message: str, lang: str = i18n.DEFAULT) -> Iterat
     with db.session() as conn:
         g = _play(conn, vid)
         db.log(conn, vid, "gm")
-        turn = agent.Turn()
-        messages = [{"role": "system", "content": prompts.gm_system(g["found"], g["beat"], lang)}, *agent.history(g["turns"]),
+        messages = [{"role": "system", "content": prompts.gm_system(_snapshot(g), g["state"]["hero"], _exit_at(g["state"]), lang)}, *agent.history(g["turns"]),
                     {"role": "user", "content": line}]
         try:
-            for raw in agent.run(client, config.CHAT_MODEL, messages, [], turn, vid, max_tokens=600):
-                for ev in (_finish(client, vid, raw, lang) if raw["type"] == "done" else [raw]):
-                    if ev["type"] == "done":
-                        g["turns"] += [{"role": "user", "content": line}, {"role": "assistant", "content": ev["text"] or "…"}]
-                    yield ev
+            for raw in agent.run(client, config.CHAT_MODEL, messages, [], agent.Turn(), vid, max_tokens=500):
+                ev = {"type": "done", "text": i18n.clean_ai(raw["text"], lang)} if raw["type"] == "done" else raw
+                if ev["type"] == "done":
+                    g["turns"] += [{"role": "user", "content": line}, {"role": "assistant", "content": ev["text"] or "…"}]
+                yield ev
         finally:
             db.save_play(conn, g)
 
 
 @app.post("/api/gm/chat")
 def gm_chat(body: Message, request: Request):
-    """Ask Ray what is going on, or for a nudge. This costs no time."""
+    """Ask Ray what is going on, how the rules work, or for a nudge. This costs no time."""
     vid = request.state.vid
     with db.session() as conn:
         _play(conn, vid)
@@ -416,56 +578,54 @@ def gm_chat(body: Message, request: Request):
     return sse(guarded(_gm_turn(client, vid, body.message, request.state.lang), vid), request.state.lang)
 
 
-# ---------- the move ----------
+# ---------- leaving, and how it ends ----------
 
-@app.post("/api/move")
-def make_move(body: Move, request: Request):
-    """Try one of the two ways out. This is the last move: if the clues she holds don't open it, she dies."""
-    if body.path not in case.PATHS:
-        raise HTTPException(400, tr("Choose one of the two.", "请从两条路里选一条。", "เลือกหนึ่งในสองทาง"))
+@app.post("/api/leave")
+def leave(request: Request):
+    """Walk out of the door. After the storm passes that wins; before it, the desert takes her."""
     with db.session() as conn:
         g = _play(conn, request.state.vid, "playing")
-        if case.can_move(body.path, g["found"]):
-            g.update(stage="moving", path=body.path)
+        st = g["state"]
+        if st["fight"]:
+            raise HTTPException(409, tr("You can't walk out in the middle of a fight.", "打斗中不能走出去。", "กลางการต่อสู้เดินออกไปไม่ได้"))
+        if st["tick"] >= _exit_at(st):
+            _say(st, "leave", tr("You open the door and walk out into the clear morning.", "你推开门，走进清晨的光里。", "เจ้าเปิดประตูเดินออกไปสู่เช้าอันแจ่มใส"), "She walked out of the inn after the storm and was free.")
+            _finish(g, "solved", "escaped")
         else:
-            _die(g, "move")
-        db.log(conn, request.state.vid, "move", path=body.path, verdict="go" if g["stage"] == "moving" else "dead")
+            _say(st, "leave", tr("You open the door into the storm.", "你推开门，走进了沙暴。", "เจ้าเปิดประตูเข้าไปในพายุ"), "She went out into the storm too early.")
+            _finish(g, "dead", "storm")
         db.save_play(conn, g)
-        return _L(request, {"verdict": "go" if g["stage"] == "moving" else "dead", "game": _state(conn, g)})
-
-
-HOW = {"tunnel": "through the secret tunnel under the cellar, with Old Tuo staying behind to cover her tracks",
-       "kill": "by drugging the keeper's night tea, climbing the stairs while the guard changed, killing her in her bed and taking the key to the front door"}
+        return _L(request, {"game": _state(g)})
 
 
 @app.post("/api/ending")
 def ending(request: Request):
-    """Ray's telling after she gets out: how she did it, what really happened in the inn, and what became of everyone."""
-    vid = request.state.vid
+    """Ray's telling of how the night ended, built from what really happened in it."""
+    vid, lang = request.state.vid, request.state.lang
     with db.session() as conn:
-        g = _play(conn, vid, "moving")
-        path, found = g["path"], list(g["found"])
+        g = _play(conn, vid, ("solved", "dead"))
+        if g["ending"]:
+            return _L(request, {"game": _state(g)})
+        key, log = g["cause"], "\n".join(g["state"]["log"])
+        outcome = {"escaped": "She survived the storm and walked out, free.", "slain": "She lost a fight and was killed.",
+                   "arrested": "She lost a fight to the law and was taken away in chains to hang.", "storm": "She left too early and was swallowed by the storm."}[key]
     text = ""
-    lang = request.state.lang
     try:
         ratelimit.check(vid)
         client = llm()
-        learned = "; ".join(i18n.plain(case.CLUES[c]["title"]) for c in found if c in case.CLUES and c != "official")
-        prompt = prompts.ENDING.format(truth=i18n.plain(case.truth()), how=HOW[path], learned=learned or "very little",
-                                       names=prompts.names_line(), format=i18n.reply_rule(lang))
-        r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=1500, extra_body={"thinking": {"type": "disabled"}},
+        prompt = prompts.ENDING.format(outcome=outcome, log=log or "(little happened)", names=story.names_line(), format=i18n.reply_rule(lang))
+        r = client.chat.completions.create(model=config.CHAT_MODEL, max_tokens=900, extra_body={"thinking": {"type": "disabled"}},
                                            messages=[{"role": "system", "content": prompt}, {"role": "user", "content": "Tell the ending."}])
         text = i18n.clean_ai(r.choices[0].message.content or "", lang)
-        if not i18n.in_language(text, lang) or len(text) < 200:
+        if not i18n.in_language(text, lang) or len(text) < 120:
             text = ""
     except (RateLimited, HTTPException, openai.APIError) as e:
         print("Ending fell back to the written version:", repr(e))
-    text = text or case.fallback_ending(path)
     with db.session() as conn:
-        g = _play(conn, vid, "moving")
-        g.update(stage="solved", ending=text)
+        g = _play(conn, vid, ("solved", "dead"))
+        g["ending"] = text or i18n.pick(story.ENDINGS[key]["fallback"], lang)
         db.save_play(conn, g)
-        return _L(request, {"game": _state(conn, g)})
+        return _L(request, {"game": _state(g)})
 
 
 class Feedback(BaseModel):

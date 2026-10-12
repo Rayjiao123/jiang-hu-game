@@ -38,7 +38,7 @@
   <h2>Funnel (distinct visitors)</h2><div class="scroll"><table id="funnel"></table></div>
   <h2>Endings and deaths</h2><div class="scroll"><table id="endings"></table></div>
   <h2>People: how each character performs</h2><div class="scroll"><table id="people"></table></div>
-  <h2>Clues found</h2><div class="scroll"><table id="clues"></table></div>
+  <h2>Builds rolled (offence + defence)</h2><div class="scroll"><table id="clues"></table></div>
   <h2>By day (UTC)</h2><div class="scroll"><table id="daily"></table></div>
   <h2>Conversations</h2>
   <div class="row"><label><input id="onlyDown" type="checkbox"> only replies that got 👎</label><button id="loadTalks" type="button">Load</button></div>
@@ -58,15 +58,15 @@
   async function load() {
     const s = await get("/api/admin/stats?days=" + $("#days").value);
     $("#cards").innerHTML = [["Visitors", s.visitors], ["Page loads", s.page_loads], ["Nights started", s.nights_started], ["Finished", s.nights_finished], ["Left unfinished", s.nights_abandoned],
-      ["Minutes to finish (avg)", s.avg_minutes_to_finish ?? "–"], ["Player messages", s.ai.player_messages], ["Asked Ray", s.ai.ray_questions], ["AI errors", s.ai.errors],
+      ["Minutes to finish (avg)", s.avg_minutes_to_finish ?? "–"], ["Win rate", s.win_rate == null ? "–" : Math.round(s.win_rate * 100) + "%"], ["Fights per night (avg)", s.avg_fights_at_end ?? "–"], ["Player messages", s.ai.player_messages], ["Asked Ray", s.ai.ray_questions], ["AI errors", s.ai.errors],
       ["👍 / 👎", `${s.feedback.up} / ${s.feedback.down}`], ["Languages", Object.entries(s.languages || {}).map(([k, v]) => `${k} ${v}`).join(" · ") || "–"]].map(([k, v]) => `<div class="card"><b>${v}</b><span>${k}</span></div>`).join("");
     const top = Math.max(1, ...s.funnel.map(f => f.visitors));
     table($("#funnel"), ["Step", "Visitors", ""], s.funnel.map(f => [f.step, f.visitors, `<div class="bar" style="width:${Math.round(f.visitors / top * 100)}%"></div>`]));
-    const names = { dead: "Died", tunnel: "Escaped by the tunnel", kill: "Killed the keeper" };
-    table($("#endings"), ["Ending", "Count"], [...Object.entries(s.endings).map(([k, v]) => [names[k] || k, v]), ...Object.entries(s.death_causes).map(([k, v]) => ["&nbsp;&nbsp;died: " + k, v])]);
-    table($("#people"), ["Person", "Talks started", "Messages", "Clues told", "Avg trust change", "Fatal to her", "👍", "👎"],
-      Object.values(s.people).map(p => [esc(p.name), p.talks, p.messages, p.clues_told, p.avg_trust_change, p.killed_her, `<span class="up">${p.up}</span>`, `<span class="down">${p.down}</span>`]));
-    table($("#clues"), ["Clue", "Times told"], Object.entries(s.clues).sort((a, b) => b[1] - a[1]).map(([k, v]) => [esc(k), v]));
+    const names = { escaped: "Survived the storm", slain: "Cut down", arrested: "Arrested", storm: "Went out into the storm" };
+    table($("#endings"), ["Ending", "Count"], [...Object.entries(s.endings).map(([k, v]) => [names[k] || k, v]), ...Object.entries(s.death_causes).map(([k, v]) => ["&nbsp;&nbsp;killed by: " + (k || "the storm"), v])]);
+    table($("#people"), ["Person", "Talks started", "Messages", "Rounds fought", "Avg trust change", "Killed her", "👍", "👎"],
+      Object.values(s.people).map(p => [esc(p.name), p.talks, p.messages, p.rounds_fought, p.avg_trust_change, p.killed_her, `<span class="up">${p.up}</span>`, `<span class="down">${p.down}</span>`]));
+    table($("#clues"), ["Build", "Nights"], Object.entries(s.builds || {}).map(([k, v]) => [esc(k), v]));
     table($("#daily"), ["Date", "Page loads", "Nights started", "Endings", "Messages"], s.daily.map(d => [d.date, d.visits, d.starts, d.endings, d.messages]));
   }
   async function loadTalks() {
