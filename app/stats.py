@@ -14,8 +14,45 @@ def _who(visitor_id: str) -> str:
     return hashlib.sha256(visitor_id.encode()).hexdigest()[:6]
 
 
+ICT = 7 * 3600                     # every time shown to the admin is Thailand time (UTC+7)
+
+
 def _day(ts: float) -> str:
-    return time.strftime("%Y-%m-%d", time.gmtime(ts))
+    return time.strftime("%Y-%m-%d", time.gmtime(ts + ICT))
+
+
+def _stamp(ts: float) -> str:
+    return time.strftime("%Y-%m-%d %H:%M", time.gmtime(ts + ICT))
+
+
+def players(conn, since: float = 0, limit: int = 300) -> list[dict]:
+    """One row per visitor: when they came, how often, how many nights they played, how long, and how the last one ended.
+    A night lasts from its start to its ending; one that was never finished lasts until the visitor's last action in it."""
+    by_vid: dict[str, list[dict]] = defaultdict(list)
+    for e in _events(conn, since=since):
+        by_vid[e["vid"]].append(e)
+    rows = []
+    for vid, ev in by_vid.items():
+        starts = [e["ts"] for e in ev if e["kind"] == "start"]
+        nights, last_end = [], None
+        for i, t0 in enumerate(starts):
+            t_next = starts[i + 1] if i + 1 < len(starts) else float("inf")
+            inside = [e for e in ev if t0 <= e["ts"] < t_next and e["kind"] != "visit"]
+            end = next((e for e in inside if e["kind"] == "end"), None)
+            t1 = end["ts"] if end else max(e["ts"] for e in inside)
+            nights.append({"minutes": (t1 - t0) / 60, "ended": bool(end), "won": bool(end and end["data"].get("won")), "ending": end["data"].get("ending") if end else ""})
+            last_end = nights[-1]
+        visits = [e for e in ev if e["kind"] == "visit"]
+        langs = [e["data"].get("lang") for e in ev if e["data"].get("lang")]
+        rows.append({"who": _who(vid), "first_seen": _stamp(ev[0]["ts"]), "last_seen": _stamp(ev[-1]["ts"]), "last_ts": ev[-1]["ts"], "visits": len(visits),
+                     "lang": langs[-1] if langs else "", "nights": len(nights), "finished": sum(n["ended"] for n in nights), "wins": sum(n["won"] for n in nights),
+                     "minutes": round(sum(n["minutes"] for n in nights), 1), "last_night_minutes": round(last_end["minutes"], 1) if last_end else None,
+                     "last_result": ("won" if last_end["won"] else last_end["ending"] or "died") if last_end and last_end["ended"] else ("in progress or left" if last_end else "only looked"),
+                     "messages": sum(1 for e in ev if e["kind"] == "msg"), "fights": sum(1 for e in ev if e["kind"] == "round")})
+    rows.sort(key=lambda r: -r["last_ts"])
+    for r in rows:
+        del r["last_ts"]
+    return rows[:limit]
 
 
 def _events(conn, kind: str | None = None, since: float = 0) -> list[dict]:
@@ -81,7 +118,7 @@ def summary(conn, days: int = 14) -> dict:
         "builds": {f"{a} + {b}": n for (a, b), n in builds.most_common(8) if a},
         "avg_minutes_to_finish": round(sum(mins) / len(mins), 1) if mins else None,
         "avg_messages_at_end": round(sum(e["data"].get("msgs", 0) for e in ends) / len(ends), 1) if ends else None,
-        "people": npcs,
+        "people": npcs, "players": players(conn, since), "total_minutes_played": round(sum(r["minutes"] for r in players(conn, since, 100000)), 1),
         "ai": {"player_messages": len(by_kind["msg"]), "ray_questions": len(by_kind["gm"]), "errors": len(by_kind["error"]),
                "errors_by_kind": dict(Counter(e["data"].get("kind", "?") for e in by_kind["error"]))},
         "feedback": {"up": sum(1 for e in by_kind["feedback"] if e["data"].get("rating") == "up"),
@@ -109,6 +146,6 @@ def transcripts(conn, limit: int = 40, only_down: bool = False) -> list[dict]:
         if only_down and not any(m["rating"] == "down" for m in marked):
             continue
         out.append({"id": r["id"], "visitor": _who(r["visitor_id"]), "npc": i18n.plain(story.BY_KEY[r["npc_key"]]["name"]) if r["npc_key"] in story.BY_KEY else r["npc_key"],
-                    "trust": r["trust"], "updated": time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["updated_at"])), "archived": bool(r["archived"]),
+                    "trust": r["trust"], "updated": _stamp(r["updated_at"]), "archived": bool(r["archived"]),
                     "turns": marked})
     return out[:limit]

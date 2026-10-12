@@ -441,6 +441,27 @@ def test_three_languages_all_the_way_through(api):
     assert any("฀" <= ch <= "๿" for ch in th["setup"]) and th["cast"][0]["name"] == "ฮูหยินซวง"
 
 
+def test_the_admin_lists_every_player_with_how_long_they_played(api, monkeypatch):
+    monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "s3cret")
+    h = {"authorization": "Bearer s3cret"}
+    api.get("/api/case")                                                      # a visitor who only looked
+    other = TestClient(main.app)
+    other.get("/api/case")
+    other.post("/api/roll")
+    other.post("/api/game/start")
+    t = other.post("/api/talks", json={"npc": "shuang"}).json()
+    other.post(f"/api/talks/{t['id']}/chat", json={"message": "hello"})
+    with db.session() as conn:
+        conn.execute("UPDATE events SET ts = ts - 300 WHERE kind IN ('visit', 'roll', 'start')")             # they started five minutes ago
+    other.post("/api/leave")
+    rows = api.get("/api/admin/stats", headers=h).json()["players"]
+    assert len(rows) == 2 and all("who" in r and len(r["who"]) == 6 for r in rows)
+    looked = next(r for r in rows if r["nights"] == 0)
+    played = next(r for r in rows if r["nights"] == 1)
+    assert looked["last_result"] == "only looked" and played["finished"] == 1 and played["messages"] == 1
+    assert 4.5 < played["minutes"] < 5.5 and played["last_result"] == "storm"
+
+
 def test_the_admin_sees_nights_wins_and_what_killed_her(api, monkeypatch):
     monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "s3cret")
     h = {"authorization": "Bearer s3cret"}
