@@ -149,3 +149,8 @@ A database made by an earlier version still works: old tables are simply unused.
 2. More arrivals and rewards (a second wave, a boss), and consumables
 3. Grow the eval set from 👎 replies; move the rate limiter to Redis for more than one replica
 4. Real painted art behind `portrait.js`
+
+## Resting
+
+In the inn, **Rest** takes 2 beats and heals 4 + Strength / 4 hit points (5 to 8), up to 3 times a night (`rules.rest_heal`, `POST /api/rest`). The night keeps moving while she
+rests: people arrive and lose patience, and if someone attacks during a rest she only gets half. Not available mid-fight or at full health.

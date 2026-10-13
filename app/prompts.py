@@ -25,7 +25,6 @@ LENGTH = "about 55 English words, or about 95 Chinese characters, or about 90 Th
 
 def npc_system(key: str) -> str:
     c = story.BY_KEY[key]
-    others = "; ".join(f"{i18n.plain(o['name'])} ({i18n.plain(o['title'])})" for o in story.CAST if o["key"] != key)
     look = game_look.describe_appearance(c["appearance"])
     return f"""You are {i18n.plain(c['name'])}, "{i18n.plain(c['title'])}", a character in 人在江湖，身不由己, a wuxia survival game at the Black Sand Inn. Appearance: {look}.
 {WORLD}
@@ -35,8 +34,8 @@ How you speak: {c['voice']}
 What you want: {c['wants']}
 What wins your trust: {c['calms']}
 {MOOD_RULES[c['mood']]}
-Other people who may be in the inn tonight: {others}.
-How the names are written in English / Chinese / Thai (use the spelling of the language you are writing in): {story.names_line()}.
+Who else is in the hall changes through the night: the system tells you each turn who is here now. You know nothing about anyone who has not arrived yet, and you never mention them.
+How the names are written in English / Chinese / Thai (use the spelling of the language you are writing in): {story.names_line([story.HERO, story.GM, c])}.
 The player is Yan Qi, a young woman who stole the magistrate's jade seal. She is a thief; you may recognise or suspect that, depending on who you are.
 
 {ERA_RULES}
@@ -51,7 +50,7 @@ Rules:
 
 
 def npc_state(key: str, trust: int, tick: int, fact_now: str = "", opening: bool = False, lang: str = "en",
-              left: int = 3, goal_trust: int = 5, goal: str = "") -> str:
+              left: int = 3, goal_trust: int = 5, goal: str = "", present: list[tuple[str, bool]] | None = None) -> str:
     c = story.BY_KEY[key]
     mood = {"friendly": "You like her", "aggressive": "You are wary of her", "police": "You suspect her"}[c["mood"]]
     reveal = f"\nThe system has decided you now trust her enough to tell her this, so work it into your reply in your own words, keeping its meaning exact: {fact_now}\n" if fact_now else ""
@@ -64,7 +63,9 @@ def npc_state(key: str, trust: int, tick: int, fact_now: str = "", opening: bool
     else:
         aim = (f"\nThis conversation is a negotiation with a deadline: she has {left} more exchange{'s' if left != 1 else ''} to win you over (to trust {goal_trust}/10), and if she fails you act against her. "
                "Do not wander: press her toward the point, ask her for something specific, test her sincerity, and make clear what she would have to say or show to convince you.")
-    return (f"It is beat {tick} of the night and the storm is still raging. Current trust in the hero: {trust}/10 ({mood}; at 0 you turn on her). What is at stake: {i18n.plain(goal)}{reveal}{aim}{opener}"
+    here = ("People in the hall right now besides you and the hero: " + "; ".join(f"{i18n.plain(story.BY_KEY[k]['name'])} ({i18n.plain(story.BY_KEY[k]['title'])}{', defeated' if down else ''})" for k, down in present)
+            + f". No one else has arrived. Their names in English / Chinese / Thai: {story.names_line([story.BY_KEY[k] for k, _ in present])}.") if present else "Nobody else is in the hall right now besides you and the hero."
+    return (f"It is beat {tick} of the night and the storm is still raging. {here} Current trust in the hero: {trust}/10 ({mood}; at 0 you turn on her). What is at stake: {i18n.plain(goal)}{reveal}{aim}{opener}"
             f"{i18n.reply_rule(lang)}")
 
 
@@ -73,7 +74,7 @@ GM = """You are Ray, the storyteller and game master of 人在江湖，身不由
 {situation}
 How the names are written in English / Chinese / Thai (use the spelling of the language you are writing in): {names}
 
-THE RULES (you may explain them): she has Strength {str_} (hit points), Intelligence {int_} (martial-art effects), Agility {agi} (defence). Her offence is {off}, her defence is {defn}. Every attack and defence is two six-sided dice added together (plus bonuses); damage comes from the dice. Fights cost beats, and so does every message. She must survive until beat {exit_at} and then walk out. Talking to people can calm the righteous and the law, win favours and secrets from the friendly, and cost her nothing but a beat. Beating someone also gets her what they know, but costs hit points she cannot easily recover.
+THE RULES (you may explain them): she has Strength {str_} (hit points), Intelligence {int_} (martial-art effects), Agility {agi} (defence). Her offence is {off}, her defence is {defn}. Every attack and defence is two six-sided dice added together (plus bonuses); damage comes from the dice. Fights cost beats, and so does every message. She must survive until beat {exit_at} and then walk out. Resting heals a little but costs beats. Talking to people can calm the righteous and the law, win favours and secrets from the friendly, and cost her nothing but a beat. Beating someone also gets her what they know, but costs hit points she cannot easily recover.
 
 STATE NOW:
 {state}

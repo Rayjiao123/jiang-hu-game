@@ -114,7 +114,7 @@ def _fresh_state() -> dict:
     stats_ = rules.roll_stats(_dice)
     hp = rules.max_hp(stats_)
     return {"v": db.STATE_VERSION, "hero": {**stats_, "qi": rules.start_qi(stats_), "hp": hp, "hp_max": hp, "off": _dice.choice(rules.OFFENCE), "defn": _dice.choice(rules.DEFENCE)},
-            "tick": 0, "rounds": 0, "intent": "quick", "fights": 0, "shortcut": 0, "edges": {}, "fight": None, "killer": "", "feed": [], "log": [],
+            "tick": 0, "rounds": 0, "rests": 0, "intent": "quick", "fights": 0, "shortcut": 0, "edges": {}, "fight": None, "killer": "", "feed": [], "log": [],
             "npcs": {c["key"]: {"status": "away", "hp": c["hp"], "trust": c["start_trust"], "arrived": -1, "rewarded": False, "talks": 0, "ambush": False} for c in story.CAST}}
 
 
@@ -247,7 +247,7 @@ def _state(g: dict) -> dict:
         c, n = story.BY_KEY[st["fight"]], st["npcs"][st["fight"]]
         fight = {"npc": st["fight"], "hp": n["hp"], "hp_max": c["hp"], "edge": story.edge_for(st["edges"], st["fight"]), "intent": st["intent"]}
     over = g["stage"] in ("solved", "dead")
-    return {"stage": g["stage"], "hero": {**story.hero_card(), "str": h["str"], "int": h["int"], "agi": h["agi"], "hp": h["hp"], "hp_max": h["hp_max"], "qi": h["qi"], "qi_max": rules.QI_MAX,
+    return {"stage": g["stage"], "hero": {**story.hero_card(), "str": h["str"], "int": h["int"], "agi": h["agi"], "hp": h["hp"], "hp_max": h["hp_max"], "qi": h["qi"], "qi_max": rules.QI_MAX, "rests_left": rules.REST_MAX - st.get("rests", 0), "rest_heal": rules.rest_heal(h), "rest_beats": rules.REST_BEATS,
                                           "off": _look(h["off"]), "defn": _look(h["defn"]), "defence_bonus": rules.defence_bonus(h)},
             "tick": st["tick"], "storm_end": story.STORM_END, "exit_at": _exit_at(st), "can_leave": st["tick"] >= _exit_at(st), "npcs": npcs,
             "incoming": len(away), "next_in": (min(away) - st["tick"]) if away else None, "fight": fight, "edges": st["edges"], "feed": st["feed"][-30:],
@@ -445,7 +445,8 @@ def _npc_turn(client, tid: str, vid: str, message: str | None, lang: str = i18n.
                 yield from _apply_reward(st, key, "by talking")
                 yield from _storm_check(st)
         messages = [{"role": "system", "content": prompts.npc_system(key)}, *agent.history(talk["turns"]),
-                    {"role": "system", "content": prompts.npc_state(key, n["trust"], st["tick"], fact_now, opening, lang, max(0, c["talk_limit"] - n["talks"] - (0 if opening else 1)), c["reward"]["trust"], c["goal"])},
+                    {"role": "system", "content": prompts.npc_state(key, n["trust"], st["tick"], fact_now, opening, lang, max(0, c["talk_limit"] - n["talks"] - (0 if opening else 1)), c["reward"]["trust"], c["goal"],
+                                                                         [(o["key"], st["npcs"][o["key"]]["status"] == "down") for o in story.CAST if o["key"] != key and st["npcs"][o["key"]]["status"] != "away"])},
                     {"role": "user", "content": line}]
         if seen["threat"] and c["mood"] != "friendly":
             messages.insert(-1, {"role": "system", "content": "The hero just threatened you. Answer with cold anger: you are about to attack her."})
@@ -562,12 +563,40 @@ def fight_round(body: Round, request: Request):
         return _L(request, {"round": result, "events": events, "game": _state(g)})
 
 
+# ---------- resting ----------
+
+@app.post("/api/rest")
+def rest(request: Request):
+    """Catch her breath in the inn: it costs beats, so people keep arriving and losing patience while she does. If someone attacks during it, she only gets half."""
+    vid = request.state.vid
+    with db.session() as conn:
+        g = _play(conn, vid, "playing")
+        st = g["state"]
+        h = st["hero"]
+        if st["fight"]:
+            raise HTTPException(409, tr("You can't rest in the middle of a fight.", "打斗中不能休息。", "กลางการต่อสู้พักไม่ได้"))
+        if st.get("rests", 0) >= rules.REST_MAX:
+            raise HTTPException(409, tr("You have rested as much as the night allows.", "这一夜能休息的次数用完了。", "คืนนี้เจ้าพักได้เท่านี้แล้ว"))
+        if h["hp"] >= h["hp_max"]:
+            raise HTTPException(409, tr("You are not hurt.", "你没有受伤。", "เจ้าไม่ได้บาดเจ็บ"))
+        st["rests"] = st.get("rests", 0) + 1
+        events = [_say(st, "rest", tr("You find a dark corner and close your eyes for a moment.", "你找了个暗角，闭目调息片刻。", "เจ้าหามุมมืดแล้วหลับตาพักชั่วครู่"), "She rested in a corner of the hall.")]
+        events += _advance(st, rules.REST_BEATS)
+        gain = rules.rest_heal(h) // (2 if st["fight"] else 1)             # an interrupted rest is only half as good
+        before = h["hp"]
+        h["hp"] = min(h["hp_max"], h["hp"] + gain)
+        events.append({"type": "rested", "healed": h["hp"] - before, "interrupted": bool(st["fight"])})
+        db.log(conn, vid, "rest", healed=h["hp"] - before, interrupted=bool(st["fight"]))
+        db.save_play(conn, g)
+        return _L(request, {"events": events, "game": _state(g)})
+
+
 # ---------- Ray, the game master ----------
 
 def _snapshot(g: dict) -> str:
     """Where things stand, in plain English, for Ray. Rewards nobody has earned yet are never in here."""
     st = g["state"]
-    lines = [f"Beat {st['tick']}. She can leave at beat {_exit_at(st)}. Her hit points: {st['hero']['hp']}/{st['hero']['hp_max']}."]
+    lines = [f"Beat {st['tick']}. She can leave at beat {_exit_at(st)}. Her hit points: {st['hero']['hp']}/{st['hero']['hp_max']}. She can rest {rules.REST_MAX - st.get('rests', 0)} more time(s) (each rest takes {rules.REST_BEATS} beats and heals {rules.rest_heal(st['hero'])})."]
     for c in story.CAST:
         n = st["npcs"][c["key"]]
         if n["status"] == "away":

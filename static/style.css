@@ -66,7 +66,7 @@ canvas.bg { position: absolute; inset: 0; width: 100%; height: 100%; display: bl
 .bar.trust-bar i { background: var(--jade); }
 @keyframes pulse { 50% { opacity: .55; } }
 .x { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; background: none; border: 0; font-size: 24px; line-height: 1; z-index: 2; color: var(--dim); }
-.toast { position: fixed; z-index: 120; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translate(-50%, 30px); opacity: 0; pointer-events: none; max-width: min(520px, calc(100vw - 24px)); background: #1d1814; border: 1px solid var(--gold); border-radius: 8px; padding: 12px 16px; font-size: 14px; transition: .25s; }
+.toast { position: fixed; z-index: 120; left: 50%; top: calc(var(--bar) + 8px); transform: translate(-50%, -30px); opacity: 0; pointer-events: none; max-width: min(520px, calc(100vw - 24px)); background: #1d1814; border: 1px solid var(--gold); border-radius: 8px; padding: 12px 16px; font-size: 14px; transition: .25s; }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 .chip { display: inline-block; padding: 1px 9px; border: 1px solid var(--gold-dim); border-radius: 99px; font-size: 13px; background: rgba(0, 0, 0, .3); white-space: nowrap; }
 
@@ -278,3 +278,8 @@ html[lang="th"] .gate-en { font-family: var(--f-body); font-style: normal; font-
 .btn.act { min-height: 54px; padding: 7px 10px; }
 .btn.act b { font-size: 14.5px; } .btn.act small { font-size: 11.5px; line-height: 1.25; }
 #fightDone { flex: 0 0 auto; }
+
+/* things that happen in the inn during a talk */
+.notice { display: flex; gap: 8px; align-items: flex-start; justify-self: center; max-width: 92%; padding: 7px 12px; border: 1px solid var(--gold-dim); border-radius: 10px; background: rgba(0, 0, 0, .35); font-size: 13.5px; color: var(--gold-text); }
+.notice.n-gain, .notice.n-calm, .notice.n-storm { color: var(--good); border-color: rgba(143, 211, 168, .4); }
+.rest { width: 100%; }

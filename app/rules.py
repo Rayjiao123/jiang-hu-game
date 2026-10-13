@@ -52,6 +52,14 @@ def qi_recovery(stats: dict) -> int:
     return 2 if stats["int"] >= 11 else 1
 
 
+REST_BEATS, REST_MAX = 2, 3          # resting in the inn: how long it takes, and how often she may in one night
+
+
+def rest_heal(stats: dict) -> int:
+    """What a rest gives back: 5 to 8 hit points, more for the strong."""
+    return 4 + stats["str"] // 4
+
+
 def defence_bonus(stats: dict) -> int:
     return stats["agi"] // 3
 

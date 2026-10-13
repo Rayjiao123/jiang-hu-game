@@ -230,6 +230,9 @@
     [...S.game.npcs].sort((a, b) => rank(a) - rank(b)).forEach(n => box.append(personCard(n)));
     const g = S.game;
     $("#incoming").textContent = g.incoming && !g.can_leave ? tr("Out in the storm, somebody else is coming…", "风沙里，还有人在赶来…", "ในพายุ ยังมีใครบางคนกำลังมา…") : "";
+    const rest = $("#restBtn"), h = g.hero;
+    rest.textContent = tr(`😮‍💨 Rest · ${h.rest_beats} beats · +${h.rest_heal} HP (${h.rests_left} left)`, `😮‍💨 休息 · ${h.rest_beats} 拍 · 回复 ${h.rest_heal} 点生命（还剩 ${h.rests_left} 次）`, `😮‍💨 พัก · ${h.rest_beats} จังหวะ · ฟื้น ${h.rest_heal} เลือด (เหลือ ${h.rests_left} ครั้ง)`);
+    rest.disabled = h.rests_left < 1 || h.hp >= h.hp_max;
     const door = $("#doorBtn");
     door.classList.toggle("jade", g.can_leave); door.classList.toggle("ghost", !g.can_leave);
     door.textContent = g.can_leave ? tr("🚪 Walk out of the inn", "🚪 走出客栈", "🚪 เดินออกจากโรงเตี๊ยม") : tr(`🚪 Leave into the storm (${g.exit_at - g.tick} beats until it passes)`, `🚪 走进沙暴（还有 ${g.exit_at - g.tick} 拍沙暴才过去）`, `🚪 ออกไปในพายุ (อีก ${g.exit_at - g.tick} จังหวะพายุจึงผ่าน)`);
@@ -242,6 +245,17 @@
   $("#doorBtn").addEventListener("click", async () => {
     if (!S.game.can_leave) { $("#leaveModal").hidden = false; return; }
     await leave();
+  });
+  $("#restBtn").addEventListener("click", async () => {
+    const b = $("#restBtn"); b.disabled = true;
+    try {
+      const r = await api("/api/rest", {}); setGame(r.game);
+      const done = r.events.find(e => e.type === "rested");
+      const arrivals = r.events.filter(e => e.type === "feed" && ["arrival", "storm"].includes(e.item.kind)).map(e => e.item.text);
+      toast([done.interrupted ? tr(`Your rest was cut short: +${done.healed} HP.`, `休息被打断：回复 ${done.healed} 点生命。`, `การพักถูกขัดจังหวะ: ฟื้น ${done.healed} เลือด`) : tr(`You feel better: +${done.healed} HP.`, `你缓过来了：回复 ${done.healed} 点生命。`, `เจ้ารู้สึกดีขึ้น: ฟื้น ${done.healed} เลือด`), ...arrivals].join(" "), 6500);
+      if (r.game.fight) { await sleep(900); go("fight"); return; }
+      go("game");
+    } catch (e) { toast(errText(e)); renderPeople(); }
   });
   $("#lvNo").addEventListener("click", () => { $("#leaveModal").hidden = true; });
   $("#lvYes").addEventListener("click", async () => { $("#leaveModal").hidden = true; await leave(); });
@@ -275,6 +289,12 @@
     };
     for (const [r, icon] of [["up", "👍"], ["down", "👎"]]) { const b = el("button", "", icon); b.type = "button"; b.addEventListener("click", () => send(r)); fb.append(b); }
     bubble.parentElement.append(fb);
+  }
+  // Things that happen in the inn while she is talking (someone walks in, a gift, the storm easing) appear in the chat itself, never over the input.
+  function noticeRow(item) {
+    const icon = { arrival: "🚪", gain: "🎁", calm: "✓", storm: "🌤" }[item.kind] || "•";
+    const row = el("div", "notice n-" + item.kind); row.append(el("span", "", icon), el("span", "", item.text));
+    $("#thread").append(row); scrollThread();
   }
   const scrollThread = () => { const th = $("#thread"); th.scrollTop = th.scrollHeight; };
   function renderMeta() {
@@ -344,9 +364,9 @@
         else if (ev.type === "done" && ev.text) { said = ev.text; out.classList.remove("thinking"); fillText(out, said); }
         else if (ev.type === "turn") addFeedback(out, ev.i);
         else if (ev.type === "trust") { mine.trust = ev.trust; if (ev.delta && mineBubble) mineBubble.parentElement.append(tag(ev.delta)); }
-        else if (ev.type === "feed") { S.game.feed.push(ev.item); if (["arrival", "gain", "calm", "storm"].includes(ev.item.kind)) toast(ev.item.text, 7000); }
+        else if (ev.type === "feed") { S.game.feed.push(ev.item); if (["arrival", "gain", "calm", "storm"].includes(ev.item.kind)) noticeRow(ev.item); }
         else if (ev.type === "fight") fightNow = true;
-        else if (ev.type === "resolved") toast(tr("Settled: you got what you came for. Back to the inn when you are ready.", "谈妥了：你得到了想要的。准备好就回大堂吧。", "เจรจาสำเร็จ: เจ้าได้สิ่งที่ต้องการ พร้อมแล้วก็กลับไปที่โถง"), 6000);
+        else if (ev.type === "resolved") noticeRow({ kind: "calm", text: tr("Settled: you got what you came for. Back to the inn when you are ready.", "谈妥了：你得到了想要的。准备好就回大堂吧。", "เจรจาสำเร็จ: เจ้าได้สิ่งที่ต้องการ พร้อมแล้วก็กลับไปที่โถง") });
         else if (ev.type === "state") { setGame(ev.game); renderMeta(); }
         scrollThread();
       }, S.talkCtl.signal);

@@ -265,9 +265,9 @@ def gm_card() -> dict:
     return {**{k: GM[k] for k in ("key", "name", "title", "appearance")}}
 
 
-def names_line() -> str:
-    """How every person's name is written in each language, so a Thai or Chinese reply uses the right spelling."""
-    people = [HERO, GM, *CAST]
+def names_line(people: list | None = None) -> str:
+    """How people's names are written in each language, so a Thai or Chinese reply uses the right spelling. Without a list, everybody's."""
+    people = people if people is not None else [HERO, GM, *CAST]
     return "; ".join(" / ".join(i18n.parts(p["name"])) for p in people)
 
 

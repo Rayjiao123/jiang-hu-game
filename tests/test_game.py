@@ -519,6 +519,41 @@ def test_the_judge_reads_scores_and_ignores_nonsense():
     assert judge.score_translation(tr_, "a", "b", "th") == {"faithful": 2, "natural": 5, "issue": "reversed"}
 
 
+def test_a_person_only_knows_about_the_people_who_have_arrived(api):
+    begin(api)
+    t = api.post("/api/talks", json={"npc": "shuang"}).json()
+    say(api, t["id"], "hello")
+    state = [r for r in api.llm.requests if r.get("stream")][-1]["messages"][-2]["content"]
+    assert "Captain Gu" not in state and "Black Wolf" not in state and "Nobody else is in the hall" in state
+    assert "Captain Gu" not in prompts.npc_system("shuang") and "Old Qin" not in prompts.npc_system("shuang")
+    say(api, t["id"], "again")                                                              # Black Wolf arrives at beat 1
+    state = [r for r in api.llm.requests if r.get("stream")][-1]["messages"][-2]["content"]
+    assert "Black Wolf" in state and "Captain Gu" not in state
+
+
+def test_resting_heals_costs_beats_and_is_limited(api):
+    begin(api)
+    assert api.post("/api/rest").status_code == 409                                        # not hurt
+    rigged(api, hero={"hp": 5, "hp_max": 30, "str": 12})
+    r = api.post("/api/rest").json()
+    g = r["game"]
+    assert g["tick"] == 2 and g["hero"]["hp"] == 5 + 7 and g["hero"]["rests_left"] == 2    # 4 + 12 // 4
+    assert any(e["type"] == "feed" and e["item"]["kind"] == "arrival" for e in r["events"])      # Black Wolf walked in while she rested
+    assert [e for e in r["events"] if e["type"] == "rested"][0]["healed"] == 7
+    api.post("/api/rest")
+    api.post("/api/rest")
+    assert api.post("/api/rest").status_code == 409                                        # three a night
+    assert api.get("/api/game").json()["game"]["hero"]["rests_left"] == 0
+
+
+def test_a_rest_that_is_interrupted_by_a_fight_only_heals_half(api):
+    begin(api)
+    rigged(api, hero={"hp": 5, "hp_max": 30, "str": 12}, tick=2, npc={"yue": {"status": "here", "arrived": 0}})   # Yue lost patience long ago
+    r = api.post("/api/rest").json()
+    assert r["game"]["fight"]["npc"] == "yue" and [e for e in r["events"] if e["type"] == "rested"][0]["interrupted"]
+    assert api.post("/api/rest").status_code == 409                                        # no resting in a fight
+
+
 def test_the_admin_sees_nights_wins_and_what_killed_her(api, monkeypatch):
     monkeypatch.setattr(main.config, "ADMIN_PASSWORD", "s3cret")
     h = {"authorization": "Bearer s3cret"}
