@@ -23,7 +23,7 @@ Best on a phone. Pick a language, roll your thief, and go.
 - **An AI judge that scores the AI.** A second model call rates replies for character, drive, language, period and format, and flags reward leaks. It runs on a sample of live traffic, in the evals, and as a Thai/Chinese translation checker.
 - **Measured, not guessed.** 58 offline tests with a fake model, live evals per language, and a balance simulation that reports how often a player survives.
 - **Three languages done properly.** Fixed text is written once in all three; the AI is told which one to write; a translation audit caught a reversed meaning in the first pass.
-- **Shipped and observed.** Deployed on Railway with a persistent volume, rate and spend caps, and an admin page with a visitor funnel, countries (looked up on the server, IP never stored), play time and reply quality.
+- **Shipped.** It runs live on a public URL, not just on localhost.
 
 ## How it works in 30 seconds
 
@@ -32,8 +32,8 @@ browser (phone)  ──►  FastAPI server  ──►  DeepSeek
  static/app.js         app/main.py          characters + Ray, one prompt each
                        app/rules.py   ◄──   the dice: stats, rounds, martial arts   (code, tested)
                        app/story.py   ◄──   the cast, rewards, endings, 3 languages (data)
-                       app/judge.py   ──►   scores replies; numbers only, to the admin page
-                       SQLite on a volume   nights, conversations, visitor events
+                       app/judge.py   ──►   scores replies (numbers only)
+                       SQLite              nights and conversations
 ```
 
 Each turn the server rebuilds the character's prompt with the current state (who is in the hall, trust, the goal, exchanges left) and, only when earned, the one thing they will now tell the player.
@@ -45,7 +45,7 @@ the stats and fight design, the negotiation goal, the difficulty, the languages 
 that drove the fixes (the stuck loading screen, the cramped fight screen, the pop-up that hid the input), and decided what shipped. The commit history is the honest record of how it evolved.
 
 **Known limits.** The balance simulation uses a stand-in for how well players talk. The AI judge is a model from the same family as the characters, so it can be too generous about fluency. Thai and Chinese text has
-had one AI audit but not yet a native speaker's read. The rate limiter lives in memory, so it assumes one server.
+had one AI audit but not yet a native speaker's read.
 
 ---
 
@@ -121,15 +121,14 @@ static/portrait.js     painted character portraits (procedural), with a head-and
 static/scenes.js       painted backdrops (the inn)
 app/rules.py           THE DICE: stats, hit points, two-dice rounds, the martial arts
 app/story.py           THE STORY: cast, arrivals, rewards, endings, texts in 3 languages
-app/main.py            FastAPI routes: the state of the night, talking, fighting, leaving, Ray, the admin
+app/main.py            FastAPI routes: the state of the night, talking, fighting, leaving, Ray
 app/agent.py           streaming loop for DeepSeek (OpenAI chat format)
 app/prompts.py         world, per-person instructions by mood, Ray's instructions, the ending prompt
 app/game_look.py       portrait options and how to describe a look in words
 app/i18n.py            the three languages: picking one per request, cleaning the model's text, checking its language
 static/i18n.js         the page's own text in English, Chinese and Thai
-app/db.py              SQLite: plays (one per visitor, with the state of the night) and talks (one per visitor and person)
-app/ratelimit.py       per-visitor and daily caps on model calls
-app/stats.py           the admin's numbers, built from the events table
+app/db.py              SQLite: plays (one per player, with the state of the night) and talks (one per player and person)
+app/ratelimit.py       caps on model calls
 evals/run.py           live evaluation of the characters, per language
 evals/balance.py       offline balance simulation of the dice
 ```
@@ -152,20 +151,8 @@ every prompt carries the names in all three spellings.
 | POST | `/api/ending` | Ray's telling of how the night ended |
 | POST | `/api/gm/chat` | ask Ray (stream; costs no time) |
 | POST | `/api/feedback` | a thumb on one of a character's replies |
-| GET | `/api/admin/stats` · `/api/admin/transcripts` | visitor numbers and conversations (needs `ADMIN_PASSWORD`) |
 
-Visitors are an anonymous `vid` cookie, which owns their night and conversations.
-
-## Knowing your visitors
-
-Set `ADMIN_PASSWORD` and open `/admin.html`: visitors, a funnel (opened, rolled, started, talked, fought, ended), win rate, endings and what killed players,
-the builds that were rolled, per-person numbers (talks, messages, rounds fought, trust change, kills), AI errors, and the conversations. `events` stores counts
-only, never message text; conversations are kept in `talk_archive` after a night ends so replies can be reviewed. Every reply has 👍 / 👎.
-`CALLS_PER_VISITOR_PER_10_MIN` (150) and `DAILY_CALL_CAP` (8000) cap model calls; one talk message costs two calls and a night is a few dozen.
-
-**Where visitors are.** The country comes from the IP address, looked up on the server in a bundled free file (DB-IP "IP to Country Lite", CC BY 4.0, <https://db-ip.com>),
-so no address is sent to another service and only the two-letter country is stored, never the IP. The admin also shows the device (phone, tablet, desktop) and the site
-each visitor came from.
+Each browser gets an anonymous cookie that owns its night and conversations.
 
 ## The AI judge
 
@@ -173,8 +160,7 @@ each visitor came from.
 **language** (natural, correct, no mixing), **period** (nothing modern) and **format** (short, no meta talk), and flags whether the reply **leaked** the reward
 the player has not earned yet. It never changes a reply and never blocks a player. It is used three ways:
 
-- **Live.** `JUDGE_SAMPLE_RATE` (default 0.25) of real replies are scored in a background thread. Only numbers are stored (with the talk and reply index, never the text), and the
-  admin page shows averages per person and language, leaks and low scores, and a 🤖 score next to each reply in the transcripts. One extra model call per scored reply; set the rate to 0 to switch it off.
+- **Live.** `JUDGE_SAMPLE_RATE` (default 0.25) of real replies are scored in a background thread. Only numbers are stored, never the text. One extra model call per scored reply; set the rate to 0 to switch it off.
 - **`python -m evals.run --judge`** scores every character's replies in a language and fails the run if a reward leaked.
 - **`python -m evals.translations --lang th|zh|all`** checks the fixed Thai and Chinese text in `app/story.py` against the English for faithfulness (a reversed meaning scores 1) and naturalness.
   It over-flags deliberate adaptations such as the martial-art names, so read its list, don't just obey it. The judge is a model from the same family as the characters, so it can be too kind about fluency:
@@ -183,22 +169,16 @@ the player has not earned yet. It never changes a reply and never blocks a playe
 ## Evaluating
 
 1. **`pytest` (offline, free)**: the dice (stats total 30, damage is the dice, every martial art, ties), the story rules (arrivals, patience, standing down, rewards,
-   threats, picking a fight, death by the blade or by arrest, leaving early vs after the storm), Ray not knowing unearned rewards, three-language output, the admin.
+   threats, picking a fight, death by the blade or by arrest, leaving early vs after the storm), Ray not knowing unearned rewards, three-language output.
 2. **`python -m evals.run [--lang en|zh|th|all] [--judge]` (live model)**: every reply in the chosen language, no markup or fourth wall, rewards stay locked on a polite
    first question, insults are never threats, threats are caught, kindness raises trust, the ending is in the right language. Report in `evals/last_report.json`.
 3. **`python -m evals.balance`**: how hard the dice make it.
-
-## Deploying to Railway
-
-The repo includes a `Dockerfile` and `railway.json`. Push to GitHub, **New Project → Deploy from GitHub repo**, add a **volume mounted at `/data`** (the SQLite database
-lives there), set `DEEPSEEK_API_KEY` and a long random `ADMIN_PASSWORD`, generate a domain, and keep **one replica** (the rate limiter is in memory).
-A database made by an earlier version still works: old tables are simply unused.
 
 ## Next steps
 
 1. Playtest and tune: arrival beats, patience, how many people the player can realistically calm, hit points
 2. More arrivals and rewards (a second wave, a boss), and consumables
-3. Grow the eval set from 👎 replies; move the rate limiter to Redis for more than one replica
+3. Grow the eval set from 👎 replies
 4. Real painted art behind `portrait.js`
 
 ## Resting
