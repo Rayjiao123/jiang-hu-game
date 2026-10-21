@@ -1,4 +1,55 @@
-# 人在江湖，身不由己
+# 人在江湖，身不由己 · Helpless in the Jianghu
+
+[![tests](https://github.com/Rayjiao123/jiang-hu-game/actions/workflows/tests.yml/badge.svg)](https://github.com/Rayjiao123/jiang-hu-game/actions/workflows/tests.yml)
+
+A dark Song-dynasty wuxia survival game you can finish in five minutes, in **English, 中文 and ไทย**. You are a thief hiding in an inn during a sandstorm.
+Seven AI-voiced characters walk in one by one, and each can be talked down or fought. Most players die.
+
+### [▶ Play it: jiang-hu-game-production.up.railway.app](https://jiang-hu-game-production.up.railway.app)
+
+Best on a phone. Pick a language, roll your thief, and go.
+
+<p align="center">
+  <img src="docs/screenshots/fight.gif" width="260" alt="A fight: the enemy telegraphs a heavy blow, the player counters">
+</p>
+
+| Roll your thief | The inn | A negotiation | A fight |
+|---|---|---|---|
+| <img src="docs/screenshots/02-your-thief.png" width="170"> | <img src="docs/screenshots/03-the-inn.png" width="170"> | <img src="docs/screenshots/04-a-negotiation.png" width="170"> | <img src="docs/screenshots/05-a-fight.png" width="170"> |
+
+## What this project shows
+
+- **AI where it belongs, code everywhere else.** The model plays the characters' voices; a server decides trust, rewards, dice, damage and who wins. A character's secret is not in its prompt until the server unlocks it, so it cannot leak (a test checks this).
+- **An AI judge that scores the AI.** A second model call rates replies for character, drive, language, period and format, and flags reward leaks. It runs on a sample of live traffic, in the evals, and as a Thai/Chinese translation checker.
+- **Measured, not guessed.** 58 offline tests with a fake model, live evals per language, and a balance simulation that reports how often a player survives.
+- **Three languages done properly.** Fixed text is written once in all three; the AI is told which one to write; a translation audit caught a reversed meaning in the first pass.
+- **Shipped and observed.** Deployed on Railway with a persistent volume, rate and spend caps, and an admin page with a visitor funnel, countries (looked up on the server, IP never stored), play time and reply quality.
+
+## How it works in 30 seconds
+
+```
+browser (phone)  ──►  FastAPI server  ──►  DeepSeek
+ static/app.js         app/main.py          characters + Ray, one prompt each
+                       app/rules.py   ◄──   the dice: stats, rounds, martial arts   (code, tested)
+                       app/story.py   ◄──   the cast, rewards, endings, 3 languages (data)
+                       app/judge.py   ──►   scores replies; numbers only, to the admin page
+                       SQLite on a volume   nights, conversations, visitor events
+```
+
+Each turn the server rebuilds the character's prompt with the current state (who is in the hall, trust, the goal, exchanges left) and, only when earned, the one thing they will now tell the player.
+
+## How I built this
+
+Built by Ray, working with Claude Code as a pair programmer. I set the direction and made the product calls: the story and its pivots (a murder-mystery became a dice-driven survival game),
+the stats and fight design, the negotiation goal, the difficulty, the languages and what to measure. Claude wrote most of the code and tests under my review, and I played it, sent the screenshots and bug reports
+that drove the fixes (the stuck loading screen, the cramped fight screen, the pop-up that hid the input), and decided what shipped. The commit history is the honest record of how it evolved.
+
+**Known limits.** The balance simulation uses a stand-in for how well players talk. The AI judge is a model from the same family as the characters, so it can be too generous about fluency. Thai and Chinese text has
+had one AI audit but not yet a native speaker's read. The rate limiter lives in memory, so it assumes one server.
+
+---
+
+## The game in detail
 
 **Helpless in the Jianghu.** A dark Song-dynasty wuxia survival game, about five minutes long, in English, 中文 and ไทย. Every person in it is an
 AI (DeepSeek) and a game master, Ray, runs the night like a tabletop DM. The dice are not AI: they are code you can test.
